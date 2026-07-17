@@ -16,7 +16,8 @@ Forge Companion complements BrewForge instead of reproducing its recipe designer
 - [ ] snapshot schema validation and manifest
 - [ ] optional, rate-limit-aware full export of brew details, notes, and readings
 - [ ] optional compression
-- [ ] inventory audit for duplicates, suspicious units, expiry dates, and old hops
+- [x] offline inventory audit for expiry, negative quantities, missing units, and conservative duplicates
+- [ ] machine-readable inventory audit output and additional plausibility rules
 - [ ] conservative Brewfather/BrewForge comparison report
 - [ ] machine-readable `doctor --json` output
 

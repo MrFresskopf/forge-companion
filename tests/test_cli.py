@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -66,3 +67,35 @@ def test_backup_command_reports_api_error_without_traceback(
     assert "Snapshot failed: unexpected response" in result.output
     assert "Traceback" not in result.output
     assert not destination.exists()
+
+
+def test_inventory_audit_command_reports_findings_from_snapshot(tmp_path: Path) -> None:
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "format": "forge-companion-collection-snapshot-v1",
+                "resources": {
+                    "inventory_yeasts": [
+                        {
+                            "id": "yeast-1",
+                            "name": "Example Yeast",
+                            "quantity": 1,
+                            "quantityUnit": "pkg",
+                            "expiryDate": "2026-07-01",
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["inventory-audit", str(snapshot), "--as-of", "2026-07-17"],
+    )
+
+    assert result.exit_code == 0
+    assert "1 finding(s)" in result.output
+    assert "WARNING yeasts Example Yeast: expired on 2026-07-01" in result.output

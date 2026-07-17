@@ -10,7 +10,7 @@ BrewForge is the brewing system of record. Forge Companion provides connective t
 
 - **Protect:** portable snapshots of supported API collections
 - **Inspect:** API and endpoint diagnostics
-- **Understand:** fermentation reports and inventory audits (next milestones)
+- **Understand:** offline inventory audits now; fermentation reports next
 - **Connect:** MQTT, Home Assistant, and device bridges (future milestones)
 
 The project deliberately starts read-only. It does not create, update, or delete BrewForge data.
@@ -40,9 +40,31 @@ endpoints. API credentials are not included.
 > API. Calling it a collection snapshot makes that scope explicit and avoids spending one API
 > request per brew and subresource without the user's informed choice.
 
+### Audit inventory offline
+
+```bash
+forge-companion inventory-audit snapshots/brewforge.json
+forge-companion inventory-audit snapshots/brewforge.json --as-of 2026-07-17
+```
+
+The audit reads only the local snapshot and currently reports:
+
+- expired inventory
+- negative quantities
+- missing yeast or miscellaneous-item units
+- conservative possible duplicates using category-specific identity fields
+
+Findings are advisory. Possible duplicates are never merged or changed automatically.
+
 ## Requirements
 
-- Python 3.11 or newer
+All commands require Python 3.11 or newer.
+
+`inventory-audit` works entirely offline with an existing Forge Companion snapshot. It does not
+need a BrewForge subscription, API access, or token.
+
+The `doctor` and `snapshot` commands additionally require:
+
 - A BrewForge plan with API access
 - A BrewForge API token with the narrowest suitable read scopes:
   - `brews:read`
@@ -100,7 +122,7 @@ See [SECURITY.md](SECURITY.md) for responsible disclosure and credential handlin
 The next planned vertical slices are:
 
 1. snapshot manifest and validation
-2. inventory audit with human-readable findings
+2. machine-readable audit output and additional inventory rules
 3. CSV export and shareable fermentation brief
 4. webhook/MQTT bridge
 5. Home Assistant integration
