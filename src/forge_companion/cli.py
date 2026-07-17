@@ -18,6 +18,7 @@ from forge_companion.fermentation_report import render_markdown, write_markdown
 from forge_companion.inventory_audit import audit_inventory
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
 from forge_companion.spunding_report import render_spunding_advice
+from forge_companion.terminal_text import safe_terminal_text
 
 app = typer.Typer(
     help="Unofficial, read-only community tools for BrewForge.",
@@ -180,4 +181,60 @@ def spunding_advisor_command(
         typer.echo(render_spunding_advice(result), nl=False)
     except (httpx.HTTPError, OverflowError, TypeError, ValueError) as error:
         typer.echo(f"Spunding advisor failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+
+
+@app.command("brews")
+def brews_command(
+    page: Annotated[
+        int,
+        typer.Option("--page", min=1, help="One-indexed BrewForge page."),
+    ] = 1,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=100, help="Brews to request, from 1 to 100."),
+    ] = 100,
+) -> None:
+    """List brew names and UUIDs using one read-only request."""
+    try:
+        client = BrewForgeClient(token=_token_from_environment())
+        payload = client.get("brews", params={"page": page, "limit": limit})
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise TypeError("brews response has no list-shaped data field")
+        pagination = payload.get("pagination")
+        if not isinstance(pagination, dict):
+            raise TypeError("brews response has no object-shaped pagination")
+        has_more = pagination.get("hasMore")
+        if not isinstance(has_more, bool):
+            raise TypeError("pagination.hasMore must be a boolean")
+        total = pagination.get("total")
+        if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+            raise TypeError("pagination.total must be a non-negative integer")
+        if has_more and not data:
+            raise ValueError("pagination made no progress while hasMore is true")
+        rows: list[tuple[str, str]] = []
+        for item in data:
+            if not isinstance(item, dict):
+                raise TypeError("brew is not an object")
+            brew_id = str(UUID(str(item.get("id"))))
+            name = item.get("name")
+            if not isinstance(name, str) or not name.strip():
+                raise TypeError("brew has no valid name")
+            safe_name = safe_terminal_text(name.strip())
+            if not safe_name:
+                raise ValueError("brew name is empty after terminal sanitization")
+            rows.append((safe_name, brew_id))
+        if not rows:
+            typer.echo(f"No brews found on page {page}.")
+        else:
+            for name, brew_id in rows:
+                typer.echo(f"{name} | {brew_id}")
+        if has_more:
+            typer.echo(f"More brews available: rerun with --page {page + 1}.")
+    except httpx.HTTPError:
+        typer.echo("Brew list failed: API request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (TypeError, ValueError) as error:
+        typer.echo(f"Brew list failed: {error}", err=True)
         raise typer.Exit(code=1) from None
