@@ -10,7 +10,7 @@ BrewForge is the brewing system of record. Forge Companion provides connective t
 
 - **Protect:** portable snapshots of supported API collections
 - **Inspect:** API and endpoint diagnostics
-- **Understand:** offline inventory audits now; fermentation reports next
+- **Understand:** offline inventory audits, fermentation reports, and fail-closed simulations
 - **Connect:** MQTT, Home Assistant, and device bridges (future milestones)
 
 The project deliberately starts read-only. It does not create, update, or delete BrewForge data.
@@ -73,6 +73,31 @@ Temperature units are never guessed. Omit `--temperature-unit` to label values a
 The report is descriptive: it does not declare fermentation complete and cannot trigger hardware.
 Reports may contain private brew names, comments, and measurements, so `reports/` is gitignored.
 
+### Simulate a spunding threshold decision
+
+```bash
+forge-companion spunding-advisor BREW_ID \
+  --trigger-sg 1.0120 \
+  --max-age-minutes 90 \
+  --max-gap-minutes 120 \
+  --confirmations 2
+```
+
+The command pins one exact brew UUID and makes exactly one read-only request for its stored
+fermentation readings. It prints one of three evidence-backed statuses:
+
+- `NO_DECISION`: telemetry is malformed, conflicted, stale, insufficient, or too widely spaced
+- `WAIT`: at least one of the latest confirmation readings is above the explicit trigger SG
+- `CONDITION_MET`: every latest confirmation reading is at or below the explicit trigger SG
+
+`CONDITION_MET` is a simulation result, not a device command or a declaration that actuation is
+safe. Forge Companion does not contact a Shelly, verify pressure, confirm valve position, or test a
+regulator or PRV. The trigger SG must be calculated separately from the actual beer volume,
+fermenter volume and headspace, expected FG, temperature, desired pressure, and carbonation target.
+
+The command has no scheduler. Calling one pinned readings endpoint hourly would already use roughly
+720 of BrewForge's documented 1,000 monthly requests.
+
 ## Requirements
 
 All commands require Python 3.11 or newer.
@@ -80,7 +105,7 @@ All commands require Python 3.11 or newer.
 `inventory-audit` works entirely offline with an existing Forge Companion snapshot. It does not
 need a BrewForge subscription, API access, or token.
 
-The `doctor` and `snapshot` commands additionally require:
+Commands that contact BrewForge additionally require:
 
 - A BrewForge plan with API access
 - A BrewForge API token with the narrowest suitable read scopes:

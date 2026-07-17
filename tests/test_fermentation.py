@@ -190,6 +190,24 @@ def test_parse_readings_does_not_include_invalid_timestamp_data_in_reason() -> N
     assert result.rejected == ("reading 0: timestamp is not valid ISO 8601",)
 
 
+def test_parse_readings_rejects_timestamp_that_overflows_utc_normalization() -> None:
+    result = parse_readings(
+        {
+            "data": [
+                {
+                    "id": "boundary",
+                    "timestamp": "0001-01-01T00:00:00+23:59",
+                    "gravity": 1.010,
+                }
+            ]
+        }
+    )
+
+    assert result.readings == ()
+    assert len(result.rejected) == 1
+    assert result.rejected[0].startswith("reading 0:")
+
+
 def test_analyze_readings_rejects_future_latest_timestamp() -> None:
     parsed = parse_readings(
         {"data": [{"id": "1", "timestamp": "2026-07-17T10:00:00Z", "gravity": 1.010}]}

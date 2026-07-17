@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
@@ -16,6 +16,8 @@ from forge_companion.diagnostics import run_doctor
 from forge_companion.fermentation import analyze_readings, parse_readings
 from forge_companion.fermentation_report import render_markdown, write_markdown
 from forge_companion.inventory_audit import audit_inventory
+from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
+from forge_companion.spunding_report import render_spunding_advice
 
 app = typer.Typer(
     help="Unofficial, read-only community tools for BrewForge.",
@@ -141,3 +143,41 @@ def fermentation_brief_command(
         typer.echo(f"Fermentation brief failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"Fermentation brief written to {destination}")
+
+
+@app.command("spunding-advisor")
+def spunding_advisor_command(
+    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    trigger_sg: Annotated[
+        float,
+        typer.Option("--trigger-sg", help="Explicit SG threshold for this simulation."),
+    ],
+    max_age_minutes: Annotated[
+        int,
+        typer.Option("--max-age-minutes", help="Maximum age of the newest reading."),
+    ] = 90,
+    max_gap_minutes: Annotated[
+        int,
+        typer.Option("--max-gap-minutes", help="Maximum gap between confirmation readings."),
+    ] = 120,
+    confirmations: Annotated[
+        int,
+        typer.Option("--confirmations", help="Required latest readings at or below trigger SG."),
+    ] = 2,
+) -> None:
+    """Simulate one fail-closed spunding threshold evaluation."""
+    try:
+        canonical_id = str(UUID(brew_id))
+        config = AdvisorConfig(
+            trigger_sg=trigger_sg,
+            max_age=timedelta(minutes=max_age_minutes),
+            max_gap=timedelta(minutes=max_gap_minutes),
+            confirmations=confirmations,
+        )
+        client = BrewForgeClient(token=_token_from_environment())
+        payload = client.get(f"brews/{canonical_id}/readings")
+        result = advise_spunding_payload(payload, config=config, as_of=datetime.now(UTC))
+        typer.echo(render_spunding_advice(result), nl=False)
+    except (httpx.HTTPError, OverflowError, TypeError, ValueError) as error:
+        typer.echo(f"Spunding advisor failed: {error}", err=True)
+        raise typer.Exit(code=1) from None

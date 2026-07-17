@@ -22,6 +22,12 @@ protecting and encrypting them. They are not complete or directly restorable acc
 Fermentation briefs can contain brew names, comments, timestamps, and measurements. Keep them in
 the gitignored `reports/` directory unless you deliberately review and share a report.
 
+The spunding advisor is simulation-only. It performs one GET for a pinned brew's readings and
+prints a threshold evaluation; it has no scheduler, device client, actuator state, or write path.
+Its output cannot verify pressure, valve position, regulator behavior, PRV condition, or mechanical
+success. Never use it as an overpressure safeguard or as a substitute for independent mechanical
+protection and manual override.
+
 ## Reporting vulnerabilities
 
 Do not publish credential leaks, authorization bypasses, or destructive API behavior in a public issue. Contact the maintainers privately with:
