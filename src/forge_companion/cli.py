@@ -2,9 +2,10 @@
 
 import json
 import os
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 import httpx
 import typer
@@ -12,6 +13,8 @@ import typer
 from forge_companion.backup import create_backup, write_backup
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
+from forge_companion.fermentation import analyze_readings, parse_readings
+from forge_companion.fermentation_report import render_markdown, write_markdown
 from forge_companion.inventory_audit import audit_inventory
 
 app = typer.Typer(
@@ -91,6 +94,50 @@ def inventory_audit_command(
     typer.echo(f"{len(findings)} finding(s)")
     for finding in findings:
         typer.echo(
-            f"{finding.severity.value.upper()} {finding.category} "
-            f"{finding.name}: {finding.message}"
+            f"{finding.severity.value.upper()} {finding.category} {finding.name}: {finding.message}"
         )
+
+
+@app.command("fermentation-brief")
+def fermentation_brief_command(
+    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Destination Markdown file."),
+    ] = None,
+    temperature_unit: Annotated[
+        str | None,
+        typer.Option("--temperature-unit", help="Explicit C or F; omitted means raw API value."),
+    ] = None,
+) -> None:
+    """Create a read-only Markdown brief for one pinned brew."""
+    try:
+        canonical_id = str(UUID(brew_id))
+        unit = temperature_unit.upper() if temperature_unit is not None else None
+        if unit not in {None, "C", "F"}:
+            raise ValueError("temperature unit must be C or F")
+        destination = output or Path("reports") / f"fermentation-{canonical_id}.md"
+        client = BrewForgeClient(token=_token_from_environment())
+        brew = client.get(f"brews/{canonical_id}")
+        if brew.get("id") != canonical_id:
+            raise ValueError("brew response ID does not match requested brew")
+        brew_name = brew.get("name")
+        if not isinstance(brew_name, str) or not brew_name.strip():
+            raise TypeError("brew response has no valid name")
+        readings_payload = client.get(f"brews/{canonical_id}/readings")
+        parsed = parse_readings(readings_payload)
+        report_time = datetime.now(UTC)
+        metrics = analyze_readings(parsed, report_time=report_time)
+        report = render_markdown(
+            brew_name=brew_name,
+            brew_id=canonical_id,
+            parsed=parsed,
+            metrics=metrics,
+            report_time=report_time,
+            temperature_unit=unit,
+        )
+        write_markdown(report, destination)
+    except (httpx.HTTPError, OSError, TypeError, ValueError) as error:
+        typer.echo(f"Fermentation brief failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Fermentation brief written to {destination}")

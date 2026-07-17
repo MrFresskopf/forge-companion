@@ -18,6 +18,8 @@ Forge Companion complements BrewForge instead of reproducing its recipe designer
 - [ ] optional compression
 - [x] offline inventory audit for expiry, negative quantities, missing units, and conservative duplicates
 - [ ] machine-readable inventory audit output and additional plausibility rules
+- [x] read-only Markdown fermentation brief with data-quality metrics
+- [ ] optional HTML fermentation charts and split-batch comparison
 - [ ] conservative Brewfather/BrewForge comparison report
 - [ ] machine-readable `doctor --json` output
 

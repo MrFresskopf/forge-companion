@@ -6,6 +6,20 @@ from typing import Any, Protocol
 import httpx
 
 
+class _OversizedJsonInteger:
+    """Marker for a JSON integer Python deliberately refused to materialize."""
+
+
+_OVERSIZED_JSON_INTEGER = _OversizedJsonInteger()
+
+
+def _safe_json_integer(value: str) -> int | _OversizedJsonInteger:
+    try:
+        return int(value)
+    except ValueError:
+        return _OVERSIZED_JSON_INTEGER
+
+
 class ReadClient(Protocol):
     """Shared interface for read-only BrewForge consumers."""
 
@@ -46,7 +60,7 @@ class BrewForgeClient:
             headers=self._headers,
         )
         response.raise_for_status()
-        payload = response.json()
+        payload = response.json(parse_int=_safe_json_integer)
         if not isinstance(payload, dict):
             raise TypeError("BrewForge returned JSON that is not an object")
         return payload

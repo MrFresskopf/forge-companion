@@ -13,4 +13,5 @@ build/
 !.env.example
 backups/
 snapshots/
+reports/
 .hermes/
