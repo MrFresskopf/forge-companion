@@ -99,3 +99,56 @@ def test_inventory_audit_command_reports_findings_from_snapshot(tmp_path: Path) 
     assert result.exit_code == 0
     assert "1 finding(s)" in result.output
     assert "WARNING yeasts Example Yeast: expired on 2026-07-01" in result.output
+
+
+def test_fermentation_brief_uses_exactly_two_gets_and_writes_report(
+    tmp_path: Path,
+    monkeypatch: object,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[str] = []
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append(path)
+            if path == f"brews/{brew_id}":
+                return {"id": brew_id, "name": "Example Wit"}
+            if path == f"brews/{brew_id}/readings":
+                return {
+                    "data": [
+                        {
+                            "id": "reading-1",
+                            "timestamp": "2026-07-17T08:00:00Z",
+                            "gravity": 1.012,
+                            "temperature": 29.0,
+                        }
+                    ]
+                }
+            raise AssertionError(f"unexpected GET: {path}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    destination = tmp_path / "brief.md"
+
+    result = runner.invoke(
+        app,
+        [
+            "fermentation-brief",
+            brew_id,
+            "--output",
+            str(destination),
+            "--temperature-unit",
+            "C",
+        ],
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [f"brews/{brew_id}", f"brews/{brew_id}/readings"]
+    assert destination.exists()
+    report = destination.read_text(encoding="utf-8")
+    assert "# Fermentation Brief: Example Wit" in report
+    assert "test-token" not in report
+    assert str(destination) in result.output

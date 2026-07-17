@@ -19,6 +19,9 @@ Version 0.1 is intentionally read-only. The HTTP client exposes only GET request
 snapshots are local JSON files and may contain private brewing data, so users are responsible for
 protecting and encrypting them. They are not complete or directly restorable account backups.
 
+Fermentation briefs can contain brew names, comments, timestamps, and measurements. Keep them in
+the gitignored `reports/` directory unless you deliberately review and share a report.
+
 ## Reporting vulnerabilities
 
 Do not publish credential leaks, authorization bypasses, or destructive API behavior in a public issue. Contact the maintainers privately with:

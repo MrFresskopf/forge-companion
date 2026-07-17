@@ -56,6 +56,23 @@ The audit reads only the local snapshot and currently reports:
 
 Findings are advisory. Possible duplicates are never merged or changed automatically.
 
+### Create a fermentation brief
+
+```bash
+forge-companion fermentation-brief BREW_ID \
+  --output reports/fermentation-BREW_ID.md \
+  --temperature-unit C
+```
+
+The command pins the exact brew UUID and uses two read-only API requests: one for the brew and
+one for its stored fermentation readings. It writes a local Markdown report with observation
+duration, gravity change, an optional 24-hour least-squares slope, temperature range, freshness,
+largest telemetry gap, and recent readings.
+
+Temperature units are never guessed. Omit `--temperature-unit` to label values as raw API values.
+The report is descriptive: it does not declare fermentation complete and cannot trigger hardware.
+Reports may contain private brew names, comments, and measurements, so `reports/` is gitignored.
+
 ## Requirements
 
 All commands require Python 3.11 or newer.
@@ -123,7 +140,7 @@ The next planned vertical slices are:
 
 1. snapshot manifest and validation
 2. machine-readable audit output and additional inventory rules
-3. CSV export and shareable fermentation brief
+3. CSV export and optional HTML fermentation charts
 4. webhook/MQTT bridge
 5. Home Assistant integration
 6. experimental automation modules with fail-closed safeguards
