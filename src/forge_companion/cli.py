@@ -218,12 +218,18 @@ def brews_command(
             if not isinstance(item, dict):
                 raise TypeError("brew is not an object")
             brew_id = str(UUID(str(item.get("id"))))
-            name = item.get("name")
-            if not isinstance(name, str) or not name.strip():
-                raise TypeError("brew has no valid name")
-            safe_name = safe_terminal_text(name.strip())
-            if not safe_name:
-                raise ValueError("brew name is empty after terminal sanitization")
+            if "name" not in item:
+                safe_name = "<unnamed brew>"
+            else:
+                name = item["name"]
+                if not isinstance(name, str):
+                    raise TypeError("brew name is not a string")
+                if not name.strip():
+                    safe_name = "<unnamed brew>"
+                else:
+                    safe_name = safe_terminal_text(name.strip())
+                    if not safe_name:
+                        raise ValueError("brew name is empty after terminal sanitization")
             rows.append((safe_name, brew_id))
         if not rows:
             typer.echo(f"No brews found on page {page}.")
