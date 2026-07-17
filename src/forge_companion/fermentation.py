@@ -112,7 +112,7 @@ def parse_readings(payload: object) -> ParseResult:
                 readings_by_timestamp[reading.timestamp] = reading
             seen.add(reading)
             readings.append(reading)
-        except (TypeError, ValueError) as error:
+        except (OverflowError, TypeError, ValueError) as error:
             rejected.append(f"reading {index}: {error}")
     readings.sort(key=lambda reading: (reading.timestamp, reading.id))
     return ParseResult(

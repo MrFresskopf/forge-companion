@@ -42,8 +42,8 @@ Forge Companion complements BrewForge instead of reproducing its recipe designer
 
 ## Milestone 4 — Experimental automation
 
-- [ ] simulation-only spunding decision engine
-- [ ] stale-data and confidence gates
+- [x] simulation-only spunding threshold advisor
+- [x] stale-data, timestamp-conflict, confirmation, and cadence gates
 - [ ] one-shot, idempotent Shelly actions
 - [ ] read-back verification and audit log
 - [ ] explicit experimental warning and mechanical safety requirements

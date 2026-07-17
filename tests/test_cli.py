@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -152,3 +153,133 @@ def test_fermentation_brief_uses_exactly_two_gets_and_writes_report(
     assert "# Fermentation Brief: Example Wit" in report
     assert "test-token" not in report
     assert str(destination) in result.output
+
+
+def test_spunding_advisor_uses_one_readings_get(monkeypatch: object) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[str] = []
+    now = datetime.now(UTC)
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append(path)
+            return {
+                "data": [
+                    {
+                        "id": "reading-1",
+                        "timestamp": (now - timedelta(hours=1)).isoformat(),
+                        "gravity": 1.0119,
+                    },
+                    {
+                        "id": "reading-2",
+                        "timestamp": now.isoformat(),
+                        "gravity": 1.0117,
+                    },
+                ]
+            }
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+
+    result = runner.invoke(
+        app,
+        ["spunding-advisor", brew_id, "--trigger-sg", "1.012"],
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [f"brews/{brew_id}/readings"]
+    assert "Spunding advisor: CONDITION_MET" in result.output
+    assert "Simulation only: no device command was sent." in result.output
+    assert "test-token" not in result.output
+
+
+def test_spunding_advisor_renders_no_decision_for_malformed_envelope(
+    monkeypatch: object,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[str] = []
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append(path)
+            return {"unexpected": []}
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+
+    result = runner.invoke(
+        app,
+        ["spunding-advisor", brew_id, "--trigger-sg", "1.012"],
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [f"brews/{brew_id}/readings"]
+    assert "Spunding advisor: NO_DECISION" in result.output
+    assert "Reason: readings response is malformed" in result.output
+    assert "Spunding advisor failed" not in result.output
+
+
+def test_spunding_advisor_reports_api_error_without_traceback(monkeypatch: object) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+
+    class BrokenClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            raise ValueError("unexpected response")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+
+    result = runner.invoke(
+        app,
+        ["spunding-advisor", brew_id, "--trigger-sg", "1.012"],
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 1
+    assert "Spunding advisor failed: unexpected response" in result.output
+    assert "Traceback" not in result.output
+    assert "test-token" not in result.output
+
+
+def test_spunding_advisor_renders_no_decision_for_timestamp_overflow(
+    monkeypatch: object,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[str] = []
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append(path)
+            return {
+                "data": [
+                    {
+                        "id": "boundary",
+                        "timestamp": "0001-01-01T00:00:00+23:59",
+                        "gravity": 1.010,
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+
+    result = runner.invoke(
+        app,
+        ["spunding-advisor", brew_id, "--trigger-sg", "1.012"],
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [f"brews/{brew_id}/readings"]
+    assert "Spunding advisor: NO_DECISION" in result.output
+    assert "Spunding advisor failed" not in result.output
