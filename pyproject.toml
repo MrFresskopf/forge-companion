@@ -9,11 +9,16 @@ description = "Unofficial, read-only community tools for BrewForge"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Johannes Döhler" }]
+authors = [{ name = "Johannes Döhler", email = "doehler.johannes@gmail.com" }]
 dependencies = [
   "httpx>=0.27,<1",
   "typer>=0.12,<1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/MrFresskopf/forge-companion"
+Repository = "https://github.com/MrFresskopf/forge-companion"
+Issues = "https://github.com/MrFresskopf/forge-companion/issues"
 
 [project.optional-dependencies]
 dev = [

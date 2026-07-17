@@ -77,7 +77,7 @@ BrewForge currently documents limits of 100 requests per hour and 1,000 requests
 ## Install for development
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MrFresskopf/forge-companion.git
 cd forge-companion
 uv sync --extra dev
 ```
