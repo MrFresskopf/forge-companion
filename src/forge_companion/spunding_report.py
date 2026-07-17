@@ -1,11 +1,10 @@
 """Deterministic terminal rendering for simulation-only spunding advice."""
 
 import math
-import re
-import unicodedata
 from datetime import UTC, timedelta
 
 from forge_companion.spunding_advisor import AdvisorResult
+from forge_companion.terminal_text import safe_terminal_text
 
 
 def _duration(value: timedelta | None) -> str:
@@ -19,28 +18,17 @@ def _duration(value: timedelta | None) -> str:
     return f"{minutes}m"
 
 
-def _safe_text(value: str, *, limit: int = 160) -> str:
-    value = re.sub(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", value)
-    without_controls = "".join(
-        " " if unicodedata.category(character).startswith("C") else character for character in value
-    )
-    normalized = " ".join(without_controls.split()).replace("|", "\\|")
-    if len(normalized) > limit:
-        return normalized[: limit - 3] + "..."
-    return normalized
-
-
 def render_spunding_advice(result: AdvisorResult) -> str:
     """Render evidence without implying that an actuator command is safe."""
     if result.gravity_slope_per_day is not None and math.isfinite(result.gravity_slope_per_day):
         trend = f"{result.gravity_slope_per_day:+.4f} SG/day (descriptive only)"
     else:
-        note = _safe_text(result.trend_note or "not available")
+        note = safe_terminal_text(result.trend_note or "not available")
         trend = f"not available — {note}"
 
     lines = [
         f"Spunding advisor: {result.status.value}",
-        f"Reason: {_safe_text(result.reason)}",
+        f"Reason: {safe_terminal_text(result.reason)}",
         "Simulation only: no device command was sent.",
         "Safety: this does not verify pressure, valve position, regulator, or PRV safety.",
         f"Trigger SG: {result.trigger_sg:.4f}",
@@ -54,7 +42,7 @@ def render_spunding_advice(result: AdvisorResult) -> str:
     else:
         lines.extend(
             "- "
-            f"{_safe_text(item.reading_id)} | "
+            f"{safe_terminal_text(item.reading_id)} | "
             f"{item.timestamp.astimezone(UTC).isoformat()} | "
             f"{item.gravity:.4f} SG"
             for item in result.evidence

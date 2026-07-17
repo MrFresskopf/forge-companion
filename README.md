@@ -17,6 +17,18 @@ The project deliberately starts read-only. It does not create, update, or delete
 
 ## Current commands
 
+### Find brew UUIDs
+
+```bash
+forge-companion brews
+forge-companion brews --page 2 --limit 25
+```
+
+The command makes exactly one read-only `GET /brews` request and prints only each brew's sanitized
+name and canonical UUID. It does not select a brew automatically or fetch details, notes, or
+readings. If the API reports another page, the command prints the next `--page` value instead of
+requesting it automatically.
+
 ### Diagnose API access
 
 ```bash
@@ -130,9 +142,22 @@ Set the token in the current shell. Do not put a real token in source control:
 export BREWFORGE_API_TOKEN='bfk_your_token_here'
 ```
 
+In Windows Command Prompt (`cmd.exe`), enter the token without placing it in the command history:
+
+```cmd
+set /p "BREWFORGE_API_TOKEN=BrewForge API token: "
+```
+
+Remove it from that Command Prompt session when finished:
+
+```cmd
+set "BREWFORGE_API_TOKEN="
+```
+
 Run a command:
 
 ```bash
+uv run forge-companion brews
 uv run forge-companion doctor
 uv run forge-companion snapshot --output snapshots/brewforge.json
 ```
