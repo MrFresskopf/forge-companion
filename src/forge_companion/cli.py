@@ -77,7 +77,10 @@ def snapshot_command(
     try:
         payload = create_backup(client)
         write_backup(payload, output)
-    except (httpx.HTTPError, OSError, TypeError, ValueError) as error:
+    except httpx.HTTPError:
+        typer.echo("Snapshot failed: API request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (OSError, TypeError, ValueError) as error:
         typer.echo(f"Snapshot failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"Collection snapshot written to {output}")
@@ -153,7 +156,10 @@ def fermentation_brief_command(
             temperature_unit=unit,
         )
         write_markdown(report, destination)
-    except (httpx.HTTPError, OSError, TypeError, ValueError) as error:
+    except httpx.HTTPError:
+        typer.echo("Fermentation brief failed: API request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (OSError, TypeError, ValueError) as error:
         typer.echo(f"Fermentation brief failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"Fermentation brief written to {destination}")
@@ -378,7 +384,10 @@ def spunding_advisor_command(
         payload = client.get(f"brews/{canonical_id}/readings")
         result = advise_spunding_payload(payload, config=config, as_of=datetime.now(UTC))
         typer.echo(render_spunding_advice(result), nl=False)
-    except (httpx.HTTPError, OverflowError, TypeError, ValueError) as error:
+    except httpx.HTTPError:
+        typer.echo("Spunding advisor failed: API request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (OverflowError, TypeError, ValueError) as error:
         typer.echo(f"Spunding advisor failed: {error}", err=True)
         raise typer.Exit(code=1) from None
 

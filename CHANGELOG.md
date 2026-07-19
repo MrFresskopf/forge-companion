@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevent raw authenticated HTTP transport errors from reaching terminal output in `doctor`, `snapshot`, `fermentation-brief`, and `spunding-advisor`.
+
 ## [0.1.0] — 2026-07-19
 
 First public developer-preview release.
