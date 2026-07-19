@@ -31,13 +31,13 @@ read scopes needed for your command.
 With [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-uv tool install git+https://github.com/MrFresskopf/forge-companion.git
+uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.1.0
 ```
 
 Or with [pipx](https://pipx.pypa.io/):
 
 ```bash
-pipx install git+https://github.com/MrFresskopf/forge-companion.git
+pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.1.0
 ```
 
 ### 2. Add your token to the current shell
