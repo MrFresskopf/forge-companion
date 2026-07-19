@@ -5,8 +5,8 @@
 <p align="center">
   <a href="https://github.com/MrFresskopf/forge-companion/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MrFresskopf/forge-companion/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-788C5D"></a>
-  <img alt="BrewForge access" src="https://img.shields.io/badge/BrewForge-read--only-D97757">
+  <a href="LICENSE"><img alt="MIT license" src="docs/assets/badges/license.svg"></a>
+  <img alt="BrewForge access" src="docs/assets/badges/brewforge-read-only.svg">
 </p>
 
 Forge Companion turns [BrewForge](https://brewforge.sh/) data into local snapshots,
