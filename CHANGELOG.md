@@ -6,6 +6,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-07-19
+
 ### Fixed
 
 - Prevent raw authenticated HTTP transport errors from reaching terminal output in `doctor`, `snapshot`, `fermentation-brief`, and `spunding-advisor`.
@@ -35,5 +37,6 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.1
 [0.1.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.0

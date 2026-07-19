@@ -11,7 +11,7 @@ body:
     attributes:
       label: Forge Companion version
       description: Run `forge-companion --version`.
-      placeholder: Forge Companion 0.1.0
+      placeholder: Forge Companion 0.1.1
     validations:
       required: true
   - type: dropdown
