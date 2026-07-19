@@ -111,6 +111,30 @@ Text cells that spreadsheet applications could interpret as formulas are prefixe
 CSV files can contain private comments, identifiers, and measurements; the default destination is the
 gitignored `reports/` directory.
 
+### Create a standalone HTML fermentation report
+
+```bash
+forge-companion fermentation-html BREW_ID \
+  --title "Lithuanian Session Witbier" \
+  --temperature-unit C \
+  --output reports/lithuanian-session-witbier.html
+```
+
+The command pins one exact brew UUID and makes exactly one read-only request for its stored readings.
+It does not fetch brew details or select a brew automatically; use `--title` when a human-readable
+name is wanted. The generated file contains summary metrics, data-quality evidence, recent readings,
+and an inline SVG gravity/temperature chart.
+
+The report is a single offline HTML file with no JavaScript, CDN, remote fonts, images, or other
+external dependencies. Dynamic titles, comments, and bounded rejection reasons are sanitized and
+HTML-escaped, and a restrictive Content Security Policy blocks external content. Destination paths
+are not embedded in the report; their CLI completion output is terminal-sanitized. Writes are
+atomic. Temperature units are never guessed; omit `--temperature-unit` to show raw API values.
+
+HTML reports remain private brewing data and belong in the gitignored `reports/` directory unless
+deliberately reviewed and shared. They are descriptive and never declare fermentation complete or
+trigger hardware.
+
 ### Simulate a spunding threshold decision
 
 ```bash
@@ -187,6 +211,7 @@ uv run forge-companion brews
 uv run forge-companion doctor
 uv run forge-companion snapshot --output snapshots/brewforge.json
 uv run forge-companion fermentation-csv BREW_ID
+uv run forge-companion fermentation-html BREW_ID --title "My brew" --temperature-unit C
 ```
 
 ## Quality checks
@@ -217,7 +242,7 @@ The next planned vertical slices are:
 
 1. snapshot manifest and validation
 2. machine-readable audit output and additional inventory rules
-3. CSV export and optional HTML fermentation charts
+3. attenuation/rate analysis and configurable outlier detection
 4. webhook/MQTT bridge
 5. Home Assistant integration
 6. experimental automation modules with fail-closed safeguards

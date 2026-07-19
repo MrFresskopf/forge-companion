@@ -23,7 +23,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] offline inventory audit for expiry, negative quantities, missing units, and conservative duplicates
 - [ ] machine-readable inventory audit output and additional plausibility rules
 - [x] read-only Markdown fermentation brief with data-quality metrics
-- [ ] optional HTML fermentation charts and split-batch comparison
+- [x] standalone HTML fermentation charts
 - [ ] conservative Brewfather/BrewForge comparison report
 - [ ] machine-readable `doctor --json` output
 
@@ -33,9 +33,9 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [ ] attenuation and fermentation-rate calculations
 - [x] stale-reading, telemetry-gap, and timestamp-conflict detection
 - [ ] configurable gravity and temperature outlier detection
-- [ ] standalone HTML fermentation report
+- [x] standalone HTML fermentation report
 - [ ] shareable SVG/PNG Fermentation Brief
-- [ ] split-batch comparison
+- [ ] split-batch comparison — deferred until BrewForge's roadmap implementation can be evaluated
 
 ## Milestone 3 — Connect
 

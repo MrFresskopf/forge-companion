@@ -15,6 +15,7 @@ from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
 from forge_companion.fermentation import analyze_readings, parse_readings
 from forge_companion.fermentation_csv import render_csv, write_csv
+from forge_companion.fermentation_html import render_html, write_html
 from forge_companion.fermentation_report import render_markdown, write_markdown
 from forge_companion.inventory_audit import audit_inventory
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
@@ -173,6 +174,61 @@ def fermentation_csv_command(
         raise typer.Exit(code=1) from None
     except (TypeError, ValueError) as error:
         typer.echo(f"Fermentation CSV failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    safe_destination = safe_terminal_text(str(destination), limit=300)
+    typer.echo(
+        f"{len(parsed.readings)} readings written to {safe_destination} "
+        f"({len(parsed.rejected)} rejected; "
+        f"{len(parsed.conflicting_timestamps)} conflicting timestamps)"
+    )
+
+
+@app.command("fermentation-html")
+def fermentation_html_command(
+    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Destination standalone HTML file."),
+    ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="Explicit report title; no brew detail request is made."),
+    ] = None,
+    temperature_unit: Annotated[
+        str | None,
+        typer.Option("--temperature-unit", help="Explicit C or F; omitted means raw API value."),
+    ] = None,
+) -> None:
+    """Create a self-contained HTML report for one pinned brew."""
+    try:
+        canonical_id = str(UUID(brew_id))
+        unit = temperature_unit.upper() if temperature_unit is not None else None
+        if unit not in {None, "C", "F"}:
+            raise ValueError("temperature unit must be C or F")
+        destination = output or Path("reports") / f"fermentation-{canonical_id}.html"
+        report_title = title if title is not None else f"Brew {canonical_id}"
+        client = BrewForgeClient(token=_token_from_environment())
+        payload = client.get(f"brews/{canonical_id}/readings")
+        parsed = parse_readings(payload)
+        report_time = datetime.now(UTC)
+        metrics = analyze_readings(parsed, report_time=report_time)
+        report = render_html(
+            title=report_title,
+            brew_id=canonical_id,
+            parsed=parsed,
+            metrics=metrics,
+            report_time=report_time,
+            temperature_unit=unit,
+        )
+        write_html(report, destination)
+    except httpx.HTTPError:
+        typer.echo("Fermentation HTML failed: API request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        typer.echo("Fermentation HTML failed: local file operation failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (TypeError, ValueError) as error:
+        typer.echo(f"Fermentation HTML failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     safe_destination = safe_terminal_text(str(destination), limit=300)
     typer.echo(

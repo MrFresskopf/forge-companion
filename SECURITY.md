@@ -26,6 +26,11 @@ Fermentation CSV exports can contain identifiers, comments, timestamps, and meas
 spreadsheet-safe text cells for formula-like IDs and comments, but remain private brewing data and
 belong in the gitignored `reports/` directory unless deliberately reviewed and shared.
 
+Standalone HTML fermentation reports contain the same private telemetry and comments. They sanitize
+and HTML-escape dynamic text, cap displayed rejection reasons, embed no external dependencies, and
+ship with a restrictive Content Security Policy. These defenses do not make a report public-safe;
+review it deliberately before moving it out of the gitignored `reports/` directory.
+
 The spunding advisor is simulation-only. It performs one GET for a pinned brew's readings and
 prints a threshold evaluation; it has no scheduler, device client, actuator state, or write path.
 Its output cannot verify pressure, valve position, regulator behavior, PRV condition, or mechanical
