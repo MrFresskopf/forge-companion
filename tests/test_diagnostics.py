@@ -63,3 +63,19 @@ def test_doctor_reports_invalid_payload_and_continues() -> None:
     assert misc.status is None
     assert misc.error == "invalid response: invalid JSON"
     assert client.paths[-1] == "profiles/styles"
+
+
+def test_doctor_does_not_echo_token_from_transport_exception() -> None:
+    token = "test-token-secret"
+
+    class BrokenTransportClient:
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
+
+    checks = run_doctor(BrokenTransportClient())
+
+    assert len(checks) == 7
+    assert {check.error for check in checks} == {"API request failed"}
+    assert all(check.status is None and not check.ok for check in checks)
+    assert all(token not in (check.error or "") for check in checks)
+    assert all("\x1b" not in (check.error or "") for check in checks)

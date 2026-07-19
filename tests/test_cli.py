@@ -2,6 +2,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
+import pytest
 from typer.testing import CliRunner
 
 import forge_companion.cli as cli
@@ -84,6 +86,35 @@ def test_backup_command_reports_api_error_without_traceback(
     assert result.exit_code == 1
     assert "Snapshot failed: unexpected response" in result.output
     assert "Traceback" not in result.output
+    assert not destination.exists()
+
+
+def test_snapshot_does_not_echo_token_from_transport_exception(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token = "test-token-secret"
+
+    class BrokenClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token-secret"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    destination = tmp_path / "must-not-exist.json"
+
+    result = runner.invoke(
+        app,
+        ["snapshot", "--output", str(destination)],
+        env={"BREWFORGE_API_TOKEN": token},
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "Snapshot failed: API request failed.\n"
+    assert token not in result.output
+    assert "\x1b" not in result.output
     assert not destination.exists()
 
 
@@ -170,6 +201,36 @@ def test_fermentation_brief_uses_exactly_two_gets_and_writes_report(
     assert "# Fermentation Brief: Example Wit" in report
     assert "test-token" not in report
     assert str(destination) in result.output
+
+
+def test_fermentation_brief_does_not_echo_token_from_transport_exception(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    token = "test-token-secret"
+
+    class BrokenClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token-secret"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    destination = tmp_path / "must-not-exist.md"
+
+    result = runner.invoke(
+        app,
+        ["fermentation-brief", brew_id, "--output", str(destination)],
+        env={"BREWFORGE_API_TOKEN": token},
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "Fermentation brief failed: API request failed.\n"
+    assert token not in result.output
+    assert "\x1b" not in result.output
+    assert not destination.exists()
 
 
 def test_spunding_advisor_uses_one_readings_get(monkeypatch: object) -> None:
@@ -264,6 +325,33 @@ def test_spunding_advisor_reports_api_error_without_traceback(monkeypatch: objec
     assert "Spunding advisor failed: unexpected response" in result.output
     assert "Traceback" not in result.output
     assert "test-token" not in result.output
+
+
+def test_spunding_advisor_does_not_echo_token_from_transport_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    token = "test-token-secret"
+
+    class BrokenClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token-secret"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+
+    result = runner.invoke(
+        app,
+        ["spunding-advisor", brew_id, "--trigger-sg", "1.012"],
+        env={"BREWFORGE_API_TOKEN": token},
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "Spunding advisor failed: API request failed.\n"
+    assert token not in result.output
+    assert "\x1b" not in result.output
 
 
 def test_spunding_advisor_renders_no_decision_for_timestamp_overflow(

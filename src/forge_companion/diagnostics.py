@@ -43,8 +43,10 @@ def run_doctor(client: ReadClient) -> list[EndpointCheck]:
                     error=f"HTTP {error.response.status_code}",
                 )
             )
-        except httpx.HTTPError as error:
-            checks.append(EndpointCheck(path=path, ok=False, status=None, error=str(error)))
+        except httpx.HTTPError:
+            checks.append(
+                EndpointCheck(path=path, ok=False, status=None, error="API request failed")
+            )
         except (TypeError, ValueError) as error:
             checks.append(
                 EndpointCheck(
