@@ -2,12 +2,16 @@
 
 Forge Companion complements BrewForge instead of reproducing its recipe designer or roadmap.
 
+Milestones describe capability tracks rather than a strict delivery order. Read-only analysis and
+safety work may advance ahead of broader exports or integrations when that creates practical value.
+
 ## Milestone 0 — Foundation (working)
 
 - [x] installable Python package and CLI
 - [x] environment-only token handling
 - [x] read-only API client
 - [x] endpoint diagnostics
+- [x] one-page, read-only brew listing with sanitized names and canonical UUIDs
 - [x] validated, paginated JSON collection snapshot
 - [x] automated tests, linting, and type checking
 
@@ -25,9 +29,10 @@ Forge Companion complements BrewForge instead of reproducing its recipe designer
 
 ## Milestone 2 — Understand fermentation
 
-- [ ] CSV export of brew readings
+- [x] deterministic, spreadsheet-safe CSV export of validated brew readings
 - [ ] attenuation and fermentation-rate calculations
-- [ ] stale-data and outlier detection
+- [x] stale-reading, telemetry-gap, and timestamp-conflict detection
+- [ ] configurable gravity and temperature outlier detection
 - [ ] standalone HTML fermentation report
 - [ ] shareable SVG/PNG Fermentation Brief
 - [ ] split-batch comparison
@@ -44,9 +49,11 @@ Forge Companion complements BrewForge instead of reproducing its recipe designer
 
 - [x] simulation-only spunding threshold advisor
 - [x] stale-data, timestamp-conflict, confirmation, and cadence gates
-- [ ] one-shot, idempotent Shelly actions
+- [ ] read-only Shelly connectivity and state check
+- [ ] device-independent dry-run actuation plan
+- [ ] one-shot, explicitly armed Shelly action with timeout and idempotency
 - [ ] read-back verification and audit log
-- [ ] explicit experimental warning and mechanical safety requirements
+- [x] explicit experimental warning and mechanical safety requirements
 
 ## Non-goals
 
