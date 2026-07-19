@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a focused, safe improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the brewing problem first. Large features and anything involving writes or hardware need a safety design before implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Brewing problem
+      description: What is difficult today, and who runs into it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed workflow
+      description: Show the command or user flow you would like to have.
+    validations:
+      required: true
+  - type: input
+    id: requests
+    attributes:
+      label: Expected BrewForge API use
+      description: Estimate requests per run if the feature contacts BrewForge.
+      placeholder: Offline, or 1 GET request per run
+  - type: textarea
+    id: safety
+    attributes:
+      label: Privacy and safety implications
+      description: Note any private data, API writes, scheduled polling, or hardware involved.
+    validations:
+      required: true

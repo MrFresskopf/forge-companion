@@ -5,9 +5,26 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 import forge_companion.cli as cli
+from forge_companion import __version__
 from forge_companion.cli import app
 
 runner = CliRunner()
+
+
+def test_version_option_prints_package_version() -> None:
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output == f"Forge Companion {__version__}\n"
+
+
+def test_help_groups_commands_by_user_goal() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Start here" in result.output
+    assert "Reports and exports" in result.output
+    assert "Safety experiments" in result.output
 
 
 def test_doctor_requires_token_without_printing_secrets() -> None:

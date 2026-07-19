@@ -1,182 +1,106 @@
-# Forge Companion
+<p align="center">
+  <img src="docs/assets/forge-companion-hero.svg" alt="Forge Companion: understand your BrewForge data and leave it untouched" width="100%">
+</p>
 
-> **Unofficial community project.** Forge Companion is not affiliated with or endorsed by BrewForge. BrewForge is a product and trademark of its respective owner.
+<p align="center">
+  <a href="https://github.com/MrFresskopf/forge-companion/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MrFresskopf/forge-companion/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.python.org/downloads/"><img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-788C5D"></a>
+  <img alt="BrewForge access" src="https://img.shields.io/badge/BrewForge-read--only-D97757">
+</p>
 
-Read-only tools that help brewers protect, inspect, and understand data stored in
-[BrewForge](https://brewforge.sh/r/ckpejh7o).
+Forge Companion turns [BrewForge](https://brewforge.sh/) data into local snapshots,
+inventory checks, CSV exports, and fermentation reports. It never creates, changes, or deletes
+anything in BrewForge.
 
-> **Referral disclosure:** The BrewForge link above is a referral link.
+> [!IMPORTANT]
+> Forge Companion is an unofficial community project and is not affiliated with or endorsed by
+> BrewForge.
 
-## Why this exists
+> [!NOTE]
+> **Developer preview:** Forge Companion is source-installable, read-only, and not yet a complete
+> backup solution. Interfaces and snapshot formats may change before 1.0.
 
-BrewForge is the brewing system of record. Forge Companion provides connective tissue around it:
+## Get running in three steps
 
-- **Protect:** portable snapshots of supported API collections
-- **Inspect:** API and endpoint diagnostics
-- **Understand:** offline inventory audits, fermentation reports, and fail-closed simulations
-- **Connect:** MQTT, Home Assistant, and device bridges (future milestones)
+You need Python 3.11 or newer, a BrewForge plan with API access, and a token with the narrowest
+read scopes needed for your command.
 
-The project deliberately starts read-only. It does not create, update, or delete BrewForge data.
+### 1. Install
 
-## Current commands
-
-### Find brew UUIDs
+With [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-forge-companion brews
-forge-companion brews --page 2 --limit 25
+uv tool install git+https://github.com/MrFresskopf/forge-companion.git
 ```
 
-The command makes exactly one read-only `GET /brews` request and prints only each brew's sanitized
-name and canonical UUID. It does not select a brew automatically or fetch details, notes, or
-readings. If the API reports another page, the command prints the next `--page` value instead of
-requesting it automatically.
+Or with [pipx](https://pipx.pypa.io/):
 
-### Diagnose API access
+```bash
+pipx install git+https://github.com/MrFresskopf/forge-companion.git
+```
+
+### 2. Add your token to the current shell
+
+macOS, Linux, or Git Bash:
+
+```bash
+export BREWFORGE_API_TOKEN='bfk_your_token_here'
+```
+
+Windows Command Prompt (the token is not saved permanently):
+
+```cmd
+set /p "BREWFORGE_API_TOKEN=BrewForge API token: "
+```
+
+Do not put a real token in a config file, issue, screenshot, or commit.
+
+### 3. Check access and create your first report
 
 ```bash
 forge-companion doctor
+forge-companion brews
+forge-companion fermentation-html BREW_ID --title "My brew" --temperature-unit C
 ```
 
-The command checks the documented collections for brews, inventory, equipment, and style profiles. It uses seven API requests and reports endpoint failures individually.
+`brews` prints the human-readable brew name next to the exact UUID expected by report commands.
+The report lands in `reports/` and opens as a standalone file in any modern browser.
 
-### Create a JSON collection snapshot
+<p align="center">
+  <img src="docs/assets/fermentation-report.png" alt="Example standalone Forge Companion fermentation report" width="880">
+</p>
 
-```bash
-forge-companion snapshot
-forge-companion snapshot --output snapshots/my-brewforge-collections.json
-```
+## What it does
 
-The snapshot contains every validated page returned by the supported top-level collection
-endpoints. API credentials are not included.
+| Goal | Command | Network use |
+|---|---|---:|
+| Check token and API access | `forge-companion doctor` | 7 GET requests |
+| Find a brew by name | `forge-companion brews` | 1 GET request |
+| Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
+| Check inventory from a snapshot | `forge-companion inventory-audit FILE` | Offline |
+| Create a Markdown fermentation brief | `forge-companion fermentation-brief BREW_ID` | 2 GET requests |
+| Export validated readings | `forge-companion fermentation-csv BREW_ID` | 1 GET request |
+| Create an offline visual report | `forge-companion fermentation-html BREW_ID` | 1 GET request |
+| Simulate a spunding threshold | `forge-companion spunding-advisor BREW_ID ...` | 1 GET request |
 
-> This is **not yet a complete or restorable account backup**. Version 0.1 does not fetch
-> per-brew details, notes, fermentation readings, or data unavailable through the documented
-> API. Calling it a collection snapshot makes that scope explicit and avoids spending one API
-> request per brew and subresource without the user's informed choice.
+See the [command guide](docs/COMMANDS.md) for options, output details, and examples.
 
-### Audit inventory offline
+## Why read-only?
 
-```bash
-forge-companion inventory-audit snapshots/brewforge.json
-forge-companion inventory-audit snapshots/brewforge.json --as-of 2026-07-17
-```
+Brewing data is useful; accidental writes are not. Forge Companion starts with a deliberately small
+trust boundary:
 
-The audit reads only the local snapshot and currently reports:
+- the API client exposes only `GET`
+- tokens come only from `BREWFORGE_API_TOKEN`
+- default `reports/` and `snapshots/` destinations stay local and are ignored by Git; custom output
+  paths remain your responsibility
+- collection snapshots abort on invalid or incomplete pages; fermentation exports keep valid
+  readings but report every rejection and timestamp conflict
+- the spunding advisor simulates a decision and never contacts hardware
 
-- expired inventory
-- negative quantities
-- missing yeast or miscellaneous-item units
-- conservative possible duplicates using category-specific identity fields
-
-Findings are advisory. Possible duplicates are never merged or changed automatically.
-
-### Create a fermentation brief
-
-```bash
-forge-companion fermentation-brief BREW_ID \
-  --output reports/fermentation-BREW_ID.md \
-  --temperature-unit C
-```
-
-The command pins the exact brew UUID and uses two read-only API requests: one for the brew and
-one for its stored fermentation readings. It writes a local Markdown report with observation
-duration, gravity change, an optional 24-hour least-squares slope, temperature range, freshness,
-largest telemetry gap, and recent readings.
-
-Temperature units are never guessed. Omit `--temperature-unit` to label values as raw API values.
-The report is descriptive: it does not declare fermentation complete and cannot trigger hardware.
-Reports may contain private brew names, comments, and measurements, so `reports/` is gitignored.
-
-### Export fermentation readings as CSV
-
-```bash
-forge-companion fermentation-csv BREW_ID
-forge-companion fermentation-csv BREW_ID --output reports/readings-BREW_ID.csv
-```
-
-The command pins one exact brew UUID and makes exactly one read-only request for its stored
-fermentation readings. It writes accepted readings in chronological order with these stable columns:
-
-```text
-id,timestamp_utc,gravity_sg,temperature_raw,pressure,ph,comment
-```
-
-Temperature units are not guessed. The `temperature_raw` column preserves the validated numeric API
-value, while missing optional measurements remain empty cells. The completion message reports how
-many input records were rejected and how many timestamps contained conflicting readings, so a
-partial export is never silent. If no valid reading remains, no CSV is written.
-
-Text cells that spreadsheet applications could interpret as formulas are prefixed with an apostrophe.
-CSV files can contain private comments, identifiers, and measurements; the default destination is the
-gitignored `reports/` directory.
-
-### Create a standalone HTML fermentation report
-
-```bash
-forge-companion fermentation-html BREW_ID \
-  --title "Lithuanian Session Witbier" \
-  --temperature-unit C \
-  --output reports/lithuanian-session-witbier.html
-```
-
-The command pins one exact brew UUID and makes exactly one read-only request for its stored readings.
-It does not fetch brew details or select a brew automatically; use `--title` when a human-readable
-name is wanted. The generated file contains summary metrics, data-quality evidence, recent readings,
-and an inline SVG gravity/temperature chart.
-
-The report is a single offline HTML file with no JavaScript, CDN, remote fonts, images, or other
-external dependencies. Dynamic titles, comments, and bounded rejection reasons are sanitized and
-HTML-escaped, and a restrictive Content Security Policy blocks external content. Destination paths
-are not embedded in the report; their CLI completion output is terminal-sanitized. Writes are
-atomic. Temperature units are never guessed; omit `--temperature-unit` to show raw API values.
-
-HTML reports remain private brewing data and belong in the gitignored `reports/` directory unless
-deliberately reviewed and shared. They are descriptive and never declare fermentation complete or
-trigger hardware.
-
-### Simulate a spunding threshold decision
-
-```bash
-forge-companion spunding-advisor BREW_ID \
-  --trigger-sg 1.0120 \
-  --max-age-minutes 90 \
-  --max-gap-minutes 120 \
-  --confirmations 2
-```
-
-The command pins one exact brew UUID and makes exactly one read-only request for its stored
-fermentation readings. It prints one of three evidence-backed statuses:
-
-- `NO_DECISION`: telemetry is malformed, conflicted, stale, insufficient, or too widely spaced
-- `WAIT`: at least one of the latest confirmation readings is above the explicit trigger SG
-- `CONDITION_MET`: every latest confirmation reading is at or below the explicit trigger SG
-
-`CONDITION_MET` is a simulation result, not a device command or a declaration that actuation is
-safe. Forge Companion does not contact a Shelly, verify pressure, confirm valve position, or test a
-regulator or PRV. The trigger SG must be calculated separately from the actual beer volume,
-fermenter volume and headspace, expected FG, temperature, desired pressure, and carbonation target.
-
-The command has no scheduler. Calling one pinned readings endpoint hourly would already use roughly
-720 of BrewForge's documented 1,000 monthly requests.
-
-## Requirements
-
-All commands require Python 3.11 or newer.
-
-`inventory-audit` works entirely offline with an existing Forge Companion snapshot. It does not
-need a BrewForge subscription, API access, or token.
-
-Commands that contact BrewForge additionally require:
-
-- A BrewForge plan with API access
-- A BrewForge API token with the narrowest suitable read scopes:
-  - `brews:read`
-  - `inventory:read`
-  - `equipment:read`
-  - `styles:read`
-
-BrewForge currently documents limits of 100 requests per hour and 1,000 requests per month. Forge Companion paginates collections and avoids one-request-per-item behavior.
+The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
+assets. It describes telemetry but does not decide that fermentation is complete.
 
 ## Install for development
 
@@ -184,37 +108,10 @@ BrewForge currently documents limits of 100 requests per hour and 1,000 requests
 git clone https://github.com/MrFresskopf/forge-companion.git
 cd forge-companion
 uv sync --extra dev
+uv run forge-companion --help
 ```
 
-Set the token in the current shell. Do not put a real token in source control:
-
-```bash
-export BREWFORGE_API_TOKEN='bfk_your_token_here'
-```
-
-In Windows Command Prompt (`cmd.exe`), enter the token without placing it in the command history:
-
-```cmd
-set /p "BREWFORGE_API_TOKEN=BrewForge API token: "
-```
-
-Remove it from that Command Prompt session when finished:
-
-```cmd
-set "BREWFORGE_API_TOKEN="
-```
-
-Run a command:
-
-```bash
-uv run forge-companion brews
-uv run forge-companion doctor
-uv run forge-companion snapshot --output snapshots/brewforge.json
-uv run forge-companion fermentation-csv BREW_ID
-uv run forge-companion fermentation-html BREW_ID --title "My brew" --temperature-unit C
-```
-
-## Quality checks
+Run the quality checks before opening a pull request:
 
 ```bash
 uv run pytest
@@ -222,37 +119,27 @@ uv run ruff check .
 uv run mypy
 ```
 
-## Safety model
+## Project status
 
-- The initial API client exposes only `GET`.
-- Tokens come exclusively from `BREWFORGE_API_TOKEN`.
-- `.env` files and generated snapshots are ignored by Git.
-- Snapshots are written atomically through a uniquely named temporary file.
-- Pagination must make progress and match the API's declared total; collection processing is
-  capped at 100 pages.
-- HTTP, response-validation, and file errors stop snapshots with a concise CLI error instead of
-  creating a misleading partial success.
-- Future write support, if any, requires a separate opt-in design with dry runs and read-back verification.
+Forge Companion is young and intentionally conservative. Collection snapshots, inventory audits,
+fermentation exports/reports, and fail-closed spunding simulations work today. MQTT, Home Assistant,
+and hardware bridges remain future work.
 
-See [SECURITY.md](SECURITY.md) for responsible disclosure and credential handling.
-
-## Roadmap
-
-The next planned vertical slices are:
-
-1. snapshot manifest and validation
-2. machine-readable audit output and additional inventory rules
-3. attenuation/rate analysis and configurable outlier detection
-4. webhook/MQTT bridge
-5. Home Assistant integration
-6. experimental automation modules with fail-closed safeguards
-
-See [docs/ROADMAP.md](docs/ROADMAP.md) for scope and non-goals.
+The snapshot command currently covers supported top-level collections. It is not yet a complete or
+restorable account backup. See the [roadmap](docs/ROADMAP.md) for current scope and non-goals.
 
 ## Contributing
 
-Small, test-backed changes are welcome. Please keep the default path read-only and never include real user data or API tokens in issues, fixtures, screenshots, or commits.
+Small, test-backed changes are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
+pull request, and never include private brew data or real API tokens in fixtures, screenshots, issues,
+or commits.
+
+Security reports belong in the private process described in [SECURITY.md](SECURITY.md).
+
+If Forge Companion is useful and you are considering BrewForge, you can
+[support the project with this referral link](https://brewforge.sh/r/ckpejh7o). The destination is
+the normal BrewForge service; the link credits this project when you sign up.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
