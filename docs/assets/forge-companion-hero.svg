@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Forge Companion</title>
+  <desc id="desc">Read-only BrewForge tools with a terminal command and fermentation chart preview.</desc>
+  <rect width="1200" height="420" rx="24" fill="#faf9f5"/>
+  <path d="M0 354 C180 315 298 390 470 348 C635 308 782 385 948 343 C1055 316 1120 322 1200 344 V420 H0Z" fill="#f0eee6"/>
+  <g transform="translate(64 63)">
+    <g transform="translate(0 2)">
+      <rect width="52" height="52" rx="13" fill="#141413"/>
+      <path d="M13 18h26l-3 19H16z" fill="none" stroke="#faf9f5" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M18 18v-4m16 4v-4M14 25h24" stroke="#d97757" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M23 33c3-5 6-6 9-2" fill="none" stroke="#788c5d" stroke-width="2.4" stroke-linecap="round"/>
+    </g>
+    <text x="0" y="106" fill="#141413" font-family="Georgia, 'Times New Roman', serif" font-size="50" font-weight="500" letter-spacing="-1.2">Forge Companion</text>
+    <text x="1" y="143" fill="#3d3d3a" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="20">Understand your BrewForge data. Leave it untouched.</text>
+    <g transform="translate(0 173)">
+      <rect width="112" height="28" rx="14" fill="#e7ecdf" stroke="#c8d2b8"/>
+      <circle cx="16" cy="14" r="4" fill="#788c5d"/>
+      <text x="27" y="19" fill="#4e6240" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing=".8">READ ONLY</text>
+      <text x="130" y="19" fill="#87867f" font-family="ui-monospace, monospace" font-size="12">community-built · local reports</text>
+    </g>
+    <g transform="translate(0 235)">
+      <rect width="468" height="57" rx="10" fill="#141413"/>
+      <circle cx="22" cy="18" r="3" fill="#d97757"/><circle cx="34" cy="18" r="3" fill="#c9a85c"/><circle cx="46" cy="18" r="3" fill="#788c5d"/>
+      <text x="20" y="43" fill="#d1cfc5" font-family="ui-monospace, monospace" font-size="13"><tspan fill="#d97757">$</tspan> forge-companion fermentation-html BREW_ID</text>
+    </g>
+  </g>
+  <g transform="translate(645 43)">
+    <rect width="491" height="334" rx="16" fill="#ffffff" stroke="#d1cfc5" stroke-width="1.5"/>
+    <text x="28" y="34" fill="#87867f" font-family="ui-monospace, monospace" font-size="10" letter-spacing="1">FERMENTATION REPORT</text>
+    <text x="28" y="66" fill="#141413" font-family="Georgia, 'Times New Roman', serif" font-size="25">Summer Wit · RAPT Pill</text>
+    <g transform="translate(28 88)">
+      <g><rect width="132" height="62" rx="9" fill="#faf9f5" stroke="#e3dacc"/><text x="13" y="20" fill="#87867f" font-family="ui-monospace, monospace" font-size="9">LATEST SG</text><text x="13" y="47" fill="#141413" font-family="Georgia, serif" font-size="24">1.0124</text></g>
+      <g transform="translate(145)"><rect width="132" height="62" rx="9" fill="#faf9f5" stroke="#e3dacc"/><text x="13" y="20" fill="#87867f" font-family="ui-monospace, monospace" font-size="9">TEMPERATURE</text><text x="13" y="47" fill="#141413" font-family="Georgia, serif" font-size="24">29.1 °C</text></g>
+      <g transform="translate(290)"><rect width="145" height="62" rx="9" fill="#faf9f5" stroke="#e3dacc"/><text x="13" y="20" fill="#87867f" font-family="ui-monospace, monospace" font-size="9">LATEST READING</text><text x="13" y="47" fill="#141413" font-family="Georgia, serif" font-size="24">18m ago</text></g>
+    </g>
+    <g transform="translate(28 176)">
+      <line x1="0" y1="0" x2="435" y2="0" stroke="#f0eee6"/>
+      <line x1="0" y1="56" x2="435" y2="56" stroke="#f0eee6"/>
+      <line x1="0" y1="112" x2="435" y2="112" stroke="#e3dacc"/>
+      <polyline points="0,12 42,20 86,31 129,39 174,51 218,64 262,73 305,86 349,96 392,102 435,106" fill="none" stroke="#d97757" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <polyline points="0,82 42,75 86,79 129,66 174,62 218,57 262,59 305,48 349,53 392,46 435,49" fill="none" stroke="#788c5d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="435" cy="106" r="4" fill="#d97757"/><circle cx="435" cy="49" r="4" fill="#788c5d"/>
+    </g>
+    <g transform="translate(28 311)" font-family="ui-monospace, monospace" font-size="10">
+      <line x1="0" y1="-3" x2="20" y2="-3" stroke="#d97757" stroke-width="3"/><text x="28" y="0" fill="#87867f">Gravity</text>
+      <line x1="102" y1="-3" x2="122" y2="-3" stroke="#788c5d" stroke-width="3"/><text x="130" y="0" fill="#87867f">Temperature</text>
+      <text x="435" y="0" fill="#87867f" text-anchor="end">offline HTML</text>
+    </g>
+  </g>
+</svg>

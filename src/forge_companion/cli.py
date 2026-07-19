@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 import typer
 
+from forge_companion import __version__
 from forge_companion.backup import create_backup, write_backup
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
@@ -25,12 +26,21 @@ from forge_companion.terminal_text import safe_terminal_text
 app = typer.Typer(
     help="Unofficial, read-only community tools for BrewForge.",
     no_args_is_help=True,
+    invoke_without_command=True,
 )
 
 
 @app.callback()
-def main() -> None:
+def main(
+    version: Annotated[
+        bool,
+        typer.Option("--version", help="Show the version and exit.", is_eager=True),
+    ] = False,
+) -> None:
     """Run read-only BrewForge companion commands."""
+    if version:
+        typer.echo(f"Forge Companion {__version__}")
+        raise typer.Exit()
 
 
 def _token_from_environment() -> str:
@@ -41,7 +51,7 @@ def _token_from_environment() -> str:
     return token
 
 
-@app.command()
+@app.command(rich_help_panel="Start here")
 def doctor() -> None:
     """Check authentication and documented read-only API collections."""
     client = BrewForgeClient(token=_token_from_environment())
@@ -54,7 +64,7 @@ def doctor() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command("snapshot")
+@app.command("snapshot", rich_help_panel="Protect and inspect")
 def snapshot_command(
     output: Annotated[
         Path,
@@ -72,7 +82,7 @@ def snapshot_command(
     typer.echo(f"Collection snapshot written to {output}")
 
 
-@app.command("inventory-audit")
+@app.command("inventory-audit", rich_help_panel="Protect and inspect")
 def inventory_audit_command(
     snapshot: Annotated[Path, typer.Argument(help="Collection snapshot JSON file.")],
     as_of: Annotated[
@@ -103,7 +113,7 @@ def inventory_audit_command(
         )
 
 
-@app.command("fermentation-brief")
+@app.command("fermentation-brief", rich_help_panel="Reports and exports")
 def fermentation_brief_command(
     brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
     output: Annotated[
@@ -148,7 +158,7 @@ def fermentation_brief_command(
     typer.echo(f"Fermentation brief written to {destination}")
 
 
-@app.command("fermentation-csv")
+@app.command("fermentation-csv", rich_help_panel="Reports and exports")
 def fermentation_csv_command(
     brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
     output: Annotated[
@@ -183,7 +193,7 @@ def fermentation_csv_command(
     )
 
 
-@app.command("fermentation-html")
+@app.command("fermentation-html", rich_help_panel="Reports and exports")
 def fermentation_html_command(
     brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
     output: Annotated[
@@ -238,7 +248,7 @@ def fermentation_html_command(
     )
 
 
-@app.command("spunding-advisor")
+@app.command("spunding-advisor", rich_help_panel="Safety experiments")
 def spunding_advisor_command(
     brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
     trigger_sg: Annotated[
@@ -276,7 +286,7 @@ def spunding_advisor_command(
         raise typer.Exit(code=1) from None
 
 
-@app.command("brews")
+@app.command("brews", rich_help_panel="Start here")
 def brews_command(
     page: Annotated[
         int,

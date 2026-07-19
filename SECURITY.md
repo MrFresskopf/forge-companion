@@ -39,7 +39,9 @@ protection and manual override.
 
 ## Reporting vulnerabilities
 
-Do not publish credential leaks, authorization bypasses, or destructive API behavior in a public issue. Contact the maintainers privately with:
+Use GitHub's [private vulnerability reporting form](https://github.com/MrFresskopf/forge-companion/security/advisories/new).
+Do not publish credential leaks, authorization bypasses, or destructive API behavior in a public
+issue. Include:
 
 - affected version
 - reproduction steps using redacted identifiers
