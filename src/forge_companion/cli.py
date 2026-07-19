@@ -14,6 +14,7 @@ from forge_companion.backup import create_backup, write_backup
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
 from forge_companion.fermentation import analyze_readings, parse_readings
+from forge_companion.fermentation_csv import render_csv, write_csv
 from forge_companion.fermentation_report import render_markdown, write_markdown
 from forge_companion.inventory_audit import audit_inventory
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
@@ -144,6 +145,41 @@ def fermentation_brief_command(
         typer.echo(f"Fermentation brief failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"Fermentation brief written to {destination}")
+
+
+@app.command("fermentation-csv")
+def fermentation_csv_command(
+    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Destination CSV file."),
+    ] = None,
+) -> None:
+    """Export validated readings for one pinned brew as CSV."""
+    try:
+        canonical_id = str(UUID(brew_id))
+        destination = output or Path("reports") / f"fermentation-{canonical_id}.csv"
+        client = BrewForgeClient(token=_token_from_environment())
+        payload = client.get(f"brews/{canonical_id}/readings")
+        parsed = parse_readings(payload)
+        if not parsed.readings:
+            raise ValueError("no valid fermentation readings")
+        write_csv(render_csv(parsed), destination)
+    except httpx.HTTPError:
+        typer.echo("Fermentation CSV failed: API request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        typer.echo("Fermentation CSV failed: local file operation failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (TypeError, ValueError) as error:
+        typer.echo(f"Fermentation CSV failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    safe_destination = safe_terminal_text(str(destination), limit=300)
+    typer.echo(
+        f"{len(parsed.readings)} readings written to {safe_destination} "
+        f"({len(parsed.rejected)} rejected; "
+        f"{len(parsed.conflicting_timestamps)} conflicting timestamps)"
+    )
 
 
 @app.command("spunding-advisor")

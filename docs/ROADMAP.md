@@ -29,7 +29,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 
 ## Milestone 2 — Understand fermentation
 
-- [ ] CSV export of brew readings
+- [x] deterministic, spreadsheet-safe CSV export of validated brew readings
 - [ ] attenuation and fermentation-rate calculations
 - [x] stale-reading, telemetry-gap, and timestamp-conflict detection
 - [ ] configurable gravity and temperature outlier detection

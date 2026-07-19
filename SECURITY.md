@@ -22,6 +22,10 @@ protecting and encrypting them. They are not complete or directly restorable acc
 Fermentation briefs can contain brew names, comments, timestamps, and measurements. Keep them in
 the gitignored `reports/` directory unless you deliberately review and share a report.
 
+Fermentation CSV exports can contain identifiers, comments, timestamps, and measurements. They use
+spreadsheet-safe text cells for formula-like IDs and comments, but remain private brewing data and
+belong in the gitignored `reports/` directory unless deliberately reviewed and shared.
+
 The spunding advisor is simulation-only. It performs one GET for a pinned brew's readings and
 prints a threshold evaluation; it has no scheduler, device client, actuator state, or write path.
 Its output cannot verify pressure, valve position, regulator behavior, PRV condition, or mechanical

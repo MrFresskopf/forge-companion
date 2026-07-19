@@ -85,6 +85,29 @@ Temperature units are never guessed. Omit `--temperature-unit` to label values a
 The report is descriptive: it does not declare fermentation complete and cannot trigger hardware.
 Reports may contain private brew names, comments, and measurements, so `reports/` is gitignored.
 
+### Export fermentation readings as CSV
+
+```bash
+forge-companion fermentation-csv BREW_ID
+forge-companion fermentation-csv BREW_ID --output reports/readings-BREW_ID.csv
+```
+
+The command pins one exact brew UUID and makes exactly one read-only request for its stored
+fermentation readings. It writes accepted readings in chronological order with these stable columns:
+
+```text
+id,timestamp_utc,gravity_sg,temperature_raw,pressure,ph,comment
+```
+
+Temperature units are not guessed. The `temperature_raw` column preserves the validated numeric API
+value, while missing optional measurements remain empty cells. The completion message reports how
+many input records were rejected and how many timestamps contained conflicting readings, so a
+partial export is never silent. If no valid reading remains, no CSV is written.
+
+Text cells that spreadsheet applications could interpret as formulas are prefixed with an apostrophe.
+CSV files can contain private comments, identifiers, and measurements; the default destination is the
+gitignored `reports/` directory.
+
 ### Simulate a spunding threshold decision
 
 ```bash
@@ -160,6 +183,7 @@ Run a command:
 uv run forge-companion brews
 uv run forge-companion doctor
 uv run forge-companion snapshot --output snapshots/brewforge.json
+uv run forge-companion fermentation-csv BREW_ID
 ```
 
 ## Quality checks
