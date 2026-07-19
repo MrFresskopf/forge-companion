@@ -4,21 +4,33 @@
 import html
 import math
 import os
+import re
 import sys
 import tempfile
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from forge_companion.fermentation import FermentationMetrics, FermentationReading, ParseResult
-from forge_companion.terminal_text import safe_terminal_text
 
 
 def _escape(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
+def _normalized_text(value: object, *, limit: int) -> str:
+    text = re.sub(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", str(value))
+    without_controls = "".join(
+        " " if unicodedata.category(character).startswith("C") else character for character in text
+    )
+    normalized = " ".join(without_controls.split())
+    if len(normalized) > limit:
+        normalized = normalized[: limit - 3] + "..."
+    return normalized
+
+
 def _safe_text(value: object, *, limit: int) -> str:
-    return _escape(safe_terminal_text(str(value), limit=limit))
+    return _escape(_normalized_text(value, limit=limit))
 
 
 def _duration(value: timedelta) -> str:
@@ -205,7 +217,7 @@ def render_html(
     if not parsed.readings:
         raise ValueError("no valid fermentation readings")
 
-    normalized_title = safe_terminal_text(title, limit=160) or "Fermentation report"
+    normalized_title = _normalized_text(title, limit=160) or "Fermentation report"
     safe_title = _escape(normalized_title)
     unit = f"°{temperature_unit}" if temperature_unit is not None else "raw API value"
     if metrics.minimum_temperature is None or metrics.maximum_temperature is None:

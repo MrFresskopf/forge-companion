@@ -12,6 +12,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] read-only API client
 - [x] endpoint diagnostics
 - [x] one-page, read-only brew listing with sanitized names and canonical UUIDs
+- [x] explicit, paginated interactive brew selection for standalone HTML reports
 - [x] validated, paginated JSON collection snapshot
 - [x] automated tests, linting, and type checking
 

@@ -188,3 +188,98 @@ def test_fermentation_html_sanitizes_destination_in_terminal_output(
     assert destination.exists()
     assert "\u202e" not in result.output
     assert "report INJECTED.html" in result.output
+
+
+def test_fermentation_html_selects_numbered_brew_and_uses_its_name(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("BREWFORGE_API_TOKEN", "bfk_test_select_token")
+    first_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    second_id = "d995e6f0-69ee-422a-a781-1dd08427563a"
+    calls: list[tuple[str, dict[str, object] | None]] = []
+
+    class StubClient:
+        def __init__(self, *, token: str) -> None:
+            assert token == "bfk_test_select_token"
+
+        def get(self, path: str, params: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append((path, params))
+            if path == "brews":
+                return {
+                    "data": [
+                        {"id": first_id, "name": "Lithuanian Session Witbier"},
+                        {"id": second_id, "name": "Forgotten Hope"},
+                    ],
+                    "pagination": {"hasMore": False, "total": 2},
+                }
+            if path == f"brews/{second_id}/readings":
+                return {
+                    "data": [
+                        {
+                            "id": "reading",
+                            "timestamp": "2026-07-18T08:00:00Z",
+                            "gravity": 1.04,
+                            "temperature": 29.0,
+                        }
+                    ]
+                }
+            raise AssertionError(f"unexpected GET: {path}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    destination = tmp_path / "selected.html"
+
+    result = runner.invoke(
+        app,
+        [
+            "fermentation-html",
+            "--select",
+            "--temperature-unit",
+            "C",
+            "--output",
+            str(destination),
+        ],
+        input="2\n",
+    )
+
+    assert result.exit_code == 0
+    assert calls == [
+        ("brews", {"page": 1, "limit": 100}),
+        (f"brews/{second_id}/readings", None),
+    ]
+    assert "1  Lithuanian Session Witbier" in result.output
+    assert "2  Forgotten Hope" in result.output
+    assert "Brew number: 2" in result.output
+    assert "Fermentation Report: Forgotten Hope" in destination.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ([], "provide a brew UUID or --select"),
+        (
+            ["54d34560-f1af-49f0-9a26-6caca3397f75", "--select"],
+            "brew UUID and --select cannot be used together",
+        ),
+        (
+            ["54d34560-f1af-49f0-9a26-6caca3397f75", "--page", "2"],
+            "--page and --limit require --select",
+        ),
+        (
+            ["54d34560-f1af-49f0-9a26-6caca3397f75", "--limit", "25"],
+            "--page and --limit require --select",
+        ),
+    ],
+)
+def test_fermentation_html_rejects_ambiguous_selection_before_client_creation(
+    monkeypatch, arguments: list[str], expected_error: str
+) -> None:
+    class ForbiddenClient:
+        def __init__(self, *, token: str) -> None:
+            raise AssertionError(f"client must not be created: {token}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", ForbiddenClient)
+
+    result = runner.invoke(app, ["fermentation-html", *arguments])
+
+    assert result.exit_code == 1
+    assert expected_error in result.output

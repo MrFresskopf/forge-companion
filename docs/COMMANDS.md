@@ -99,15 +99,22 @@ conflicting timestamps; if no valid reading remains, no CSV is written.
 Create a self-contained visual fermentation report:
 
 ```bash
+forge-companion fermentation-html --select --temperature-unit C
+
 forge-companion fermentation-html BREW_ID \
   --title "Lithuanian Session Witbier" \
   --temperature-unit C \
   --output reports/lithuanian-session-witbier.html
 ```
 
-The command uses one readings request and does not fetch brew details. Pass `--title` for a friendly
-report name. The output includes summary metrics, data-quality evidence, recent readings, and an
-inline SVG gravity/temperature chart.
+The recommended interactive form makes one brew-list request, prints a numbered page of sanitized
+names, and only fetches readings after an explicit number is chosen. Use `--page` and `--limit` to
+select a different list page; pagination never fans out silently. The chosen name becomes the default
+report title.
+
+The UUID form remains deterministic for scripts and uses exactly one readings request. It does not
+fetch brew details; pass `--title` for a friendly name. Both forms include summary metrics,
+data-quality evidence, recent readings, and an inline SVG gravity/temperature chart.
 
 The HTML has no JavaScript, CDN, remote fonts, images, or tracking. Dynamic content is sanitized and
 escaped, a restrictive Content Security Policy blocks external content, and writes are atomic.

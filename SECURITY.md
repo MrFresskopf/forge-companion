@@ -31,6 +31,10 @@ and HTML-escape dynamic text, cap displayed rejection reasons, embed no external
 ship with a restrictive Content Security Policy. These defenses do not make a report public-safe;
 review it deliberately before moving it out of the gitignored `reports/` directory.
 
+Interactive HTML selection makes one bounded brew-list GET and one readings GET after the user
+chooses a displayed number. It never selects the newest or active brew automatically, never fetches
+brew details, and never follows additional list pages without an explicit `--page` value.
+
 The spunding advisor is simulation-only. It performs one GET for a pinned brew's readings and
 prints a threshold evaluation; it has no scheduler, device client, actuator state, or write path.
 Its output cannot verify pressure, valve position, regulator behavior, PRV condition, or mechanical

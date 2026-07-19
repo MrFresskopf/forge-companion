@@ -2,6 +2,7 @@
 
 import json
 import os
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
@@ -193,9 +194,69 @@ def fermentation_csv_command(
     )
 
 
+@dataclass(frozen=True)
+class _BrewChoice:
+    id: str
+    terminal_name: str
+    report_name: str
+
+
+def _validated_brew_choices(
+    payload: dict[str, object], *, page: int, limit: int
+) -> tuple[list[_BrewChoice], bool]:
+    data = payload.get("data")
+    if not isinstance(data, list):
+        raise TypeError("brews response has no list-shaped data field")
+    pagination = payload.get("pagination")
+    if not isinstance(pagination, dict):
+        raise TypeError("brews response has no object-shaped pagination")
+    has_more = pagination.get("hasMore")
+    if not isinstance(has_more, bool):
+        raise TypeError("pagination.hasMore must be a boolean")
+    total = pagination.get("total")
+    if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+        raise TypeError("pagination.total must be a non-negative integer")
+    if has_more and not data:
+        raise ValueError("pagination made no progress while hasMore is true")
+    returned_end = (page - 1) * limit + len(data)
+    pagination_contradiction = (
+        len(data) > limit
+        or (bool(data) and returned_end > total)
+        or (has_more and returned_end >= total)
+        or (not has_more and returned_end < total)
+    )
+    if pagination_contradiction:
+        raise ValueError("pagination metadata contradicts returned data")
+
+    choices: list[_BrewChoice] = []
+    for item in data:
+        if not isinstance(item, dict):
+            raise TypeError("brew is not an object")
+        raw_id = item.get("id")
+        if not isinstance(raw_id, str):
+            raise TypeError("brew ID is not a string")
+        choice_id = str(UUID(raw_id))
+        if "name" not in item or not str(item.get("name", "")).strip():
+            report_name = "<unnamed brew>"
+            terminal_name = report_name
+        else:
+            name = item["name"]
+            if not isinstance(name, str):
+                raise TypeError("brew name is not a string")
+            report_name = name.strip()
+            terminal_name = safe_terminal_text(report_name)
+            if not terminal_name:
+                raise ValueError("brew name is empty after terminal sanitization")
+        choices.append(_BrewChoice(choice_id, terminal_name, report_name))
+    return choices, has_more
+
+
 @app.command("fermentation-html", rich_help_panel="Reports and exports")
 def fermentation_html_command(
-    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    brew_id: Annotated[
+        str | None,
+        typer.Argument(help="Exact BrewForge brew UUID; omit when using --select."),
+    ] = None,
     output: Annotated[
         Path | None,
         typer.Option("--output", "-o", help="Destination standalone HTML file."),
@@ -208,16 +269,52 @@ def fermentation_html_command(
         str | None,
         typer.Option("--temperature-unit", help="Explicit C or F; omitted means raw API value."),
     ] = None,
+    select: Annotated[
+        bool,
+        typer.Option("--select", help="Choose a brew interactively from one API page."),
+    ] = False,
+    page: Annotated[
+        int,
+        typer.Option("--page", min=1, help="One-indexed brew page used with --select."),
+    ] = 1,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=100, help="Brews shown with --select."),
+    ] = 100,
 ) -> None:
     """Create a self-contained HTML report for one pinned brew."""
     try:
-        canonical_id = str(UUID(brew_id))
+        if brew_id is None and not select:
+            raise ValueError("provide a brew UUID or --select")
+        if brew_id is not None and select:
+            raise ValueError("brew UUID and --select cannot be used together")
+        if not select and (page != 1 or limit != 100):
+            raise ValueError("--page and --limit require --select")
         unit = temperature_unit.upper() if temperature_unit is not None else None
         if unit not in {None, "C", "F"}:
             raise ValueError("temperature unit must be C or F")
-        destination = output or Path("reports") / f"fermentation-{canonical_id}.html"
-        report_title = title if title is not None else f"Brew {canonical_id}"
+        canonical_id = None if select else str(UUID(str(brew_id)))
         client = BrewForgeClient(token=_token_from_environment())
+        selected_name: str | None = None
+        if select:
+            brew_payload = client.get("brews", params={"page": page, "limit": limit})
+            choices, has_more = _validated_brew_choices(brew_payload, page=page, limit=limit)
+            if not choices:
+                raise ValueError(f"No brews found on page {page}.")
+            for index, choice in enumerate(choices, start=1):
+                typer.echo(f"{index}  {choice.terminal_name}")
+            if has_more:
+                typer.echo(f"More brews available: rerun with --select --page {page + 1}.")
+            selected_number = typer.prompt("Brew number", type=int)
+            if not 1 <= selected_number <= len(choices):
+                raise ValueError(f"brew number must be between 1 and {len(choices)}")
+            selected_choice = choices[selected_number - 1]
+            canonical_id = selected_choice.id
+            selected_name = selected_choice.report_name
+        if canonical_id is None:
+            raise ValueError("brew selection did not produce an ID")
+        destination = output or Path("reports") / f"fermentation-{canonical_id}.html"
+        report_title = title if title is not None else selected_name or f"Brew {canonical_id}"
         payload = client.get(f"brews/{canonical_id}/readings")
         parsed = parse_readings(payload)
         report_time = datetime.now(UTC)
@@ -301,43 +398,12 @@ def brews_command(
     try:
         client = BrewForgeClient(token=_token_from_environment())
         payload = client.get("brews", params={"page": page, "limit": limit})
-        data = payload.get("data")
-        if not isinstance(data, list):
-            raise TypeError("brews response has no list-shaped data field")
-        pagination = payload.get("pagination")
-        if not isinstance(pagination, dict):
-            raise TypeError("brews response has no object-shaped pagination")
-        has_more = pagination.get("hasMore")
-        if not isinstance(has_more, bool):
-            raise TypeError("pagination.hasMore must be a boolean")
-        total = pagination.get("total")
-        if not isinstance(total, int) or isinstance(total, bool) or total < 0:
-            raise TypeError("pagination.total must be a non-negative integer")
-        if has_more and not data:
-            raise ValueError("pagination made no progress while hasMore is true")
-        rows: list[tuple[str, str]] = []
-        for item in data:
-            if not isinstance(item, dict):
-                raise TypeError("brew is not an object")
-            brew_id = str(UUID(str(item.get("id"))))
-            if "name" not in item:
-                safe_name = "<unnamed brew>"
-            else:
-                name = item["name"]
-                if not isinstance(name, str):
-                    raise TypeError("brew name is not a string")
-                if not name.strip():
-                    safe_name = "<unnamed brew>"
-                else:
-                    safe_name = safe_terminal_text(name.strip())
-                    if not safe_name:
-                        raise ValueError("brew name is empty after terminal sanitization")
-            rows.append((safe_name, brew_id))
-        if not rows:
+        choices, has_more = _validated_brew_choices(payload, page=page, limit=limit)
+        if not choices:
             typer.echo(f"No brews found on page {page}.")
         else:
-            for name, brew_id in rows:
-                typer.echo(f"{name} | {brew_id}")
+            for choice in choices:
+                typer.echo(f"{choice.terminal_name} | {choice.id}")
         if has_more:
             typer.echo(f"More brews available: rerun with --page {page + 1}.")
     except httpx.HTTPError:

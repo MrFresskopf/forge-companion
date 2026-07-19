@@ -60,12 +60,12 @@ Do not put a real token in a config file, issue, screenshot, or commit.
 
 ```bash
 forge-companion doctor
-forge-companion brews
-forge-companion fermentation-html BREW_ID --title "My brew" --temperature-unit C
+forge-companion fermentation-html --select --temperature-unit C
 ```
 
-`brews` prints the human-readable brew name next to the exact UUID expected by report commands.
-The report lands in `reports/` and opens as a standalone file in any modern browser.
+`--select` prints a numbered page of sanitized brew names and prompts for one explicit choice. It
+uses the chosen name as the report title, so there is no UUID to copy. The report lands in `reports/`
+and opens as a standalone file in any modern browser. For scripts, pass an exact UUID instead.
 
 <p align="center">
   <img src="docs/assets/fermentation-report.png" alt="Example standalone Forge Companion fermentation report" width="880">
@@ -81,7 +81,8 @@ The report lands in `reports/` and opens as a standalone file in any modern brow
 | Check inventory from a snapshot | `forge-companion inventory-audit FILE` | Offline |
 | Create a Markdown fermentation brief | `forge-companion fermentation-brief BREW_ID` | 2 GET requests |
 | Export validated readings | `forge-companion fermentation-csv BREW_ID` | 1 GET request |
-| Create an offline visual report | `forge-companion fermentation-html BREW_ID` | 1 GET request |
+| Create an offline visual report | `forge-companion fermentation-html --select` | 2 GET requests |
+| Create a scripted offline visual report | `forge-companion fermentation-html BREW_ID` | 1 GET request |
 | Simulate a spunding threshold | `forge-companion spunding-advisor BREW_ID ...` | 1 GET request |
 
 See the [command guide](docs/COMMANDS.md) for options, output details, and examples.
