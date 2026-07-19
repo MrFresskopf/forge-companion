@@ -19,6 +19,7 @@ dependencies = [
 Homepage = "https://github.com/MrFresskopf/forge-companion"
 Repository = "https://github.com/MrFresskopf/forge-companion"
 Issues = "https://github.com/MrFresskopf/forge-companion/issues"
+Changelog = "https://github.com/MrFresskopf/forge-companion/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
