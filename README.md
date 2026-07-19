@@ -2,7 +2,10 @@
 
 > **Unofficial community project.** Forge Companion is not affiliated with or endorsed by BrewForge. BrewForge is a product and trademark of its respective owner.
 
-Read-only tools that help brewers protect, inspect, and understand data stored in [BrewForge](https://brewforge.sh/).
+Read-only tools that help brewers protect, inspect, and understand data stored in
+[BrewForge](https://brewforge.sh/r/ckpejh7o).
+
+> **Referral disclosure:** The BrewForge link above is a referral link.
 
 ## Why this exists
 
