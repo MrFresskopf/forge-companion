@@ -203,6 +203,60 @@ def test_fermentation_brief_uses_exactly_two_gets_and_writes_report(
     assert str(destination) in result.output
 
 
+def test_fermentation_brief_selects_brew_without_detail_request(
+    tmp_path: Path,
+    monkeypatch: object,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[tuple[str, object]] = []
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append((path, params))
+            if path == "brews":
+                return {
+                    "data": [{"id": brew_id, "name": "Selected Brief Brew"}],
+                    "pagination": {"hasMore": False, "total": 1},
+                }
+            if path == f"brews/{brew_id}/readings":
+                return {
+                    "data": [
+                        {
+                            "id": "reading",
+                            "timestamp": "2026-07-17T08:00:00Z",
+                            "gravity": 1.012,
+                        }
+                    ]
+                }
+            raise AssertionError(f"unexpected GET: {path}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    destination = tmp_path / "selected-brief.md"
+
+    result = runner.invoke(
+        app,
+        [
+            "fermentation-brief",
+            "--select",
+            "--output",
+            str(destination),
+        ],
+        input="1\n",
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [
+        ("brews", {"page": 1, "limit": 100}),
+        (f"brews/{brew_id}/readings", None),
+    ]
+    assert "1  Selected Brief Brew" in result.output
+    assert "# Fermentation Brief: Selected Brief Brew" in destination.read_text(encoding="utf-8")
+
+
 def test_fermentation_brief_does_not_echo_token_from_transport_exception(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -272,6 +326,57 @@ def test_spunding_advisor_uses_one_readings_get(monkeypatch: object) -> None:
     assert "Spunding advisor: CONDITION_MET" in result.output
     assert "Simulation only: no device command was sent." in result.output
     assert "test-token" not in result.output
+
+
+def test_spunding_advisor_selects_brew_before_readings(monkeypatch: object) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[tuple[str, object]] = []
+    now = datetime.now(UTC)
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append((path, params))
+            if path == "brews":
+                return {
+                    "data": [{"id": brew_id, "name": "Selected Advisor Brew"}],
+                    "pagination": {"hasMore": False, "total": 1},
+                }
+            if path == f"brews/{brew_id}/readings":
+                return {
+                    "data": [
+                        {
+                            "id": "reading-1",
+                            "timestamp": (now - timedelta(hours=1)).isoformat(),
+                            "gravity": 1.0119,
+                        },
+                        {
+                            "id": "reading-2",
+                            "timestamp": now.isoformat(),
+                            "gravity": 1.0117,
+                        },
+                    ]
+                }
+            raise AssertionError(f"unexpected GET: {path}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+
+    result = runner.invoke(
+        app,
+        ["spunding-advisor", "--select", "--trigger-sg", "1.012"],
+        input="1\n",
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [
+        ("brews", {"page": 1, "limit": 100}),
+        (f"brews/{brew_id}/readings", None),
+    ]
+    assert "1  Selected Advisor Brew" in result.output
+    assert "Spunding advisor: CONDITION_MET" in result.output
 
 
 def test_spunding_advisor_renders_no_decision_for_malformed_envelope(

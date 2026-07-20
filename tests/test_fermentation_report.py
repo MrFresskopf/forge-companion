@@ -55,6 +55,30 @@ def test_render_markdown_is_honest_and_escapes_table_comments() -> None:
     assert "does not prove that every upstream transmission arrived" in report
 
 
+def test_render_markdown_neutralizes_active_content_in_brew_name() -> None:
+    parsed = parse_readings(
+        {"data": [{"id": "1", "timestamp": "2026-07-17T09:00:00Z", "gravity": 1.010}]}
+    )
+    report_time = datetime(2026, 7, 17, 10, tzinfo=UTC)
+
+    report = render_markdown(
+        brew_name="<img src=x onerror=alert(1)> [remote](https://evil.invalid)",
+        brew_id="brew-123",
+        parsed=parsed,
+        metrics=analyze_readings(parsed, report_time=report_time),
+        report_time=report_time,
+        temperature_unit=None,
+    )
+
+    heading = report.splitlines()[0]
+    assert heading == (
+        r"# Fermentation Brief: \<img src\=x onerror\=alert\(1\)\> "
+        r"\[remote\]\(https\:\/\/evil\.invalid\)"
+    )
+    assert "<img src=x" not in heading
+    assert "[remote](https://evil.invalid)" not in heading
+
+
 def test_render_markdown_does_not_guess_temperature_unit() -> None:
     parsed = parse_readings(
         {

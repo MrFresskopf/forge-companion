@@ -9,6 +9,65 @@ from forge_companion.cli import app
 runner = CliRunner()
 
 
+def test_fermentation_csv_selects_brew_from_one_explicit_page(
+    tmp_path: Path,
+    monkeypatch: object,
+) -> None:
+    brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
+    calls: list[tuple[str, object]] = []
+
+    class StubClient:
+        def __init__(self, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            calls.append((path, params))
+            if path == "brews":
+                return {
+                    "data": [{"id": brew_id, "name": "Selected CSV brew"}],
+                    "pagination": {"hasMore": True, "total": 100},
+                }
+            if path == f"brews/{brew_id}/readings":
+                return {
+                    "data": [
+                        {
+                            "id": "reading",
+                            "timestamp": "2026-07-17T08:00:00Z",
+                            "gravity": 1.012,
+                        }
+                    ]
+                }
+            raise AssertionError(f"unexpected GET: {path}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    destination = tmp_path / "selected.csv"
+
+    result = runner.invoke(
+        app,
+        [
+            "fermentation-csv",
+            "--select",
+            "--page",
+            "2",
+            "--limit",
+            "25",
+            "--output",
+            str(destination),
+        ],
+        input="1\n",
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == [
+        ("brews", {"page": 2, "limit": 25}),
+        (f"brews/{brew_id}/readings", None),
+    ]
+    assert "1  Selected CSV brew" in result.output
+    assert "More brews available: rerun with --select --page 3." in result.output
+    assert destination.exists()
+
+
 def test_fermentation_csv_uses_one_get_and_writes_chronological_rows(
     tmp_path: Path,
     monkeypatch: object,

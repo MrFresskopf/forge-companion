@@ -61,15 +61,18 @@ changes inventory.
 
 ## `fermentation-brief`
 
-Create a local Markdown report for one exact brew:
+Create a local Markdown report for one explicitly selected brew:
 
 ```bash
+forge-companion fermentation-brief --select --temperature-unit C
+
 forge-companion fermentation-brief BREW_ID \
   --output reports/fermentation-BREW_ID.md \
   --temperature-unit C
 ```
 
-This command uses two requests: one for the brew and one for its readings. The report includes the
+Both forms use two requests. The interactive form uses one bounded brew-list request and one readings
+request; the UUID form uses one brew-detail request and one readings request. The report includes the
 observation period, gravity change, an optional 24-hour least-squares slope, temperature range,
 reading freshness, largest telemetry gap, and recent readings.
 
@@ -80,9 +83,13 @@ Temperature units are never guessed. Omit `--temperature-unit` to label values a
 Export accepted readings in chronological order:
 
 ```bash
+forge-companion fermentation-csv --select
 forge-companion fermentation-csv BREW_ID
 forge-companion fermentation-csv BREW_ID --output reports/readings-BREW_ID.csv
 ```
+
+The UUID form uses one readings request. The interactive form adds one bounded brew-list request and
+never requests further pages automatically.
 
 The stable columns are:
 
@@ -124,12 +131,18 @@ escaped, a restrictive Content Security Policy blocks external content, and writ
 Simulate a fail-closed gravity threshold decision:
 
 ```bash
+forge-companion spunding-advisor --select \
+  --trigger-sg 1.0120
+
 forge-companion spunding-advisor BREW_ID \
   --trigger-sg 1.0120 \
   --max-age-minutes 90 \
   --max-gap-minutes 120 \
   --confirmations 2
 ```
+
+The UUID form uses one readings request. The interactive form first makes one bounded brew-list
+request and then requests only the selected brew's readings.
 
 It returns one of three statuses:
 

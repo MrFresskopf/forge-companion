@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 import httpx
@@ -119,7 +119,10 @@ def inventory_audit_command(
 
 @app.command("fermentation-brief", rich_help_panel="Reports and exports")
 def fermentation_brief_command(
-    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    brew_id: Annotated[
+        str | None,
+        typer.Argument(help="Exact BrewForge brew UUID; omit when using --select."),
+    ] = None,
     output: Annotated[
         Path | None,
         typer.Option("--output", "-o", help="Destination Markdown file."),
@@ -128,21 +131,41 @@ def fermentation_brief_command(
         str | None,
         typer.Option("--temperature-unit", help="Explicit C or F; omitted means raw API value."),
     ] = None,
+    select: Annotated[
+        bool,
+        typer.Option("--select", help="Choose a brew interactively from one API page."),
+    ] = False,
+    page: Annotated[
+        int,
+        typer.Option("--page", min=1, help="One-indexed brew page used with --select."),
+    ] = 1,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=100, help="Brews shown with --select."),
+    ] = 100,
 ) -> None:
     """Create a read-only Markdown brief for one pinned brew."""
     try:
-        canonical_id = str(UUID(brew_id))
+        canonical_id = _selection_mode_brew_id(brew_id, select=select, page=page, limit=limit)
         unit = temperature_unit.upper() if temperature_unit is not None else None
         if unit not in {None, "C", "F"}:
             raise ValueError("temperature unit must be C or F")
-        destination = output or Path("reports") / f"fermentation-{canonical_id}.md"
         client = BrewForgeClient(token=_token_from_environment())
-        brew = client.get(f"brews/{canonical_id}")
-        if brew.get("id") != canonical_id:
-            raise ValueError("brew response ID does not match requested brew")
-        brew_name = brew.get("name")
-        if not isinstance(brew_name, str) or not brew_name.strip():
-            raise TypeError("brew response has no valid name")
+        if select:
+            selected_choice = _select_brew(client, page=page, limit=limit)
+            canonical_id = selected_choice.id
+            brew_name = selected_choice.report_name
+        else:
+            brew = client.get(f"brews/{canonical_id}")
+            if brew.get("id") != canonical_id:
+                raise ValueError("brew response ID does not match requested brew")
+            raw_brew_name = brew.get("name")
+            if not isinstance(raw_brew_name, str) or not raw_brew_name.strip():
+                raise TypeError("brew response has no valid name")
+            brew_name = raw_brew_name
+        if canonical_id is None:
+            raise ValueError("brew selection did not produce an ID")
+        destination = output or Path("reports") / f"fermentation-{canonical_id}.md"
         readings_payload = client.get(f"brews/{canonical_id}/readings")
         parsed = parse_readings(readings_payload)
         report_time = datetime.now(UTC)
@@ -167,17 +190,36 @@ def fermentation_brief_command(
 
 @app.command("fermentation-csv", rich_help_panel="Reports and exports")
 def fermentation_csv_command(
-    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
+    brew_id: Annotated[
+        str | None,
+        typer.Argument(help="Exact BrewForge brew UUID; omit when using --select."),
+    ] = None,
     output: Annotated[
         Path | None,
         typer.Option("--output", "-o", help="Destination CSV file."),
     ] = None,
+    select: Annotated[
+        bool,
+        typer.Option("--select", help="Choose a brew interactively from one API page."),
+    ] = False,
+    page: Annotated[
+        int,
+        typer.Option("--page", min=1, help="One-indexed brew page used with --select."),
+    ] = 1,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=100, help="Brews shown with --select."),
+    ] = 100,
 ) -> None:
     """Export validated readings for one pinned brew as CSV."""
     try:
-        canonical_id = str(UUID(brew_id))
-        destination = output or Path("reports") / f"fermentation-{canonical_id}.csv"
+        canonical_id = _selection_mode_brew_id(brew_id, select=select, page=page, limit=limit)
         client = BrewForgeClient(token=_token_from_environment())
+        if select:
+            canonical_id = _select_brew(client, page=page, limit=limit).id
+        if canonical_id is None:
+            raise ValueError("brew selection did not produce an ID")
+        destination = output or Path("reports") / f"fermentation-{canonical_id}.csv"
         payload = client.get(f"brews/{canonical_id}/readings")
         parsed = parse_readings(payload)
         if not parsed.readings:
@@ -257,6 +299,33 @@ def _validated_brew_choices(
     return choices, has_more
 
 
+def _select_brew(client: BrewForgeClient, *, page: int, limit: int) -> _BrewChoice:
+    payload = client.get("brews", params={"page": page, "limit": limit})
+    choices, has_more = _validated_brew_choices(payload, page=page, limit=limit)
+    if not choices:
+        raise ValueError(f"No brews found on page {page}.")
+    for index, choice in enumerate(choices, start=1):
+        typer.echo(f"{index}  {choice.terminal_name}")
+    if has_more:
+        typer.echo(f"More brews available: rerun with --select --page {page + 1}.")
+    selected_number = cast(int, typer.prompt("Brew number", type=int))
+    if not 1 <= selected_number <= len(choices):
+        raise ValueError(f"brew number must be between 1 and {len(choices)}")
+    return choices[selected_number - 1]
+
+
+def _selection_mode_brew_id(
+    brew_id: str | None, *, select: bool, page: int, limit: int
+) -> str | None:
+    if brew_id is None and not select:
+        raise ValueError("provide a brew UUID or --select")
+    if brew_id is not None and select:
+        raise ValueError("brew UUID and --select cannot be used together")
+    if not select and (page != 1 or limit != 100):
+        raise ValueError("--page and --limit require --select")
+    return None if select else str(UUID(str(brew_id)))
+
+
 @app.command("fermentation-html", rich_help_panel="Reports and exports")
 def fermentation_html_command(
     brew_id: Annotated[
@@ -290,31 +359,14 @@ def fermentation_html_command(
 ) -> None:
     """Create a self-contained HTML report for one pinned brew."""
     try:
-        if brew_id is None and not select:
-            raise ValueError("provide a brew UUID or --select")
-        if brew_id is not None and select:
-            raise ValueError("brew UUID and --select cannot be used together")
-        if not select and (page != 1 or limit != 100):
-            raise ValueError("--page and --limit require --select")
+        canonical_id = _selection_mode_brew_id(brew_id, select=select, page=page, limit=limit)
         unit = temperature_unit.upper() if temperature_unit is not None else None
         if unit not in {None, "C", "F"}:
             raise ValueError("temperature unit must be C or F")
-        canonical_id = None if select else str(UUID(str(brew_id)))
         client = BrewForgeClient(token=_token_from_environment())
         selected_name: str | None = None
         if select:
-            brew_payload = client.get("brews", params={"page": page, "limit": limit})
-            choices, has_more = _validated_brew_choices(brew_payload, page=page, limit=limit)
-            if not choices:
-                raise ValueError(f"No brews found on page {page}.")
-            for index, choice in enumerate(choices, start=1):
-                typer.echo(f"{index}  {choice.terminal_name}")
-            if has_more:
-                typer.echo(f"More brews available: rerun with --select --page {page + 1}.")
-            selected_number = typer.prompt("Brew number", type=int)
-            if not 1 <= selected_number <= len(choices):
-                raise ValueError(f"brew number must be between 1 and {len(choices)}")
-            selected_choice = choices[selected_number - 1]
+            selected_choice = _select_brew(client, page=page, limit=limit)
             canonical_id = selected_choice.id
             selected_name = selected_choice.report_name
         if canonical_id is None:
@@ -353,11 +405,14 @@ def fermentation_html_command(
 
 @app.command("spunding-advisor", rich_help_panel="Safety experiments")
 def spunding_advisor_command(
-    brew_id: Annotated[str, typer.Argument(help="Exact BrewForge brew UUID.")],
     trigger_sg: Annotated[
         float,
         typer.Option("--trigger-sg", help="Explicit SG threshold for this simulation."),
     ],
+    brew_id: Annotated[
+        str | None,
+        typer.Argument(help="Exact BrewForge brew UUID; omit when using --select."),
+    ] = None,
     max_age_minutes: Annotated[
         int,
         typer.Option("--max-age-minutes", help="Maximum age of the newest reading."),
@@ -370,10 +425,22 @@ def spunding_advisor_command(
         int,
         typer.Option("--confirmations", help="Required latest readings at or below trigger SG."),
     ] = 2,
+    select: Annotated[
+        bool,
+        typer.Option("--select", help="Choose a brew interactively from one API page."),
+    ] = False,
+    page: Annotated[
+        int,
+        typer.Option("--page", min=1, help="One-indexed brew page used with --select."),
+    ] = 1,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=100, help="Brews shown with --select."),
+    ] = 100,
 ) -> None:
     """Simulate one fail-closed spunding threshold evaluation."""
     try:
-        canonical_id = str(UUID(brew_id))
+        canonical_id = _selection_mode_brew_id(brew_id, select=select, page=page, limit=limit)
         config = AdvisorConfig(
             trigger_sg=trigger_sg,
             max_age=timedelta(minutes=max_age_minutes),
@@ -381,6 +448,10 @@ def spunding_advisor_command(
             confirmations=confirmations,
         )
         client = BrewForgeClient(token=_token_from_environment())
+        if select:
+            canonical_id = _select_brew(client, page=page, limit=limit).id
+        if canonical_id is None:
+            raise ValueError("brew selection did not produce an ID")
         payload = client.get(f"brews/{canonical_id}/readings")
         result = advise_spunding_payload(payload, config=config, as_of=datetime.now(UTC))
         typer.echo(render_spunding_advice(result), nl=False)

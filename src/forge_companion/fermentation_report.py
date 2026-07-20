@@ -2,11 +2,17 @@
 
 import html
 import os
+import re
+import string
 import tempfile
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from forge_companion.fermentation import FermentationMetrics, ParseResult
+
+_ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
+_MARKDOWN_PUNCTUATION = frozenset(string.punctuation)
 
 
 def _duration(value: timedelta) -> str:
@@ -39,6 +45,19 @@ def _rejection_text(reason: str) -> str:
     return escaped
 
 
+def _markdown_heading_text(value: str) -> str:
+    without_ansi = _ANSI_ESCAPE.sub("", value)
+    without_controls = "".join(
+        " " if unicodedata.category(character).startswith("C") else character
+        for character in without_ansi
+    )
+    normalized = " ".join(without_controls.split())[:160] or "Unnamed brew"
+    return "".join(
+        f"\\{character}" if character in _MARKDOWN_PUNCTUATION else character
+        for character in normalized
+    )
+
+
 def _temperature(value: float | None, unit: str | None) -> str:
     if value is None:
         return "not available"
@@ -59,7 +78,7 @@ def render_markdown(
     if temperature_unit not in {None, "C", "F"}:
         raise ValueError("temperature unit must be C or F")
 
-    safe_name = brew_name.replace("\r", " ").replace("\n", " ").strip() or "Unnamed brew"
+    safe_name = _markdown_heading_text(brew_name)
     temperature_label = (
         f"Temperature (°{temperature_unit})"
         if temperature_unit is not None
