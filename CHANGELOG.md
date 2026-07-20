@@ -6,6 +6,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Native OS credential storage through `auth login`, `auth status`, and `auth logout`, with an explicit `BREWFORGE_API_TOKEN` override and no plaintext fallback.
+
 ## [0.1.1] — 2026-07-19
 
 ### Fixed

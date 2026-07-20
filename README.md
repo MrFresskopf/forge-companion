@@ -40,21 +40,21 @@ Or with [pipx](https://pipx.pypa.io/):
 pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.1.1
 ```
 
-### 2. Add your token to the current shell
+### 2. Store your token securely
 
-macOS, Linux, or Git Bash:
+Use the native Windows Credential Manager, macOS Keychain, or Linux Secret Service:
 
 ```bash
-export BREWFORGE_API_TOKEN='bfk_your_token_here'
+forge-companion auth login
+forge-companion auth status
 ```
 
-Windows Command Prompt (the token is not saved permanently):
-
-```cmd
-set /p "BREWFORGE_API_TOKEN=BrewForge API token: "
-```
-
-Do not put a real token in a config file, issue, screenshot, or commit.
+The token prompt is hidden and confirmed. Forge Companion refuses unavailable or non-native keyring
+backends instead of falling back to a plaintext credential file. For CI and temporary overrides, a
+valid `BREWFORGE_API_TOKEN` remains supported and takes precedence over the stored credential.
+Whitespace-only values are ignored; values containing whitespace are rejected and block stored
+credential use until corrected or unset. Do not put a real token in a config file, issue, screenshot,
+command argument, or commit.
 
 ### 3. Check access and create your first report
 
@@ -76,6 +76,7 @@ to copy. The HTML report uses the chosen name as its report title and writes one
 
 | Goal | Command | Network use |
 |---|---|---:|
+| Store or inspect authentication | `forge-companion auth ...` | Offline |
 | Check token and API access | `forge-companion doctor` | 7 GET requests |
 | Find a brew by name | `forge-companion brews` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
@@ -94,7 +95,8 @@ Brewing data is useful; accidental writes are not. Forge Companion starts with a
 trust boundary:
 
 - the API client exposes only `GET`
-- tokens come only from `BREWFORGE_API_TOKEN`
+- tokens come from a supported native OS credential store or an explicit `BREWFORGE_API_TOKEN`
+  environment override
 - default `reports/` and `snapshots/` destinations stay local and are ignored by Git; custom output
   paths remain your responsibility
 - collection snapshots abort on invalid or incomplete pages; fermentation exports keep valid

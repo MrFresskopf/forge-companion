@@ -29,7 +29,15 @@ def test_help_groups_commands_by_user_goal() -> None:
     assert "Safety experiments" in result.output
 
 
-def test_doctor_requires_token_without_printing_secrets() -> None:
+def test_doctor_requires_token_without_printing_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli.credentials,
+        "resolve_token",
+        lambda: cli.credentials.ResolvedToken(token=None, source="missing"),
+    )
+
     result = runner.invoke(app, ["doctor"], env={"BREWFORGE_API_TOKEN": ""})
 
     assert result.exit_code == 2

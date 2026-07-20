@@ -1,7 +1,6 @@
 """Command-line interface for Forge Companion."""
 
 import json
-import os
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -11,7 +10,7 @@ from uuid import UUID
 import httpx
 import typer
 
-from forge_companion import __version__
+from forge_companion import __version__, credentials
 from forge_companion.backup import create_backup, write_backup
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
@@ -29,6 +28,8 @@ app = typer.Typer(
     no_args_is_help=True,
     invoke_without_command=True,
 )
+auth_app = typer.Typer(help="Manage BrewForge authentication without displaying tokens.")
+app.add_typer(auth_app, name="auth", rich_help_panel="Start here")
 
 
 @app.callback()
@@ -44,18 +45,97 @@ def main(
         raise typer.Exit()
 
 
-def _token_from_environment() -> str:
-    token = os.getenv("BREWFORGE_API_TOKEN", "").strip()
-    if not token:
-        typer.echo("Error: BREWFORGE_API_TOKEN is not set.", err=True)
+def _authentication_failed(error: credentials.CredentialStoreError) -> None:
+    if isinstance(error, credentials.InvalidEnvironmentCredentialError):
+        message = "Authentication failed: BREWFORGE_API_TOKEN is invalid."
+    elif isinstance(error, credentials.InvalidStoredCredentialError):
+        message = (
+            "Authentication failed: stored credential is invalid; "
+            "run `forge-companion auth logout` and log in again."
+        )
+    else:
+        message = "Authentication failed: native credential store access failed."
+    typer.echo(message, err=True)
+    raise typer.Exit(code=1)
+
+
+def _report_environment_state(active_message: str) -> None:
+    status = credentials.environment_override_status()
+    if status == "valid":
+        typer.echo(active_message)
+    elif status == "invalid":
+        typer.echo("BREWFORGE_API_TOKEN is set but invalid and prevents stored credential use.")
+
+
+def _token_for_api() -> str:
+    try:
+        resolved = credentials.resolve_token()
+    except credentials.CredentialStoreError as error:
+        _authentication_failed(error)
+    if resolved.token is None:
+        typer.echo(
+            "Error: BREWFORGE_API_TOKEN is not set and no stored credential was found.",
+            err=True,
+        )
         raise typer.Exit(code=2)
-    return token
+    return resolved.token
+
+
+@auth_app.command("login")
+def auth_login_command() -> None:
+    """Store a BrewForge API token in the native OS credential store."""
+    token = typer.prompt(
+        "BrewForge API token",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    try:
+        credentials.store_token(token)
+    except ValueError:
+        typer.echo(
+            "Authentication failed: token must not be empty or contain whitespace.", err=True
+        )
+        raise typer.Exit(code=1) from None
+    except credentials.CredentialStoreError as error:
+        _authentication_failed(error)
+    typer.echo("Credential stored in the native OS credential store.")
+    _report_environment_state("BREWFORGE_API_TOKEN currently overrides the stored credential.")
+
+
+@auth_app.command("status")
+def auth_status_command() -> None:
+    """Show the active authentication source without displaying a token."""
+    try:
+        resolved = credentials.resolve_token()
+    except credentials.CredentialStoreError as error:
+        _authentication_failed(error)
+    if resolved.source == "environment":
+        typer.echo("Authentication source: BREWFORGE_API_TOKEN environment override.")
+    elif resolved.source == "keyring":
+        typer.echo("Authentication source: native OS credential store.")
+    else:
+        typer.echo("Authentication is not configured.", err=True)
+        raise typer.Exit(code=1)
+
+
+@auth_app.command("logout")
+def auth_logout_command() -> None:
+    """Delete the native stored credential without changing the environment."""
+    try:
+        deleted = credentials.delete_token()
+    except credentials.CredentialStoreError as error:
+        _authentication_failed(error)
+    if deleted:
+        typer.echo("Stored credential deleted.")
+    else:
+        typer.echo("No stored credential was present.")
+    _report_environment_state("BREWFORGE_API_TOKEN remains active and was not changed.")
 
 
 @app.command(rich_help_panel="Start here")
 def doctor() -> None:
     """Check authentication and documented read-only API collections."""
-    client = BrewForgeClient(token=_token_from_environment())
+    client = BrewForgeClient(token=_token_for_api())
     checks = run_doctor(client)
     for check in checks:
         marker = "OK" if check.ok else "FAIL"
@@ -73,7 +153,7 @@ def snapshot_command(
     ] = Path("snapshots/brewforge-collections.json"),
 ) -> None:
     """Create a local snapshot of supported BrewForge API collections."""
-    client = BrewForgeClient(token=_token_from_environment())
+    client = BrewForgeClient(token=_token_for_api())
     try:
         payload = create_backup(client)
         write_backup(payload, output)
@@ -150,7 +230,7 @@ def fermentation_brief_command(
         unit = temperature_unit.upper() if temperature_unit is not None else None
         if unit not in {None, "C", "F"}:
             raise ValueError("temperature unit must be C or F")
-        client = BrewForgeClient(token=_token_from_environment())
+        client = BrewForgeClient(token=_token_for_api())
         if select:
             selected_choice = _select_brew(client, page=page, limit=limit)
             canonical_id = selected_choice.id
@@ -214,7 +294,7 @@ def fermentation_csv_command(
     """Export validated readings for one pinned brew as CSV."""
     try:
         canonical_id = _selection_mode_brew_id(brew_id, select=select, page=page, limit=limit)
-        client = BrewForgeClient(token=_token_from_environment())
+        client = BrewForgeClient(token=_token_for_api())
         if select:
             canonical_id = _select_brew(client, page=page, limit=limit).id
         if canonical_id is None:
@@ -363,7 +443,7 @@ def fermentation_html_command(
         unit = temperature_unit.upper() if temperature_unit is not None else None
         if unit not in {None, "C", "F"}:
             raise ValueError("temperature unit must be C or F")
-        client = BrewForgeClient(token=_token_from_environment())
+        client = BrewForgeClient(token=_token_for_api())
         selected_name: str | None = None
         if select:
             selected_choice = _select_brew(client, page=page, limit=limit)
@@ -447,7 +527,7 @@ def spunding_advisor_command(
             max_gap=timedelta(minutes=max_gap_minutes),
             confirmations=confirmations,
         )
-        client = BrewForgeClient(token=_token_from_environment())
+        client = BrewForgeClient(token=_token_for_api())
         if select:
             canonical_id = _select_brew(client, page=page, limit=limit).id
         if canonical_id is None:
@@ -476,7 +556,7 @@ def brews_command(
 ) -> None:
     """List brew names and UUIDs using one read-only request."""
     try:
-        client = BrewForgeClient(token=_token_from_environment())
+        client = BrewForgeClient(token=_token_for_api())
         payload = client.get("brews", params={"page": page, "limit": limit})
         choices, has_more = _validated_brew_choices(payload, page=page, limit=limit)
         if not choices:

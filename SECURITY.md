@@ -2,7 +2,12 @@
 
 ## Credentials
 
-Forge Companion reads the BrewForge API token from `BREWFORGE_API_TOKEN`. Never place a real token in:
+Forge Companion reads the BrewForge API token from a supported native OS credential store. An
+explicit, valid `BREWFORGE_API_TOKEN` environment variable takes precedence for CI, scripts, and
+temporary sessions. Whitespace-only values are ignored; values containing whitespace are rejected and
+block stored credential use until corrected or unset. `auth login` uses hidden confirmed input and
+never puts the token in a command argument; `auth status` and `auth logout` never print it. Never place
+a real token in:
 
 - source files or committed `.env` files
 - command examples
@@ -10,6 +15,12 @@ Forge Companion reads the BrewForge API token from `BREWFORGE_API_TOKEN`. Never 
 - test fixtures
 - bug reports
 - generated public demo data
+
+Native credential storage is restricted to Windows Credential Manager, macOS Keychain, and Linux
+Secret Service backends. Forge Companion fails closed when no supported native backend is available;
+it does not create a plaintext keyring or `.env` fallback. `auth login`, `status`, and `logout` are
+offline. `auth logout` deletes only the stored entry and deliberately leaves environment variables
+unchanged.
 
 If a token is exposed, revoke it in BrewForge immediately and create a replacement with the narrowest scopes needed.
 

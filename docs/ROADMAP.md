@@ -8,7 +8,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 ## Milestone 0 — Foundation (working)
 
 - [x] installable Python package and CLI
-- [x] environment-only token handling
+- [x] native OS credential storage with explicit environment override
 - [x] read-only API client
 - [x] endpoint diagnostics
 - [x] one-page, read-only brew listing with sanitized names and canonical UUIDs

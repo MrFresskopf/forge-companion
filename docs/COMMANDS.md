@@ -1,10 +1,33 @@
 # Command guide
 
-Forge Companion uses the `BREWFORGE_API_TOKEN` environment variable for every command that contacts
-BrewForge. The inventory audit is the exception: it only reads a local snapshot.
+Forge Companion uses a supported native OS credential store by default. `BREWFORGE_API_TOKEN` remains
+an explicit override for CI, scripts, and temporary sessions. The inventory audit is the exception:
+it only reads a local snapshot and needs no credential.
 
 BrewForge currently documents limits of 100 requests per hour and 1,000 requests per month. Forge
 Companion keeps network use explicit and avoids hidden one-request-per-item behavior.
+
+## `auth`
+
+Manage authentication without displaying a token:
+
+```bash
+forge-companion auth login
+forge-companion auth status
+forge-companion auth logout
+```
+
+`login` asks twice with hidden input and writes only to the native Windows Credential Manager, macOS
+Keychain, or Linux Secret Service. It does not contact BrewForge; run `doctor` afterward to validate
+the credential and its read scopes. Forge Companion rejects missing or non-native keyring backends
+instead of creating a plaintext fallback.
+
+`status` reports only `environment`, `native OS credential store`, or `not configured`. It never
+prints the token. A valid `BREWFORGE_API_TOKEN` takes precedence over the stored credential.
+Whitespace-only values are treated as absent. Values containing whitespace are invalid and block the
+stored credential until corrected or unset. `logout` deletes only the native stored entry and reports
+whether a valid environment override remains active or an invalid value still blocks authentication.
+All three commands are offline.
 
 ## `doctor`
 
