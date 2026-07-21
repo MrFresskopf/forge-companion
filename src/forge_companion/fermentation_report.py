@@ -1,15 +1,14 @@
 """Deterministic Markdown rendering for fermentation briefs."""
 
 import html
-import os
 import re
 import string
-import tempfile
 import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from forge_companion.fermentation import FermentationMetrics, ParseResult
+from forge_companion.file_io import atomic_write_text
 
 _ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 _MARKDOWN_PUNCTUATION = frozenset(string.punctuation)
@@ -172,19 +171,4 @@ def render_markdown(
 
 def write_markdown(content: str, destination: Path) -> None:
     """Write a report atomically without a predictable shared temp path."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.",
-        suffix=".tmp",
-        dir=destination.parent,
-        text=True,
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
+    atomic_write_text(content, destination, newline="\n")

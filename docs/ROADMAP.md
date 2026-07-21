@@ -13,6 +13,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] endpoint diagnostics
 - [x] one-page, read-only brew listing with sanitized names and canonical UUIDs
 - [x] shared explicit, paginated brew selection for reports, exports, and safety simulations
+- [x] comfort-oriented `report` workflow with remembered non-secret temperature-unit preference
 - [x] validated, paginated JSON collection snapshot
 - [x] automated tests, linting, and type checking
 

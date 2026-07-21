@@ -21,6 +21,15 @@ def test_version_option_prints_package_version() -> None:
     assert result.output == f"Forge Companion {__version__}\n"
 
 
+def test_no_argument_start_page_exits_successfully_with_primary_next_steps() -> None:
+    result = runner.invoke(app, [])
+
+    assert result.exit_code == 0
+    assert "forge-companion report" in result.output
+    assert "forge-companion auth login" in result.output
+    assert "fermentation-csv" not in result.output
+
+
 def test_help_groups_commands_by_user_goal() -> None:
     result = runner.invoke(app, ["--help"])
 
@@ -28,6 +37,13 @@ def test_help_groups_commands_by_user_goal() -> None:
     assert "Start here" in result.output
     assert "Reports and exports" in result.output
     assert "Safety experiments" in result.output
+    assert "report" in result.output
+    assert "inventory" in result.output
+    assert "fermentation-html" not in result.output
+    assert "fermentation-csv" not in result.output
+    assert "fermentation-brief" not in result.output
+    assert "inventory-audit" not in result.output
+    assert "brews" not in result.output
 
 
 def test_doctor_requires_token_without_printing_secrets(
@@ -43,6 +59,7 @@ def test_doctor_requires_token_without_printing_secrets(
 
     assert result.exit_code == 2
     assert "BREWFORGE_API_TOKEN is not set" in result.output
+    assert "forge-companion auth login" in result.output
     assert "bfk_" not in result.output
 
 
@@ -104,6 +121,23 @@ def test_snapshot_validate_reports_safe_offline_summary(tmp_path: Path) -> None:
         "Excluded: brew details, brew notes, brew readings, undocumented resources.\n"
     )
     assert "private-name" not in result.output
+
+
+def test_snapshot_validate_uses_snapshot_default_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class EmptyClient:
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            return {"data": [], "pagination": {"hasMore": False, "total": 0}}
+
+    monkeypatch.chdir(tmp_path)
+    source = Path("snapshots/brewforge-collections.json")
+    backup.write_backup(backup.create_backup(EmptyClient()), source)
+
+    result = runner.invoke(app, ["snapshot", "validate"])
+
+    assert result.exit_code == 0
+    assert result.output.startswith("Snapshot is valid.\n")
 
 
 def test_snapshot_validate_hides_invalid_path_and_content(tmp_path: Path) -> None:
@@ -203,6 +237,28 @@ def test_inventory_audit_command_reports_findings_from_snapshot(tmp_path: Path) 
     assert result.exit_code == 0
     assert "1 finding(s)" in result.output
     assert "WARNING yeasts Example Yeast: expired on 2026-07-01" in result.output
+
+
+def test_inventory_uses_default_snapshot_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    snapshot = Path("snapshots/brewforge-collections.json")
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text(
+        json.dumps(
+            {
+                "format": "forge-companion-collection-snapshot-v1",
+                "resources": {"inventory_yeasts": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["inventory", "--as-of", "2026-07-21"])
+
+    assert result.exit_code == 0
+    assert result.output == "0 finding(s)\n"
 
 
 def test_inventory_audit_accepts_new_validated_v2_snapshot(tmp_path: Path) -> None:

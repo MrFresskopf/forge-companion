@@ -22,6 +22,10 @@ it does not create a plaintext keyring or `.env` fallback. `auth login`, `status
 offline. `auth logout` deletes only the stored entry and deliberately leaves environment variables
 unchanged.
 
+The optional report preferences file never stores credentials. It currently contains only an
+explicitly remembered `C` or `F` temperature-unit choice. `FORGE_COMPANION_CONFIG_DIR` can relocate
+that non-secret file but does not change token resolution or credential-store behavior.
+
 If a token is exposed, revoke it in BrewForge immediately and create a replacement with the narrowest scopes needed.
 
 ## Current access model
@@ -49,9 +53,12 @@ and HTML-escape dynamic text, cap displayed rejection reasons, embed no external
 ship with a restrictive Content Security Policy. These defenses do not make a report public-safe;
 review it deliberately before moving it out of the gitignored `reports/` directory.
 
-Interactive HTML selection makes one bounded brew-list GET and one readings GET after the user
-chooses a displayed number. It never selects the newest or active brew automatically, never fetches
-brew details, and never follows additional list pages without an explicit `--page` value.
+Interactive HTML selection makes one bounded brew-list GET per explicitly displayed page and one
+readings GET after the user chooses a displayed number. It never selects the newest or active brew
+automatically, never fetches
+brew details, and follows another list page only after explicit `n`, `p`, or `--page` input. The
+automatic `report` selection path requires an interactive terminal; scripts and pipelines must pin a
+UUID.
 
 The spunding advisor is simulation-only. It performs one GET for a pinned brew's readings and
 prints a threshold evaluation; it has no scheduler, device client, actuator state, or write path.
