@@ -7,6 +7,9 @@ it only reads a local snapshot and needs no credential.
 BrewForge currently documents limits of 100 requests per hour and 1,000 requests per month. Forge
 Companion keeps network use explicit and avoids hidden one-request-per-item behavior.
 
+Run `forge-companion` without arguments for the shortest start page. The primary everyday commands
+are `report`, `snapshot`, and `inventory`; older format-specific commands remain available for scripts.
+
 ## `auth`
 
 Manage authentication without displaying a token:
@@ -28,6 +31,30 @@ Whitespace-only values are treated as absent. Values containing whitespace are i
 stored credential until corrected or unset. `logout` deletes only the native stored entry and reports
 whether a valid environment override remains active or an invalid value still blocks authentication.
 All three commands are offline.
+
+## `report`
+
+Create the standard self-contained HTML fermentation report:
+
+```bash
+forge-companion report --temperature-unit C --remember
+forge-companion report BREW_ID --output reports/pinned-brew.html
+```
+
+Without a UUID in an interactive terminal, `report` requests 25 sanitized brew names and waits for
+an explicit selection. Enter a number to select, `n` to request the next page, `p` for the previous
+page, or `q` to cancel. Page
+changes never happen without that explicit input. Non-interactive scripts and pipelines must pass an
+exact UUID and never receive an automatic prompt. The selected brew name becomes the report title.
+The normal selection uses one brew-list GET plus one readings GET; every explicit `n` or `p` adds
+exactly one further brew-list GET.
+
+`--remember` requires an explicit `--temperature-unit C` or `F`. It stores only that non-secret
+preference in the platform's user configuration directory. A CLI option overrides the saved value;
+the API token remains exclusively in the credential store or environment override.
+
+The UUID form is deterministic, uses one readings request, and does not fetch brew details. Pass
+`--title` when a script needs a friendly report title.
 
 ## `doctor`
 
@@ -60,29 +87,53 @@ Save validated top-level API collections as JSON:
 ```bash
 forge-companion snapshot
 forge-companion snapshot --output snapshots/my-brewforge-collections.json
+forge-companion snapshot validate
+forge-companion snapshot validate snapshots/my-brewforge-collections.json
 ```
 
 Credentials are never written to the file. Writes are atomic, and validation or network errors stop
-the operation instead of leaving a misleading partial snapshot.
+the operation instead of leaving a misleading partial snapshot. New snapshots use the v2 format and
+contain the creation time, Forge Companion version, all seven supported collection names and counts,
+explicit exclusions, and a SHA-256 digest over canonical UTF-8 JSON excluding only the digest field.
+
+`snapshot validate [FILE]` is offline and defaults to `snapshots/brewforge-collections.json`. It
+strictly rejects duplicate JSON keys, non-JSON numeric values,
+unknown fields, unsupported formats, inconsistent counts, missing collections, malformed records,
+and checksum changes. Successful output contains only manifest metadata and counts, never collection
+records or the input path. The inventory audit applies the same validation to v2 files while retaining
+read support for strict legacy v1 snapshots.
+
+The SHA-256 digest detects changes; it is not a digital signature, proof that BrewForge produced the
+data, access control, or encryption. Keep snapshots private and protect them like any other account
+export.
 
 > [!WARNING]
 > This is not yet a complete or restorable account backup. Version 0.1 does not fetch per-brew
 > details, notes, fermentation readings, or data unavailable through the documented API.
 
-## `inventory-audit`
+## `inventory`
 
 Audit a local Forge Companion snapshot without contacting BrewForge:
 
 ```bash
-forge-companion inventory-audit snapshots/brewforge-collections.json
-forge-companion inventory-audit snapshots/brewforge-collections.json --as-of 2026-07-17
+forge-companion inventory
+forge-companion inventory snapshots/my-brewforge-collections.json --as-of 2026-07-17
 ```
+
+Without a path it reuses `snapshots/brewforge-collections.json`, the output of the default `snapshot`
+command. The previous `inventory-audit` spelling remains available for compatible scripts.
 
 Current checks cover expired inventory, negative quantities, missing yeast or miscellaneous-item
 units, and conservative possible duplicates. Findings are advisory; Forge Companion never merges or
-changes inventory.
+changes inventory. v2 input must pass schema and SHA-256 validation before any finding is calculated;
+legacy v1 snapshots remain accepted but have no embedded integrity proof.
 
-## `fermentation-brief`
+## Advanced report and export commands
+
+The following stable commands are intentionally omitted from the short root help. They remain
+available for automation and specialized output.
+
+### `fermentation-brief`
 
 Create a local Markdown report for one explicitly selected brew:
 
@@ -94,14 +145,15 @@ forge-companion fermentation-brief BREW_ID \
   --temperature-unit C
 ```
 
-Both forms use two requests. The interactive form uses one bounded brew-list request and one readings
-request; the UUID form uses one brew-detail request and one readings request. The report includes the
+The interactive form normally uses one brew-list request and one readings request; every explicit
+`n` or `p` adds another brew-list request. The UUID form uses one brew-detail request and one readings
+request. The report includes the
 observation period, gravity change, an optional 24-hour least-squares slope, temperature range,
 reading freshness, largest telemetry gap, and recent readings.
 
 Temperature units are never guessed. Omit `--temperature-unit` to label values as raw API values.
 
-## `fermentation-csv`
+### `fermentation-csv`
 
 Export accepted readings in chronological order:
 
@@ -111,8 +163,8 @@ forge-companion fermentation-csv BREW_ID
 forge-companion fermentation-csv BREW_ID --output reports/readings-BREW_ID.csv
 ```
 
-The UUID form uses one readings request. The interactive form adds one bounded brew-list request and
-never requests further pages automatically.
+The UUID form uses one readings request. The interactive form adds one brew-list request per
+explicitly displayed page; additional pages are fetched only after explicit `n` or `p` input.
 
 The stable columns are:
 
@@ -124,9 +176,9 @@ Missing optional measurements remain empty. Text that spreadsheet applications c
 formula is prefixed with an apostrophe. The completion message reports rejected records and
 conflicting timestamps; if no valid reading remains, no CSV is written.
 
-## `fermentation-html`
+### `fermentation-html`
 
-Create a self-contained visual fermentation report:
+Create a self-contained visual fermentation report using the legacy format-specific spelling:
 
 ```bash
 forge-companion fermentation-html --select --temperature-unit C
@@ -137,10 +189,9 @@ forge-companion fermentation-html BREW_ID \
   --output reports/lithuanian-session-witbier.html
 ```
 
-The recommended interactive form makes one brew-list request, prints a numbered page of sanitized
-names, and only fetches readings after an explicit number is chosen. Use `--page` and `--limit` to
-select a different list page; pagination never fans out silently. The chosen name becomes the default
-report title.
+The recommended `report` command uses a smaller 25-item page. This legacy command retains its
+100-item default plus explicit `--page` and `--limit` options. Both forms fetch another page only after
+explicit input and fetch readings only after an explicit numbered choice.
 
 The UUID form remains deterministic for scripts and uses exactly one readings request. It does not
 fetch brew details; pass `--title` for a friendly name. Both forms include summary metrics,
@@ -164,8 +215,8 @@ forge-companion spunding-advisor BREW_ID \
   --confirmations 2
 ```
 
-The UUID form uses one readings request. The interactive form first makes one bounded brew-list
-request and then requests only the selected brew's readings.
+The UUID form uses one readings request. The interactive form makes one brew-list request per
+explicitly displayed page and then requests only the selected brew's readings.
 
 It returns one of three statuses:
 

@@ -13,12 +13,13 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] endpoint diagnostics
 - [x] one-page, read-only brew listing with sanitized names and canonical UUIDs
 - [x] shared explicit, paginated brew selection for reports, exports, and safety simulations
+- [x] comfort-oriented `report` workflow with remembered non-secret temperature-unit preference
 - [x] validated, paginated JSON collection snapshot
 - [x] automated tests, linting, and type checking
 
 ## Milestone 1 — Protect and inspect
 
-- [ ] snapshot schema validation and manifest
+- [x] snapshot v2 manifest, strict offline schema validation, collection counts, scope declaration, and SHA-256 integrity check
 - [ ] optional, rate-limit-aware full export of brew details, notes, and readings
 - [ ] optional compression
 - [x] offline inventory audit for expiry, negative quantities, missing units, and conservative duplicates

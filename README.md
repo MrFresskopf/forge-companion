@@ -31,13 +31,13 @@ read scopes needed for your command.
 With [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.1.1
+uv tool install git+https://github.com/MrFresskopf/forge-companion.git@main
 ```
 
 Or with [pipx](https://pipx.pypa.io/):
 
 ```bash
-pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.1.1
+pipx install git+https://github.com/MrFresskopf/forge-companion.git@main
 ```
 
 ### 2. Store your token securely
@@ -56,17 +56,21 @@ Whitespace-only values are ignored; values containing whitespace are rejected an
 credential use until corrected or unset. Do not put a real token in a config file, issue, screenshot,
 command argument, or commit.
 
-### 3. Check access and create your first report
+### 3. Create your first report
 
 ```bash
-forge-companion doctor
-forge-companion fermentation-html --select --temperature-unit C
+forge-companion report --temperature-unit C --remember
 ```
 
-`--select` prints a numbered page of sanitized brew names and prompts for one explicit choice. It
-works with the Markdown brief, CSV export, HTML report, and spunding simulation, so there is no UUID
-to copy. The HTML report uses the chosen name as its report title and writes one standalone file to
-`reports/`. For scripts, pass an exact UUID instead.
+In an interactive terminal, `report` shows 25 sanitized brew names at a time and waits for an
+explicit choice. Enter a number to select a brew, `n` or `p` to change pages, or `q` to cancel.
+`--remember` stores only the non-secret
+temperature-unit preference; API tokens remain in the native credential store. The chosen name
+becomes the report title and one standalone HTML file is written to `reports/`.
+
+For scripts and pipelines, an exact UUID is required; automatic prompting never starts on
+non-interactive input. Run `forge-companion doctor` only when you want to check every
+documented collection and token scope.
 
 <p align="center">
   <img src="docs/assets/fermentation-report.png" alt="Example standalone Forge Companion fermentation report" width="880">
@@ -77,17 +81,16 @@ to copy. The HTML report uses the chosen name as its report title and writes one
 | Goal | Command | Network use |
 |---|---|---:|
 | Store or inspect authentication | `forge-companion auth ...` | Offline |
-| Check token and API access | `forge-companion doctor` | 7 GET requests |
-| Find a brew by name | `forge-companion brews` | 1 GET request |
+| Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |
+| Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
-| Check inventory from a snapshot | `forge-companion inventory-audit FILE` | Offline |
-| Create a Markdown fermentation brief | `forge-companion fermentation-brief --select` | 2 GET requests |
-| Export validated readings | `forge-companion fermentation-csv --select` | 2 GET requests |
-| Create an offline visual report | `forge-companion fermentation-html --select` | 2 GET requests |
-| Create a scripted offline visual report | `forge-companion fermentation-html BREW_ID` | 1 GET request |
-| Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests |
+| Verify the standard snapshot | `forge-companion snapshot validate` | Offline |
+| Check inventory from the standard snapshot | `forge-companion inventory` | Offline |
+| Diagnose API access | `forge-companion doctor` | 7 GET requests |
+| Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
 
-See the [command guide](docs/COMMANDS.md) for options, output details, and examples.
+Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
+available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details.
 
 ## Why read-only?
 
@@ -97,10 +100,13 @@ trust boundary:
 - the API client exposes only `GET`
 - tokens come from a supported native OS credential store or an explicit `BREWFORGE_API_TOKEN`
   environment override
+- report preferences contain no credentials and currently store only an explicit C/F choice
 - default `reports/` and `snapshots/` destinations stay local and are ignored by Git; custom output
   paths remain your responsibility
-- collection snapshots abort on invalid or incomplete pages; fermentation exports keep valid
-  readings but report every rejection and timestamp conflict
+- collection snapshots abort on invalid or incomplete pages; v2 snapshots include collection counts,
+  explicit scope exclusions, and a canonical SHA-256 integrity digest
+- `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v2 files offline;
+  fermentation exports keep valid readings but report every rejection and timestamp conflict
 - the spunding advisor simulates a decision and never contacts hardware
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
@@ -129,8 +135,10 @@ Forge Companion is young and intentionally conservative. Collection snapshots, i
 fermentation exports/reports, and fail-closed spunding simulations work today. MQTT, Home Assistant,
 and hardware bridges remain future work.
 
-The snapshot command currently covers supported top-level collections. It is not yet a complete or
-restorable account backup. See the [roadmap](docs/ROADMAP.md) for current scope and non-goals.
+The snapshot command currently covers supported top-level collections. Its checksum detects accidental
+or deliberate file changes, but it is not a signature, proof of origin, or encryption. A snapshot is
+not yet a complete or restorable account backup. See the [roadmap](docs/ROADMAP.md) for current scope
+and non-goals.
 
 ## Contributing
 

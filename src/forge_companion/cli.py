@@ -1,17 +1,24 @@
 """Command-line interface for Forge Companion."""
 
 import json
+import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 from uuid import UUID
 
 import httpx
 import typer
 
-from forge_companion import __version__, credentials
-from forge_companion.backup import create_backup, write_backup
+from forge_companion import __version__, credentials, preferences
+from forge_companion.backup import (
+    SnapshotValidationError,
+    create_backup,
+    load_snapshot_file,
+    validate_backup_file,
+    write_backup,
+)
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
 from forge_companion.fermentation import analyze_readings, parse_readings
@@ -25,15 +32,21 @@ from forge_companion.terminal_text import safe_terminal_text
 
 app = typer.Typer(
     help="Unofficial, read-only community tools for BrewForge.",
-    no_args_is_help=True,
+    no_args_is_help=False,
     invoke_without_command=True,
 )
 auth_app = typer.Typer(help="Manage BrewForge authentication without displaying tokens.")
 app.add_typer(auth_app, name="auth", rich_help_panel="Start here")
+snapshot_app = typer.Typer(
+    help="Create or validate local BrewForge collection snapshots.",
+    invoke_without_command=True,
+)
+app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
 
 
 @app.callback()
 def main(
+    context: typer.Context,
     version: Annotated[
         bool,
         typer.Option("--version", help="Show the version and exit.", is_eager=True),
@@ -43,6 +56,13 @@ def main(
     if version:
         typer.echo(f"Forge Companion {__version__}")
         raise typer.Exit()
+    if context.invoked_subcommand is None:
+        typer.echo("Forge Companion\n")
+        typer.echo("Create a visual fermentation report:")
+        typer.echo("  forge-companion report\n")
+        typer.echo("First use:")
+        typer.echo("  forge-companion auth login")
+        typer.echo("\nMore tools: forge-companion --help")
 
 
 def _authentication_failed(error: credentials.CredentialStoreError) -> None:
@@ -74,7 +94,8 @@ def _token_for_api() -> str:
         _authentication_failed(error)
     if resolved.token is None:
         typer.echo(
-            "Error: BREWFORGE_API_TOKEN is not set and no stored credential was found.",
+            "Error: BREWFORGE_API_TOKEN is not set and no stored credential was found; "
+            "run `forge-companion auth login`.",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -145,14 +166,17 @@ def doctor() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command("snapshot", rich_help_panel="Protect and inspect")
+@snapshot_app.callback()
 def snapshot_command(
+    context: typer.Context,
     output: Annotated[
         Path,
         typer.Option("--output", "-o", help="Destination JSON file."),
     ] = Path("snapshots/brewforge-collections.json"),
 ) -> None:
     """Create a local snapshot of supported BrewForge API collections."""
+    if context.invoked_subcommand is not None:
+        return
     client = BrewForgeClient(token=_token_for_api())
     try:
         payload = create_backup(client)
@@ -166,9 +190,35 @@ def snapshot_command(
     typer.echo(f"Collection snapshot written to {output}")
 
 
-@app.command("inventory-audit", rich_help_panel="Protect and inspect")
+@snapshot_app.command("validate")
+def snapshot_validate_command(
+    source: Annotated[
+        Path,
+        typer.Argument(help="Collection snapshot JSON file."),
+    ] = Path("snapshots/brewforge-collections.json"),
+) -> None:
+    """Validate snapshot schema and integrity without contacting BrewForge."""
+    try:
+        summary = validate_backup_file(source)
+    except SnapshotValidationError:
+        typer.echo("Snapshot validation failed: file is invalid or unreadable.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Snapshot is valid.")
+    typer.echo(f"Format: {summary.format}")
+    typer.echo(f"Created: {summary.created_at}")
+    typer.echo(f"Generator: Forge Companion {summary.generator_version}")
+    typer.echo(f"Collections: {summary.collection_count}")
+    typer.echo(f"Records: {summary.record_count}")
+    typer.echo("SHA-256 integrity: verified.")
+    typer.echo("Excluded: brew details, brew notes, brew readings, undocumented resources.")
+
+
+@app.command("inventory-audit", hidden=True)
 def inventory_audit_command(
-    snapshot: Annotated[Path, typer.Argument(help="Collection snapshot JSON file.")],
+    snapshot: Annotated[
+        Path,
+        typer.Argument(help="Collection snapshot JSON file."),
+    ] = Path("snapshots/brewforge-collections.json"),
     as_of: Annotated[
         str | None,
         typer.Option("--as-of", help="Audit date in YYYY-MM-DD format."),
@@ -176,11 +226,7 @@ def inventory_audit_command(
 ) -> None:
     """Audit inventory data from a local collection snapshot."""
     try:
-        payload = json.loads(snapshot.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise TypeError("snapshot root is not an object")
-        if payload.get("format") != "forge-companion-collection-snapshot-v1":
-            raise ValueError("unsupported snapshot format")
+        payload = load_snapshot_file(snapshot, allow_legacy_v1=True)
         resources = payload.get("resources")
         if not isinstance(resources, dict):
             raise TypeError("snapshot resources is not an object")
@@ -197,7 +243,22 @@ def inventory_audit_command(
         )
 
 
-@app.command("fermentation-brief", rich_help_panel="Reports and exports")
+@app.command("inventory", rich_help_panel="Protect and inspect")
+def inventory_command(
+    snapshot: Annotated[
+        Path,
+        typer.Argument(help="Collection snapshot JSON file."),
+    ] = Path("snapshots/brewforge-collections.json"),
+    as_of: Annotated[
+        str | None,
+        typer.Option("--as-of", help="Audit date in YYYY-MM-DD format."),
+    ] = None,
+) -> None:
+    """Check inventory using the standard local snapshot by default."""
+    inventory_audit_command(snapshot=snapshot, as_of=as_of)
+
+
+@app.command("fermentation-brief", hidden=True)
 def fermentation_brief_command(
     brew_id: Annotated[
         str | None,
@@ -213,7 +274,7 @@ def fermentation_brief_command(
     ] = None,
     select: Annotated[
         bool,
-        typer.Option("--select", help="Choose a brew interactively from one API page."),
+        typer.Option("--select", help="Choose a brew; each n or p requests one API page."),
     ] = False,
     page: Annotated[
         int,
@@ -268,7 +329,7 @@ def fermentation_brief_command(
     typer.echo(f"Fermentation brief written to {destination}")
 
 
-@app.command("fermentation-csv", rich_help_panel="Reports and exports")
+@app.command("fermentation-csv", hidden=True)
 def fermentation_csv_command(
     brew_id: Annotated[
         str | None,
@@ -280,7 +341,7 @@ def fermentation_csv_command(
     ] = None,
     select: Annotated[
         bool,
-        typer.Option("--select", help="Choose a brew interactively from one API page."),
+        typer.Option("--select", help="Choose a brew; each n or p requests one API page."),
     ] = False,
     page: Annotated[
         int,
@@ -327,6 +388,10 @@ class _BrewChoice:
     id: str
     terminal_name: str
     report_name: str
+
+
+class _BrewSelectionCancelled(ValueError):
+    """Raised when a user deliberately leaves interactive brew selection."""
 
 
 def _validated_brew_choices(
@@ -380,18 +445,48 @@ def _validated_brew_choices(
 
 
 def _select_brew(client: BrewForgeClient, *, page: int, limit: int) -> _BrewChoice:
-    payload = client.get("brews", params={"page": page, "limit": limit})
-    choices, has_more = _validated_brew_choices(payload, page=page, limit=limit)
-    if not choices:
-        raise ValueError(f"No brews found on page {page}.")
-    for index, choice in enumerate(choices, start=1):
-        typer.echo(f"{index}  {choice.terminal_name}")
-    if has_more:
-        typer.echo(f"More brews available: rerun with --select --page {page + 1}.")
-    selected_number = cast(int, typer.prompt("Brew number", type=int))
-    if not 1 <= selected_number <= len(choices):
-        raise ValueError(f"brew number must be between 1 and {len(choices)}")
-    return choices[selected_number - 1]
+    current_page = page
+    while True:
+        payload = client.get("brews", params={"page": current_page, "limit": limit})
+        choices, has_more = _validated_brew_choices(
+            payload,
+            page=current_page,
+            limit=limit,
+        )
+        if not choices:
+            raise ValueError(f"No brews found on page {current_page}.")
+        for index, choice in enumerate(choices, start=1):
+            typer.echo(f"{index}  {choice.terminal_name}")
+        if has_more:
+            typer.echo(
+                f"More brews available: rerun with --select --page {current_page + 1}."
+            )
+            typer.echo("Enter n to load the next page.")
+        if current_page > 1:
+            typer.echo("Enter p for the previous page; enter q to cancel.")
+        else:
+            typer.echo("Enter q to cancel.")
+
+        response = str(typer.prompt("Brew number")).strip().lower()
+        if response == "n":
+            if not has_more:
+                raise ValueError("no next brew page is available")
+            current_page += 1
+            continue
+        if response == "p":
+            if current_page <= 1:
+                raise ValueError("no previous brew page is available")
+            current_page -= 1
+            continue
+        if response == "q":
+            raise _BrewSelectionCancelled("brew selection cancelled")
+        try:
+            selected_number = int(response)
+        except ValueError:
+            raise ValueError("brew selection must be a number, n, p, or q") from None
+        if not 1 <= selected_number <= len(choices):
+            raise ValueError(f"brew number must be between 1 and {len(choices)}")
+        return choices[selected_number - 1]
 
 
 def _selection_mode_brew_id(
@@ -406,7 +501,11 @@ def _selection_mode_brew_id(
     return None if select else str(UUID(str(brew_id)))
 
 
-@app.command("fermentation-html", rich_help_panel="Reports and exports")
+def _terminal_is_interactive() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+@app.command("fermentation-html", hidden=True)
 def fermentation_html_command(
     brew_id: Annotated[
         str | None,
@@ -426,7 +525,7 @@ def fermentation_html_command(
     ] = None,
     select: Annotated[
         bool,
-        typer.Option("--select", help="Choose a brew interactively from one API page."),
+        typer.Option("--select", help="Choose a brew; each n or p requests one API page."),
     ] = False,
     page: Annotated[
         int,
@@ -483,6 +582,98 @@ def fermentation_html_command(
     )
 
 
+@app.command("report", rich_help_panel="Reports and exports")
+def report_command(
+    brew_id: Annotated[
+        str | None,
+        typer.Argument(help="Exact BrewForge brew UUID; omit to choose interactively."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Destination standalone HTML file."),
+    ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="Explicit report title."),
+    ] = None,
+    temperature_unit: Annotated[
+        str | None,
+        typer.Option(
+            "--temperature-unit",
+            help="Label API values as C or F; omitted uses the saved default or raw values.",
+        ),
+    ] = None,
+    remember: Annotated[
+        bool,
+        typer.Option("--remember", help="Save the explicit temperature unit as the default."),
+    ] = False,
+) -> None:
+    """Create the standard visual report, choosing a brew when needed."""
+    if brew_id is None and not _terminal_is_interactive():
+        typer.echo(
+            "Report failed: automatic brew selection requires an interactive terminal; "
+            "pass an exact brew UUID for scripts and pipelines.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    explicit_unit = temperature_unit.upper() if temperature_unit is not None else None
+    if explicit_unit not in {None, "C", "F"}:
+        typer.echo("Report failed: temperature unit must be C or F.", err=True)
+        raise typer.Exit(code=1)
+    if remember and explicit_unit is None:
+        typer.echo("Report failed: --remember requires --temperature-unit C or F.", err=True)
+        raise typer.Exit(code=1)
+    configured_unit: str | None = None
+    if explicit_unit is None:
+        try:
+            configured_unit = preferences.load_preferences().temperature_unit
+        except preferences.PreferencesError:
+            typer.echo(
+                "Report failed: local preferences are invalid or unreadable; "
+                "override them with --temperature-unit C or F.",
+                err=True,
+            )
+            raise typer.Exit(code=1) from None
+    effective_unit = explicit_unit or configured_unit
+    selected_id = brew_id
+    selected_title = title
+    if selected_id is None:
+        try:
+            client = BrewForgeClient(token=_token_for_api())
+            selected_choice = _select_brew(client, page=1, limit=25)
+        except _BrewSelectionCancelled:
+            typer.echo("Report cancelled.")
+            raise typer.Exit(code=1) from None
+        except httpx.HTTPError:
+            typer.echo("Report failed: API request failed.", err=True)
+            raise typer.Exit(code=1) from None
+        except (TypeError, ValueError) as error:
+            typer.echo(f"Report failed: {error}", err=True)
+            raise typer.Exit(code=1) from None
+        selected_id = selected_choice.id
+        if selected_title is None:
+            selected_title = selected_choice.report_name
+    fermentation_html_command(
+        brew_id=selected_id,
+        output=output,
+        title=selected_title,
+        temperature_unit=effective_unit,
+        select=False,
+        page=1,
+        limit=100,
+    )
+    if remember and explicit_unit is not None:
+        try:
+            preferences.save_preferences(preferences.Preferences(temperature_unit=explicit_unit))
+        except (OSError, preferences.PreferencesError):
+            typer.echo(
+                "Warning: report was written, but the preference could not be saved.",
+                err=True,
+            )
+        else:
+            typer.echo(f"Temperature unit {explicit_unit} saved as the report default.")
+
+
 @app.command("spunding-advisor", rich_help_panel="Safety experiments")
 def spunding_advisor_command(
     trigger_sg: Annotated[
@@ -507,7 +698,7 @@ def spunding_advisor_command(
     ] = 2,
     select: Annotated[
         bool,
-        typer.Option("--select", help="Choose a brew interactively from one API page."),
+        typer.Option("--select", help="Choose a brew; each n or p requests one API page."),
     ] = False,
     page: Annotated[
         int,
@@ -543,7 +734,7 @@ def spunding_advisor_command(
         raise typer.Exit(code=1) from None
 
 
-@app.command("brews", rich_help_panel="Start here")
+@app.command("brews", hidden=True)
 def brews_command(
     page: Annotated[
         int,

@@ -3,15 +3,14 @@
 
 import html
 import math
-import os
 import re
 import sys
-import tempfile
 import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from forge_companion.fermentation import FermentationMetrics, FermentationReading, ParseResult
+from forge_companion.file_io import atomic_write_text
 
 
 def _escape(value: object) -> str:
@@ -364,19 +363,4 @@ footer {{ border-top: 1px solid var(--gray-300); padding-top: 18px; font: 11px v
 
 def write_html(content: str, destination: Path) -> None:
     """Write a standalone report atomically and clean up failed temp files."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.",
-        suffix=".tmp",
-        dir=destination.parent,
-        text=True,
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
+    atomic_write_text(content, destination, newline="\n")

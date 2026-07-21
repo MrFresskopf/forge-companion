@@ -2,11 +2,10 @@
 
 import csv
 import io
-import os
-import tempfile
 from pathlib import Path
 
 from forge_companion.fermentation import ParseResult
+from forge_companion.file_io import atomic_write_text
 
 
 def _spreadsheet_text(value: str | None) -> str | None:
@@ -47,19 +46,4 @@ def render_csv(parsed: ParseResult) -> str:
 
 def write_csv(content: str, destination: Path) -> None:
     """Write a CSV export atomically without a predictable shared temp path."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.",
-        suffix=".tmp",
-        dir=destination.parent,
-        text=True,
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
+    atomic_write_text(content, destination, newline="")

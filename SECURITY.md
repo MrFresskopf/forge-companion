@@ -22,6 +22,10 @@ it does not create a plaintext keyring or `.env` fallback. `auth login`, `status
 offline. `auth logout` deletes only the stored entry and deliberately leaves environment variables
 unchanged.
 
+The optional report preferences file never stores credentials. It currently contains only an
+explicitly remembered `C` or `F` temperature-unit choice. `FORGE_COMPANION_CONFIG_DIR` can relocate
+that non-secret file but does not change token resolution or credential-store behavior.
+
 If a token is exposed, revoke it in BrewForge immediately and create a replacement with the narrowest scopes needed.
 
 ## Current access model
@@ -29,6 +33,13 @@ If a token is exposed, revoke it in BrewForge immediately and create a replaceme
 Version 0.1 is intentionally read-only. The HTTP client exposes only GET requests. Collection
 snapshots are local JSON files and may contain private brewing data, so users are responsible for
 protecting and encrypting them. They are not complete or directly restorable account backups.
+
+New v2 collection snapshots include a strict manifest and canonical SHA-256 digest. `snapshot
+validate` rejects ambiguous JSON, unsupported schema variants, inconsistent collection counts, and
+modified content without contacting BrewForge. The digest is unkeyed: it detects changes but does not
+authenticate the author or source, prevent a capable attacker from replacing both data and digest, or
+encrypt private data. Inventory audit validates v2 before analysis; legacy v1 files remain readable but
+do not have an embedded integrity proof.
 
 Fermentation briefs can contain brew names, comments, timestamps, and measurements. Keep them in
 the gitignored `reports/` directory unless you deliberately review and share a report.
@@ -42,9 +53,12 @@ and HTML-escape dynamic text, cap displayed rejection reasons, embed no external
 ship with a restrictive Content Security Policy. These defenses do not make a report public-safe;
 review it deliberately before moving it out of the gitignored `reports/` directory.
 
-Interactive HTML selection makes one bounded brew-list GET and one readings GET after the user
-chooses a displayed number. It never selects the newest or active brew automatically, never fetches
-brew details, and never follows additional list pages without an explicit `--page` value.
+Interactive HTML selection makes one bounded brew-list GET per explicitly displayed page and one
+readings GET after the user chooses a displayed number. It never selects the newest or active brew
+automatically, never fetches
+brew details, and follows another list page only after explicit `n`, `p`, or `--page` input. The
+automatic `report` selection path requires an interactive terminal; scripts and pipelines must pin a
+UUID.
 
 The spunding advisor is simulation-only. It performs one GET for a pinned brew's readings and
 prints a threshold evaluation; it has no scheduler, device client, actuator state, or write path.

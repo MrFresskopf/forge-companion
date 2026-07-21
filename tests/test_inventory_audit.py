@@ -47,9 +47,7 @@ def test_audit_does_not_mark_item_expiring_today_as_expired() -> None:
 
 def test_audit_reports_negative_quantity_as_error() -> None:
     resources = {
-        "inventory_fermentables": [
-            {"id": "malt-1", "name": "Example Malt", "quantity": -250}
-        ]
+        "inventory_fermentables": [{"id": "malt-1", "name": "Example Malt", "quantity": -250}]
     }
 
     findings = audit_inventory(resources, as_of=date(2026, 7, 17))
