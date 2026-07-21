@@ -9,6 +9,12 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Native OS credential storage through `auth login`, `auth status`, and `auth logout`, with an explicit `BREWFORGE_API_TOKEN` override and no plaintext fallback.
+- Versioned snapshot-v2 manifests with generator metadata, collection counts, explicit scope exclusions, and a canonical SHA-256 integrity digest.
+- Offline `snapshot validate FILE` checks for strict JSON, exact schema, count consistency, supported collections, and content integrity.
+
+### Changed
+
+- Inventory audits validate v2 snapshot schema and integrity before analysis while retaining strict read support for legacy v1 snapshots.
 
 ## [0.1.1] — 2026-07-19
 

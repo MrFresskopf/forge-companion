@@ -30,6 +30,13 @@ Version 0.1 is intentionally read-only. The HTTP client exposes only GET request
 snapshots are local JSON files and may contain private brewing data, so users are responsible for
 protecting and encrypting them. They are not complete or directly restorable account backups.
 
+New v2 collection snapshots include a strict manifest and canonical SHA-256 digest. `snapshot
+validate` rejects ambiguous JSON, unsupported schema variants, inconsistent collection counts, and
+modified content without contacting BrewForge. The digest is unkeyed: it detects changes but does not
+authenticate the author or source, prevent a capable attacker from replacing both data and digest, or
+encrypt private data. Inventory audit validates v2 before analysis; legacy v1 files remain readable but
+do not have an embedded integrity proof.
+
 Fermentation briefs can contain brew names, comments, timestamps, and measurements. Keep them in
 the gitignored `reports/` directory unless you deliberately review and share a report.
 

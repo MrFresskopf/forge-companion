@@ -80,6 +80,7 @@ to copy. The HTML report uses the chosen name as its report title and writes one
 | Check token and API access | `forge-companion doctor` | 7 GET requests |
 | Find a brew by name | `forge-companion brews` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
+| Verify snapshot schema and integrity | `forge-companion snapshot validate FILE` | Offline |
 | Check inventory from a snapshot | `forge-companion inventory-audit FILE` | Offline |
 | Create a Markdown fermentation brief | `forge-companion fermentation-brief --select` | 2 GET requests |
 | Export validated readings | `forge-companion fermentation-csv --select` | 2 GET requests |
@@ -99,8 +100,10 @@ trust boundary:
   environment override
 - default `reports/` and `snapshots/` destinations stay local and are ignored by Git; custom output
   paths remain your responsibility
-- collection snapshots abort on invalid or incomplete pages; fermentation exports keep valid
-  readings but report every rejection and timestamp conflict
+- collection snapshots abort on invalid or incomplete pages; v2 snapshots include collection counts,
+  explicit scope exclusions, and a canonical SHA-256 integrity digest
+- `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v2 files offline;
+  fermentation exports keep valid readings but report every rejection and timestamp conflict
 - the spunding advisor simulates a decision and never contacts hardware
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
@@ -129,8 +132,10 @@ Forge Companion is young and intentionally conservative. Collection snapshots, i
 fermentation exports/reports, and fail-closed spunding simulations work today. MQTT, Home Assistant,
 and hardware bridges remain future work.
 
-The snapshot command currently covers supported top-level collections. It is not yet a complete or
-restorable account backup. See the [roadmap](docs/ROADMAP.md) for current scope and non-goals.
+The snapshot command currently covers supported top-level collections. Its checksum detects accidental
+or deliberate file changes, but it is not a signature, proof of origin, or encryption. A snapshot is
+not yet a complete or restorable account backup. See the [roadmap](docs/ROADMAP.md) for current scope
+and non-goals.
 
 ## Contributing
 

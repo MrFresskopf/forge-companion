@@ -60,10 +60,23 @@ Save validated top-level API collections as JSON:
 ```bash
 forge-companion snapshot
 forge-companion snapshot --output snapshots/my-brewforge-collections.json
+forge-companion snapshot validate snapshots/my-brewforge-collections.json
 ```
 
 Credentials are never written to the file. Writes are atomic, and validation or network errors stop
-the operation instead of leaving a misleading partial snapshot.
+the operation instead of leaving a misleading partial snapshot. New snapshots use the v2 format and
+contain the creation time, Forge Companion version, all seven supported collection names and counts,
+explicit exclusions, and a SHA-256 digest over canonical UTF-8 JSON excluding only the digest field.
+
+`snapshot validate FILE` is offline. It strictly rejects duplicate JSON keys, non-JSON numeric values,
+unknown fields, unsupported formats, inconsistent counts, missing collections, malformed records,
+and checksum changes. Successful output contains only manifest metadata and counts, never collection
+records or the input path. The inventory audit applies the same validation to v2 files while retaining
+read support for strict legacy v1 snapshots.
+
+The SHA-256 digest detects changes; it is not a digital signature, proof that BrewForge produced the
+data, access control, or encryption. Keep snapshots private and protect them like any other account
+export.
 
 > [!WARNING]
 > This is not yet a complete or restorable account backup. Version 0.1 does not fetch per-brew
@@ -80,7 +93,8 @@ forge-companion inventory-audit snapshots/brewforge-collections.json --as-of 202
 
 Current checks cover expired inventory, negative quantities, missing yeast or miscellaneous-item
 units, and conservative possible duplicates. Findings are advisory; Forge Companion never merges or
-changes inventory.
+changes inventory. v2 input must pass schema and SHA-256 validation before any finding is calculated;
+legacy v1 snapshots remain accepted but have no embedded integrity proof.
 
 ## `fermentation-brief`
 

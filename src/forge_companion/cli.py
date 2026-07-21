@@ -11,7 +11,13 @@ import httpx
 import typer
 
 from forge_companion import __version__, credentials
-from forge_companion.backup import create_backup, write_backup
+from forge_companion.backup import (
+    SnapshotValidationError,
+    create_backup,
+    load_snapshot_file,
+    validate_backup_file,
+    write_backup,
+)
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
 from forge_companion.fermentation import analyze_readings, parse_readings
@@ -30,6 +36,11 @@ app = typer.Typer(
 )
 auth_app = typer.Typer(help="Manage BrewForge authentication without displaying tokens.")
 app.add_typer(auth_app, name="auth", rich_help_panel="Start here")
+snapshot_app = typer.Typer(
+    help="Create or validate local BrewForge collection snapshots.",
+    invoke_without_command=True,
+)
+app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
 
 
 @app.callback()
@@ -145,14 +156,17 @@ def doctor() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command("snapshot", rich_help_panel="Protect and inspect")
+@snapshot_app.callback()
 def snapshot_command(
+    context: typer.Context,
     output: Annotated[
         Path,
         typer.Option("--output", "-o", help="Destination JSON file."),
     ] = Path("snapshots/brewforge-collections.json"),
 ) -> None:
     """Create a local snapshot of supported BrewForge API collections."""
+    if context.invoked_subcommand is not None:
+        return
     client = BrewForgeClient(token=_token_for_api())
     try:
         payload = create_backup(client)
@@ -166,6 +180,26 @@ def snapshot_command(
     typer.echo(f"Collection snapshot written to {output}")
 
 
+@snapshot_app.command("validate")
+def snapshot_validate_command(
+    source: Annotated[Path, typer.Argument(help="Collection snapshot JSON file.")],
+) -> None:
+    """Validate snapshot schema and integrity without contacting BrewForge."""
+    try:
+        summary = validate_backup_file(source)
+    except SnapshotValidationError:
+        typer.echo("Snapshot validation failed: file is invalid or unreadable.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Snapshot is valid.")
+    typer.echo(f"Format: {summary.format}")
+    typer.echo(f"Created: {summary.created_at}")
+    typer.echo(f"Generator: Forge Companion {summary.generator_version}")
+    typer.echo(f"Collections: {summary.collection_count}")
+    typer.echo(f"Records: {summary.record_count}")
+    typer.echo("SHA-256 integrity: verified.")
+    typer.echo("Excluded: brew details, brew notes, brew readings, undocumented resources.")
+
+
 @app.command("inventory-audit", rich_help_panel="Protect and inspect")
 def inventory_audit_command(
     snapshot: Annotated[Path, typer.Argument(help="Collection snapshot JSON file.")],
@@ -176,11 +210,7 @@ def inventory_audit_command(
 ) -> None:
     """Audit inventory data from a local collection snapshot."""
     try:
-        payload = json.loads(snapshot.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise TypeError("snapshot root is not an object")
-        if payload.get("format") != "forge-companion-collection-snapshot-v1":
-            raise ValueError("unsupported snapshot format")
+        payload = load_snapshot_file(snapshot, allow_legacy_v1=True)
         resources = payload.get("resources")
         if not isinstance(resources, dict):
             raise TypeError("snapshot resources is not an object")

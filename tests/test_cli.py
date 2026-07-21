@@ -6,6 +6,7 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
+import forge_companion.backup as backup
 import forge_companion.cli as cli
 from forge_companion import __version__
 from forge_companion.cli import app
@@ -69,6 +70,52 @@ def test_backup_command_writes_file_and_reports_destination(
     assert destination.exists()
     assert str(destination) in result.output
     assert "test-token" not in destination.read_text(encoding="utf-8")
+
+
+def test_snapshot_validate_reports_safe_offline_summary(tmp_path: Path) -> None:
+    class EmptyClient:
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            return {"data": [], "pagination": {"hasMore": False, "total": 0}}
+
+    source = tmp_path / "private-name.json"
+    backup.write_backup(
+        backup.create_backup(
+            EmptyClient(),
+            now=datetime(2026, 7, 20, 18, 0, tzinfo=UTC),
+        ),
+        source,
+    )
+
+    result = runner.invoke(
+        app,
+        ["snapshot", "validate", str(source)],
+        env={"BREWFORGE_API_TOKEN": ""},
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "Snapshot is valid.\n"
+        "Format: forge-companion-collection-snapshot-v2\n"
+        "Created: 2026-07-20T18:00:00+00:00\n"
+        "Generator: Forge Companion 0.1.1\n"
+        "Collections: 7\n"
+        "Records: 0\n"
+        "SHA-256 integrity: verified.\n"
+        "Excluded: brew details, brew notes, brew readings, undocumented resources.\n"
+    )
+    assert "private-name" not in result.output
+
+
+def test_snapshot_validate_hides_invalid_path_and_content(tmp_path: Path) -> None:
+    source = tmp_path / "private-brew-name.json"
+    source.write_text('{"secret-comment":"do-not-print"', encoding="utf-8")
+
+    result = runner.invoke(app, ["snapshot", "validate", str(source)])
+
+    assert result.exit_code == 1
+    assert result.output == "Snapshot validation failed: file is invalid or unreadable.\n"
+    assert "private-brew-name" not in result.output
+    assert "do-not-print" not in result.output
 
 
 def test_backup_command_reports_api_error_without_traceback(
@@ -156,6 +203,89 @@ def test_inventory_audit_command_reports_findings_from_snapshot(tmp_path: Path) 
     assert result.exit_code == 0
     assert "1 finding(s)" in result.output
     assert "WARNING yeasts Example Yeast: expired on 2026-07-01" in result.output
+
+
+def test_inventory_audit_accepts_new_validated_v2_snapshot(tmp_path: Path) -> None:
+    class InventoryClient:
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            data: list[object] = []
+            if path == "inventory/yeasts":
+                data = [
+                    {
+                        "id": "yeast-v2",
+                        "name": "V2 Yeast",
+                        "quantity": 1,
+                        "quantityUnit": "pkg",
+                        "expiryDate": "2026-07-01",
+                    }
+                ]
+            return {"data": data, "pagination": {"hasMore": False, "total": len(data)}}
+
+    snapshot = tmp_path / "snapshot-v2.json"
+    backup.write_backup(backup.create_backup(InventoryClient()), snapshot)
+
+    result = runner.invoke(
+        app,
+        ["inventory-audit", str(snapshot), "--as-of", "2026-07-17"],
+    )
+
+    assert result.exit_code == 0
+    assert "WARNING yeasts V2 Yeast: expired on 2026-07-01" in result.output
+
+
+def test_inventory_audit_rejects_duplicate_keys_in_v2_snapshot(tmp_path: Path) -> None:
+    class EmptyClient:
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            return {"data": [], "pagination": {"hasMore": False, "total": 0}}
+
+    snapshot = tmp_path / "duplicate-v2.json"
+    payload = backup.create_backup(EmptyClient())
+    serialized = json.dumps(payload)
+    duplicated = serialized.replace(
+        '"format": "forge-companion-collection-snapshot-v2"',
+        '"format": "forge-companion-collection-snapshot-v2", '
+        '"format": "forge-companion-collection-snapshot-v2"',
+        1,
+    )
+    snapshot.write_text(duplicated, encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["inventory-audit", str(snapshot), "--as-of", "2026-07-17"],
+    )
+
+    assert result.exit_code == 1
+    assert "finding(s)" not in result.output
+
+
+def test_inventory_audit_rejects_duplicate_keys_in_legacy_v1_snapshot(
+    tmp_path: Path,
+) -> None:
+    snapshot = tmp_path / "duplicate-v1.json"
+    snapshot.write_text(
+        '{"format":"forge-companion-collection-snapshot-v1",'
+        '"format":"forge-companion-collection-snapshot-v1",'
+        '"resources":{"inventory_yeasts":[]}}',
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["inventory-audit", str(snapshot), "--as-of", "2026-07-17"],
+    )
+
+    assert result.exit_code == 1
+    assert "finding(s)" not in result.output
+
+
+def test_inventory_audit_hides_unreadable_snapshot_path(tmp_path: Path) -> None:
+    source = tmp_path / "private-brew-name.json"
+
+    result = runner.invoke(app, ["inventory-audit", str(source)])
+
+    assert result.exit_code == 1
+    assert result.output == "Inventory audit failed: Snapshot is not readable strict JSON.\n"
+    assert "private-brew-name" not in result.output
 
 
 def test_fermentation_brief_uses_exactly_two_gets_and_writes_report(
