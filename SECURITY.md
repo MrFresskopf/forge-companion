@@ -81,6 +81,19 @@ A hard crash may leave a stale lock; remove it only after confirming no Forge Co
 still working on that plan. These local file controls are not a substitute for device-side
 idempotency, a hardware timeout, or mechanical protection in any future actuator.
 
+`hopper shelly-status` is a separate read-only local-network check. Its client exposes only
+`GET /rpc/Switch.GetStatus`, rejects redirects, ambiguous base URLs, and malformed or duplicate-key
+JSON, and does not resolve BrewForge credentials. It has no generic RPC, relay-write,
+plan-transition, or scheduler interface. The current implementation has no Shelly authentication
+support and should be used only on a trusted local network; enabling device authentication will make
+it fail closed. Never place credentials in `--device-url`—credential-bearing URLs are rejected and
+command arguments may remain in shell history.
+
+Shelly status is electrical telemetry, not mechanical feedback. `OFF` cannot prove that a winch was
+physically isolated, that a hopper moved, or that an endpoint was reached. A separately measured hard
+timeout, manual isolation, and independent mechanical feedback remain prerequisites for any future
+live hopper action.
+
 ## Reporting vulnerabilities
 
 Use GitHub's [private vulnerability reporting form](https://github.com/MrFresskopf/forge-companion/security/advisories/new).

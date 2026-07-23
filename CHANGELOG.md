@@ -17,6 +17,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Offline `hopper plan`, `hopper arm`, `hopper simulate`, and `hopper status` commands with strict
   local state history, exclusive transition locks, non-overwriting creation, atomic files, SHA-256
   change detection, explicit one-shot locking, and no network or hardware path.
+- A narrow `hopper shelly-status` command for strict read-only local switch-state checks, with no
+  generic RPC method, relay-write path, BrewForge credential lookup, or mechanical-success claim.
 
 ### Changed
 
