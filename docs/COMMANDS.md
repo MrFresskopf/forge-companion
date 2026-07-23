@@ -232,6 +232,52 @@ temperature, desired pressure, and carbonation target.
 There is no scheduler. Polling one readings endpoint hourly would use roughly 720 of BrewForge's
 documented 1,000 monthly requests.
 
+## `hopper`
+
+Prepare and rehearse a remote-hop-dropper lifecycle entirely offline:
+
+```bash
+forge-companion hopper plan \
+  --trigger-at 2026-08-01T18:00:00+00:00 \
+  --pulse-ms 1500 \
+  --brew-id BREW_ID
+
+forge-companion hopper arm automation/hopper-plan.json
+forge-companion hopper status automation/hopper-plan.json
+forge-companion hopper simulate automation/hopper-plan.json
+```
+
+`plan` creates a `DRAFT` file and refuses to overwrite an existing destination. `arm` is a separate
+explicit transition and only succeeds before the trigger time. `simulate` succeeds only for an
+`ARMED` plan at or after the trigger and records this
+ordered lifecycle before permanently setting that file to `LOCKED`:
+
+```text
+DRAFT -> ARMED -> FIRE_REQUESTED -> PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED
+```
+
+All four commands are local. They do not resolve a BrewForge token, call an API, connect to a Shelly,
+wait until the trigger time, or send a physical pulse. The optional brew UUID is metadata only.
+`simulate --at TIME` provides an explicit clock for deterministic offline rehearsals; it is not a
+scheduler and will not be part of any future hardware action.
+
+Plan writes are atomic. Loading requires strict JSON, canonical UUIDs, UTC timestamps, an exact state
+history, and a matching canonical SHA-256 digest. Invalid, modified, early, already-used, or
+out-of-order plans fail closed without printing the file path or plan contents. The unkeyed digest is
+change detection, not authentication; anyone able to replace the file can recompute it.
+
+Plan creation and state transitions use a sibling `.PLAN_FILENAME.lock` file, so concurrent CLI
+processes cannot both consume the same `ARMED` state. A hard process or machine crash can leave this
+lock behind intentionally fail-closed. After confirming that no Forge Companion process is still
+using the plan, remove only that sidecar lock before retrying; never replace the plan to bypass a
+state validation failure.
+
+The pulse value is required and bounded to 1–60,000 milliseconds so the plan is concrete, but this
+range is **not** a hardware recommendation. A future actuator must use the measured winch runtime,
+its own lower hard timeout, explicit device identity, state read-back, mechanical end protection, and
+manual override. Until that separate feature exists, `ARMED`, `PULSE_ACTIVE`, `VERIFIED_OFF`, and
+`LOCKED` describe only a simulation file.
+
 ## API scopes
 
 Use the narrowest scopes needed for your task:

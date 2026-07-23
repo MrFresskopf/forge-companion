@@ -14,6 +14,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A comfort-oriented `report` command with automatic numbered brew selection, explicit next/previous-page navigation, and an optional remembered C/F preference.
 - A short successful start page when `forge-companion` is run without arguments.
 - An `inventory` command that reuses the standard snapshot path by default.
+- Offline `hopper plan`, `hopper arm`, `hopper simulate`, and `hopper status` commands with strict
+  local state history, exclusive transition locks, non-overwriting creation, atomic files, SHA-256
+  change detection, explicit one-shot locking, and no network or hardware path.
 
 ### Changed
 

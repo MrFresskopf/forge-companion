@@ -25,6 +25,19 @@ from forge_companion.fermentation import analyze_readings, parse_readings
 from forge_companion.fermentation_csv import render_csv, write_csv
 from forge_companion.fermentation_html import render_html, write_html
 from forge_companion.fermentation_report import render_markdown, write_markdown
+from forge_companion.hopper import (
+    HopperPlanBusyError,
+    HopperPlanExistsError,
+    HopperPlanValidationError,
+    arm_hopper_plan,
+    create_hopper_plan,
+    hopper_plan_lock,
+    load_hopper_plan,
+    simulate_hopper_plan,
+    validate_hopper_plan,
+    write_hopper_plan,
+    write_new_hopper_plan,
+)
 from forge_companion.inventory_audit import audit_inventory
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
 from forge_companion.spunding_report import render_spunding_advice
@@ -42,6 +55,8 @@ snapshot_app = typer.Typer(
     invoke_without_command=True,
 )
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
+hopper_app = typer.Typer(help="Prepare and rehearse offline remote-hopper plans.")
+app.add_typer(hopper_app, name="hopper", rich_help_panel="Safety experiments")
 
 
 @app.callback()
@@ -100,6 +115,132 @@ def _token_for_api() -> str:
         )
         raise typer.Exit(code=2)
     return resolved.token
+
+
+@hopper_app.command("plan")
+def hopper_plan_command(
+    trigger_at: Annotated[
+        str,
+        typer.Option("--trigger-at", help="Timezone-aware ISO trigger time for the simulation."),
+    ],
+    pulse_ms: Annotated[
+        str,
+        typer.Option("--pulse-ms", help="Simulated pulse duration in milliseconds."),
+    ],
+    brew_id: Annotated[
+        str | None,
+        typer.Option(
+            "--brew-id",
+            help="Optional exact BrewForge brew UUID; no API request is made.",
+        ),
+    ] = None,
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Destination local plan file."),
+    ] = Path("automation/hopper-plan.json"),
+) -> None:
+    """Create an offline draft that cannot contact or command hardware."""
+    try:
+        trigger = datetime.fromisoformat(trigger_at)
+        canonical_brew_id = UUID(brew_id) if brew_id is not None else None
+        with hopper_plan_lock(output):
+            payload = create_hopper_plan(
+                trigger_at=trigger,
+                pulse_duration_ms=int(pulse_ms),
+                brew_id=canonical_brew_id,
+            )
+            write_new_hopper_plan(payload, output)
+    except HopperPlanBusyError:
+        typer.echo("Hopper plan failed: destination is busy or locked.", err=True)
+        raise typer.Exit(code=1) from None
+    except HopperPlanExistsError:
+        typer.echo("Hopper plan failed: destination already exists.", err=True)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        typer.echo("Hopper plan failed: local file operation failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (TypeError, ValueError):
+        typer.echo("Hopper plan failed: trigger, pulse, or brew UUID is invalid.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Hopper simulation plan written.")
+    typer.echo("Status: DRAFT")
+    typer.echo("No device or network was contacted.")
+
+
+@hopper_app.command("arm")
+def hopper_arm_command(
+    source: Annotated[Path, typer.Argument(help="Local hopper plan file.")],
+) -> None:
+    """Explicitly arm a valid future simulation plan without contacting hardware."""
+    try:
+        with hopper_plan_lock(source):
+            payload = load_hopper_plan(source)
+            armed = arm_hopper_plan(payload, at=datetime.now(UTC))
+            write_hopper_plan(armed, source)
+    except HopperPlanBusyError:
+        typer.echo("Hopper arm failed: plan is busy or locked.", err=True)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        typer.echo("Hopper arm failed: local file operation failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (HopperPlanValidationError, TypeError, ValueError):
+        typer.echo("Hopper arm failed: plan is invalid, expired, or not a draft.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Hopper simulation plan armed.")
+    typer.echo("Status: ARMED")
+    typer.echo("No device or network was contacted.")
+
+
+@hopper_app.command("simulate")
+def hopper_simulate_command(
+    source: Annotated[Path, typer.Argument(help="Local armed hopper plan file.")],
+    at: Annotated[
+        str | None,
+        typer.Option(
+            "--at",
+            help="Optional timezone-aware simulation clock; never available to hardware actions.",
+        ),
+    ] = None,
+) -> None:
+    """Complete an armed plan as an offline rehearsal without sending a pulse."""
+    try:
+        simulation_time = datetime.fromisoformat(at) if at is not None else datetime.now(UTC)
+        with hopper_plan_lock(source):
+            payload = load_hopper_plan(source)
+            completed = simulate_hopper_plan(payload, at=simulation_time)
+            write_hopper_plan(completed, source)
+    except HopperPlanBusyError:
+        typer.echo("Hopper simulation failed: plan is busy or locked.", err=True)
+        raise typer.Exit(code=1) from None
+    except OSError:
+        typer.echo("Hopper simulation failed: local file operation failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (HopperPlanValidationError, TypeError, ValueError):
+        typer.echo(
+            "Hopper simulation failed: plan is invalid, early, or not armed.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    typer.echo("Hopper simulation completed.")
+    typer.echo("Status: LOCKED")
+    typer.echo("No device or network was contacted; no physical pulse was sent.")
+
+
+@hopper_app.command("status")
+def hopper_status_command(
+    source: Annotated[Path, typer.Argument(help="Local hopper plan file.")],
+) -> None:
+    """Validate a local simulation plan and show non-sensitive metadata."""
+    try:
+        summary = validate_hopper_plan(load_hopper_plan(source))
+    except (HopperPlanValidationError, OSError, TypeError, ValueError):
+        typer.echo("Hopper status failed: plan is invalid or unreadable.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Hopper simulation plan is valid.")
+    typer.echo(f"Status: {summary.status.value}")
+    typer.echo(f"Trigger: {summary.trigger_at.isoformat()}")
+    typer.echo(f"Pulse: {summary.pulse_duration_ms} ms (simulation only)")
+    typer.echo("No device or network was contacted.")
 
 
 @auth_app.command("login")

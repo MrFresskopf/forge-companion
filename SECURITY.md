@@ -66,6 +66,21 @@ Its output cannot verify pressure, valve position, regulator behavior, PRV condi
 success. Never use it as an overpressure safeguard or as a substitute for independent mechanical
 protection and manual override.
 
+Remote-hopper plans are also simulation-only and offline. `hopper plan`, `arm`, `simulate`, and
+`status` never contact BrewForge, a Shelly, or any other device, and they never wait for or send a
+physical pulse. Plans use strict JSON, an exact state-history schema, atomic replacement, and an
+unkeyed canonical SHA-256 digest. The digest detects accidental edits but is not authentication: a
+person who can replace the file can also recompute it. `ARMED` and `LOCKED` describe only the local
+simulation file and provide no hardware safety guarantee. The accepted 1–60,000 ms simulation value
+does not establish a safe motor runtime; that must come from a measured bench test and an independent
+hard timeout before any future actuator integration.
+
+Hopper CLI transitions use an exclusive sidecar lock and atomic replacement. A competing process
+fails closed instead of consuming the same armed state, and plan creation refuses an existing output.
+A hard crash may leave a stale lock; remove it only after confirming no Forge Companion process is
+still working on that plan. These local file controls are not a substitute for device-side
+idempotency, a hardware timeout, or mechanical protection in any future actuator.
+
 ## Reporting vulnerabilities
 
 Use GitHub's [private vulnerability reporting form](https://github.com/MrFresskopf/forge-companion/security/advisories/new).

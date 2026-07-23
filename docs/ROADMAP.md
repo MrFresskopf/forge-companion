@@ -52,7 +52,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] simulation-only spunding threshold advisor
 - [x] stale-data, timestamp-conflict, confirmation, and cadence gates
 - [ ] read-only Shelly connectivity and state check
-- [ ] device-independent dry-run actuation plan
+- [x] device-independent offline remote-hopper plan, explicit arming, lifecycle simulation, and lock
 - [ ] one-shot, explicitly armed Shelly action with timeout and idempotency
 - [ ] read-back verification and audit log
 - [x] explicit experimental warning and mechanical safety requirements
