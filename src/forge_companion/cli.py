@@ -39,6 +39,7 @@ from forge_companion.hopper import (
     write_new_hopper_plan,
 )
 from forge_companion.inventory_audit import audit_inventory
+from forge_companion.shelly import ShellyReadOnlyClient, ShellyResponseError
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
 from forge_companion.spunding_report import render_spunding_advice
 from forge_companion.terminal_text import safe_terminal_text
@@ -241,6 +242,35 @@ def hopper_status_command(
     typer.echo(f"Trigger: {summary.trigger_at.isoformat()}")
     typer.echo(f"Pulse: {summary.pulse_duration_ms} ms (simulation only)")
     typer.echo("No device or network was contacted.")
+
+
+@hopper_app.command("shelly-status")
+def hopper_shelly_status_command(
+    device_url: Annotated[
+        str,
+        typer.Option("--device-url", help="Base URL of the local Shelly device."),
+    ],
+    channel: Annotated[
+        str,
+        typer.Option("--channel", help="Shelly switch channel to read."),
+    ] = "0",
+) -> None:
+    """Read local Shelly switch status without sending a switch command."""
+    try:
+        channel_id = int(channel)
+        if channel_id < 0:
+            raise ValueError("channel must not be negative")
+        status = ShellyReadOnlyClient(base_url=device_url).get_switch_status(channel=channel_id)
+    except (ShellyResponseError, httpx.HTTPError, OSError, TypeError, ValueError):
+        typer.echo("Shelly status failed: device, channel, or response is invalid.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Shelly status read-only.")
+    typer.echo(f"Channel: {status.channel}")
+    typer.echo(f"Output: {'ON' if status.output else 'OFF'}")
+    typer.echo(f"Source: {safe_terminal_text(status.source)}")
+    typer.echo(f"Switch-on count: {status.switch_on_count}")
+    typer.echo(f"Temperature: {status.temperature_c:.1f} C")
+    typer.echo("No switch command was sent.")
 
 
 @auth_app.command("login")

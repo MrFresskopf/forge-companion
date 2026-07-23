@@ -278,6 +278,25 @@ its own lower hard timeout, explicit device identity, state read-back, mechanica
 manual override. Until that separate feature exists, `ARMED`, `PULSE_ACTIVE`, `VERIFIED_OFF`, and
 `LOCKED` describe only a simulation file.
 
+Read one local Shelly switch channel separately:
+
+```bash
+forge-companion hopper shelly-status \
+  --device-url http://192.0.2.1 \
+  --channel 0
+```
+
+`shelly-status` makes exactly one local `GET /rpc/Switch.GetStatus?id=CHANNEL` request. It has no
+generic RPC entry point, no `Switch.Set` method, no scheduler, and no connection to hopper-plan state.
+It does not resolve a BrewForge token and never prints the device URL in status or error output.
+Only a bare `http://` or `https://` device base URL without credentials, path, query, or fragment is
+accepted. The current adapter does not implement Shelly authentication; an authenticated device will
+fail closed until separate credential support exists.
+
+`Output: OFF` confirms only the Shelly's reported electrical relay state. It does not prove that a
+winch is isolated, that a hopper moved, or that a mechanical endpoint was reached. No pulse duration
+from an LED test is a safe motor-runtime recommendation.
+
 ## API scopes
 
 Use the narrowest scopes needed for your task:
