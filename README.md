@@ -88,6 +88,7 @@ documented collection and token scope.
 | Check inventory from the standard snapshot | `forge-companion inventory` | Offline |
 | Diagnose API access | `forge-companion doctor` | 7 GET requests |
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
+| Prepare and rehearse a remote hopper | `forge-companion hopper ...` | Offline |
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details.
@@ -108,6 +109,8 @@ trust boundary:
 - `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v2 files offline;
   fermentation exports keep valid readings but report every rejection and timestamp conflict
 - the spunding advisor simulates a decision and never contacts hardware
+- hopper plans, arming, status checks, and lifecycle rehearsals are offline; no device client or
+  physical pulse path exists
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
 assets. It describes telemetry but does not decide that fermentation is complete.
@@ -132,8 +135,9 @@ uv run mypy
 ## Project status
 
 Forge Companion is young and intentionally conservative. Collection snapshots, inventory audits,
-fermentation exports/reports, and fail-closed spunding simulations work today. MQTT, Home Assistant,
-and hardware bridges remain future work.
+fermentation exports/reports, fail-closed spunding simulations, and offline remote-hopper rehearsals
+work today. MQTT, Home Assistant, Shelly connectivity, and physical hardware actions remain future
+work.
 
 The snapshot command currently covers supported top-level collections. Its checksum detects accidental
 or deliberate file changes, but it is not a signature, proof of origin, or encryption. A snapshot is
