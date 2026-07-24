@@ -1,11 +1,59 @@
+from collections.abc import Iterator
+
 import httpx
 import pytest
 
+import forge_companion.shelly as shelly_module
 from forge_companion.shelly import (
     ShellyReadOnlyClient,
     ShellyResponseError,
     ShellySwitchStatus,
 )
+
+
+def test_read_only_client_disables_environment_proxies_for_internal_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_options: dict[str, object] = {}
+
+    def client_factory(**options: object) -> object:
+        seen_options.update(options)
+        return object()
+
+    monkeypatch.setattr(shelly_module.httpx, "Client", client_factory)
+
+    ShellyReadOnlyClient(base_url="http://192.0.2.1")
+
+    assert seen_options["trust_env"] is False
+
+
+def test_read_only_client_context_closes_internal_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class TrackingClient:
+        def __init__(self, **options: object) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    http = TrackingClient()
+    monkeypatch.setattr(shelly_module.httpx, "Client", lambda **options: http)
+
+    with ShellyReadOnlyClient(base_url="http://192.0.2.1"):
+        assert http.closed is False
+
+    assert http.closed is True
+
+
+def test_read_only_client_context_does_not_close_injected_http() -> None:
+    http = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
+
+    with ShellyReadOnlyClient(base_url="http://192.0.2.1", http=http):
+        assert http.is_closed is False
+
+    assert http.is_closed is False
+    http.close()
 
 
 @pytest.mark.parametrize(
@@ -252,3 +300,64 @@ def test_get_switch_status_rejects_invalid_or_ambiguous_json(raw_json: bytes) ->
 
     with pytest.raises(ShellyResponseError, match="invalid status payload"):
         client.get_switch_status(channel=0)
+
+
+def test_get_switch_status_rejects_declared_oversized_response_before_body_read() -> None:
+    class TrackingStream(httpx.SyncByteStream):
+        def __init__(self) -> None:
+            self.read_started = False
+            self.closed = False
+
+        def __iter__(self) -> Iterator[bytes]:
+            self.read_started = True
+            yield b"private oversized device content"
+
+        def close(self) -> None:
+            self.closed = True
+
+    stream = TrackingStream()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Length": "1000000"},
+            stream=stream,
+        )
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    client = ShellyReadOnlyClient(base_url="http://192.0.2.1", http=http)
+
+    with pytest.raises(ShellyResponseError, match="invalid status payload"):
+        client.get_switch_status(channel=0)
+
+    assert stream.read_started is False
+    assert stream.closed is True
+
+
+@pytest.mark.parametrize("declared_length", [None, "1"])
+def test_get_switch_status_stops_reading_observed_oversized_response(
+    declared_length: str | None,
+) -> None:
+    class TrackingStream(httpx.SyncByteStream):
+        def __init__(self) -> None:
+            self.chunks = [b"x" * 20_000 for _ in range(5)]
+            self.chunks_read = 0
+
+        def __iter__(self) -> Iterator[bytes]:
+            for chunk in self.chunks:
+                self.chunks_read += 1
+                yield chunk
+
+    stream = TrackingStream()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        headers = {} if declared_length is None else {"Content-Length": declared_length}
+        return httpx.Response(200, headers=headers, stream=stream)
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    client = ShellyReadOnlyClient(base_url="http://192.0.2.1", http=http)
+
+    with pytest.raises(ShellyResponseError, match="invalid status payload"):
+        client.get_switch_status(channel=0)
+
+    assert stream.chunks_read < len(stream.chunks)

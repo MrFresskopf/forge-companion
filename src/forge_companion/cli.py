@@ -260,7 +260,8 @@ def hopper_shelly_status_command(
         channel_id = int(channel)
         if channel_id < 0:
             raise ValueError("channel must not be negative")
-        status = ShellyReadOnlyClient(base_url=device_url).get_switch_status(channel=channel_id)
+        with ShellyReadOnlyClient(base_url=device_url) as client:
+            status = client.get_switch_status(channel=channel_id)
     except (ShellyResponseError, httpx.HTTPError, OSError, TypeError, ValueError):
         typer.echo("Shelly status failed: device, channel, or response is invalid.", err=True)
         raise typer.Exit(code=1) from None
