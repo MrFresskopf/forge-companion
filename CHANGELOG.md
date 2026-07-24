@@ -26,6 +26,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The root help now emphasizes everyday commands while keeping legacy format-specific commands available for compatible scripts.
 - Snapshot validation and inventory checks reuse `snapshots/brewforge-collections.json` when no path is supplied.
 - HTML, Markdown, and CSV exports share one atomic text writer without weakening temporary-file cleanup or replacement semantics.
+- Read-only Shelly status requests now reject responses above 64 KiB, ignore environment proxy
+  settings for internally created clients, and close owned HTTP resources deterministically.
 
 ## [0.1.1] — 2026-07-19
 

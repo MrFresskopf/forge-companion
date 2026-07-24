@@ -18,8 +18,15 @@ def test_hopper_shelly_status_reads_without_resolving_token_or_sending_command(
         def __init__(self, base_url: str) -> None:
             seen["base_url"] = base_url
 
+        def __enter__(self) -> "FakeShellyReadOnlyClient":
+            return self
+
+        def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+            seen["closed"] = True
+
         def get_switch_status(self, channel: int = 0) -> ShellySwitchStatus:
             seen["channel"] = channel
+            seen["status_calls"] = int(seen.get("status_calls", 0)) + 1
             return ShellySwitchStatus(
                 channel=0,
                 output=False,
@@ -50,6 +57,8 @@ def test_hopper_shelly_status_reads_without_resolving_token_or_sending_command(
     assert seen == {
         "base_url": "http://private-device-name.invalid",
         "channel": 0,
+        "status_calls": 1,
+        "closed": True,
     }
     assert result.output == (
         "Shelly status read-only.\n"
@@ -66,11 +75,20 @@ def test_hopper_shelly_status_reads_without_resolving_token_or_sending_command(
 def test_hopper_shelly_status_error_does_not_reflect_private_device_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    seen: dict[str, object] = {}
+
     class FailingShellyReadOnlyClient:
         def __init__(self, base_url: str) -> None:
             pass
 
+        def __enter__(self) -> "FailingShellyReadOnlyClient":
+            return self
+
+        def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+            seen["closed"] = True
+
         def get_switch_status(self, channel: int = 0) -> ShellySwitchStatus:
+            seen["status_called"] = True
             raise OSError("private-device-name and local network details")
 
     monkeypatch.setattr(cli_module, "ShellyReadOnlyClient", FailingShellyReadOnlyClient)
@@ -88,6 +106,7 @@ def test_hopper_shelly_status_error_does_not_reflect_private_device_data(
     )
 
     assert result.exit_code == 1
+    assert seen == {"status_called": True, "closed": True}
     assert result.output == "Shelly status failed: device, channel, or response is invalid.\n"
     assert "private-device-name" not in result.output
     assert "local network details" not in result.output

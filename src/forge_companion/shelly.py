@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+_MAX_STATUS_RESPONSE_BYTES = 64 * 1024
+
 
 class ShellyResponseError(ValueError):
     """Report an invalid Shelly response without reflecting device content."""
@@ -50,6 +52,24 @@ def _decode_status_json(content: bytes) -> Any:
         )
     except (json.JSONDecodeError, RecursionError, UnicodeDecodeError, ValueError):
         raise _invalid_status() from None
+
+
+def _read_status_content(response: httpx.Response) -> bytes:
+    declared_length = response.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            parsed_length = int(declared_length)
+        except ValueError:
+            raise _invalid_status() from None
+        if not 0 <= parsed_length <= _MAX_STATUS_RESPONSE_BYTES:
+            raise _invalid_status()
+
+    content = bytearray()
+    for chunk in response.iter_bytes():
+        if len(content) + len(chunk) > _MAX_STATUS_RESPONSE_BYTES:
+            raise _invalid_status()
+        content.extend(chunk)
+    return bytes(content)
 
 
 def _normalize_base_url(base_url: str) -> str:
@@ -122,18 +142,32 @@ class ShellyReadOnlyClient:
 
     def __init__(self, base_url: str, http: httpx.Client | None = None) -> None:
         self._base_url = _normalize_base_url(base_url)
-        self._http = http or httpx.Client(timeout=5.0)
+        self._owns_http = http is None
+        self._http = http if http is not None else httpx.Client(timeout=5.0, trust_env=False)
+
+    def __enter__(self) -> "ShellyReadOnlyClient":
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Close the internally owned HTTP client."""
+        if self._owns_http:
+            self._http.close()
 
     def get_switch_status(self, channel: int = 0) -> ShellySwitchStatus:
         """Read one switch channel through Shelly's documented GET-only RPC."""
         if type(channel) is not int or not 0 <= channel <= 255:
             raise ValueError("invalid Shelly channel")
-        response = self._http.get(
+        with self._http.stream(
+            "GET",
             f"{self._base_url}/rpc/Switch.GetStatus",
             params={"id": channel},
             headers={"Accept": "application/json"},
             follow_redirects=False,
-        )
-        response.raise_for_status()
-        payload = _decode_status_json(response.content)
+        ) as response:
+            response.raise_for_status()
+            content = _read_status_content(response)
+        payload = _decode_status_json(content)
         return _parse_switch_status(payload, channel=channel)

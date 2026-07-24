@@ -82,8 +82,10 @@ still working on that plan. These local file controls are not a substitute for d
 idempotency, a hardware timeout, or mechanical protection in any future actuator.
 
 `hopper shelly-status` is a separate read-only local-network check. Its client exposes only
-`GET /rpc/Switch.GetStatus`, rejects redirects, ambiguous base URLs, and malformed or duplicate-key
-JSON, and does not resolve BrewForge credentials. It has no generic RPC, relay-write,
+`GET /rpc/Switch.GetStatus`, rejects redirects, ambiguous base URLs, malformed or duplicate-key JSON,
+and responses larger than 64 KiB. Its internally owned HTTP client ignores environment proxy settings
+and is closed deterministically after each CLI invocation. It does not resolve BrewForge credentials
+and has no generic RPC, relay-write,
 plan-transition, or scheduler interface. The current implementation has no Shelly authentication
 support and should be used only on a trusted local network; enabling device authentication will make
 it fail closed. Never place credentials in `--device-url`—credential-bearing URLs are rejected and

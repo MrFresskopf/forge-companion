@@ -293,6 +293,10 @@ Only a bare `http://` or `https://` device base URL without credentials, path, q
 accepted. The current adapter does not implement Shelly authentication; an authenticated device will
 fail closed until separate credential support exists.
 
+Responses are streamed into a maximum 64 KiB buffer; a larger declared or observed body fails closed.
+The CLI-created local HTTP client ignores environment proxy settings and is closed after the request.
+This prevents an inherited proxy configuration from silently rerouting the local status request.
+
 `Output: OFF` confirms only the Shelly's reported electrical relay state. It does not prove that a
 winch is isolated, that a hopper moved, or that a mechanical endpoint was reached. No pulse duration
 from an LED test is a safe motor-runtime recommendation.
