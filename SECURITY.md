@@ -22,6 +22,14 @@ it does not create a plaintext keyring or `.env` fallback. `auth login`, `status
 offline. `auth logout` deletes only the stored entry and deliberately leaves environment variables
 unchanged.
 
+Shelly Cloud uses a separate versioned profile containing the assigned `*.shelly.cloud` tenant,
+12-hex device ID, and authorization key. `hopper cloud-auth login` collects the key through hidden,
+confirmed input and stores the complete profile under a separate native-keyring account. There is no
+plaintext or environment-variable fallback. Status and logout never display profile values, malformed
+stored profiles fail closed, and logout can remove malformed entries without first parsing them. A
+Shelly Cloud authorization key may grant access to every device in its account; use a dedicated
+account or similarly narrow boundary where practical and rotate the key immediately after exposure.
+
 The optional report preferences file never stores credentials. It currently contains only an
 explicitly remembered `C` or `F` temperature-unit choice. `FORGE_COMPANION_CONFIG_DIR` can relocate
 that non-secret file but does not change token resolution or credential-store behavior.
@@ -30,9 +38,12 @@ If a token is exposed, revoke it in BrewForge immediately and create a replaceme
 
 ## Current access model
 
-Version 0.1 is intentionally read-only. The HTTP client exposes only GET requests. Collection
-snapshots are local JSON files and may contain private brewing data, so users are responsible for
-protecting and encrypting them. They are not complete or directly restorable account backups.
+Version 0.1 does not create, change, or delete BrewForge data. The BrewForge HTTP client exposes only
+GET requests. The separate Shelly Cloud status adapter uses the provider's documented POST-based
+**Get device(s) state** endpoint, but exposes no generic request, device command, relay write, plan
+transition, scheduler, or retry interface. Collection snapshots are local JSON files and may contain
+private brewing data, so users are responsible for protecting and encrypting them. They are not
+complete or directly restorable account backups.
 
 New v2 collection snapshots include a strict manifest and canonical SHA-256 digest. `snapshot
 validate` rejects ambiguous JSON, unsupported schema variants, inconsistent collection counts, and
@@ -90,6 +101,23 @@ plan-transition, or scheduler interface. The current implementation has no Shell
 support and should be used only on a trusted local network; enabling device authentication will make
 it fail closed. Never place credentials in `--device-url`—credential-bearing URLs are rejected and
 command arguments may remain in shell history.
+
+`hopper cloud-status` is a separate read-only Internet check through Shelly Cloud Control API v2.
+It is intended for a remote brewery behind NAT and requires no inbound port, public device RPC, or
+VPN. The adapter accepts only a canonical subdomain below `shelly.cloud`, one 12-hex device ID, and
+one channel. It sends exactly one HTTPS request to `/v2/devices/api/get`, selects only that switch's
+status, disables redirects and environment proxies, uses a five-second timeout, and streams at most
+64 KiB. Device IDs and response fields must match the request exactly; duplicate-key, non-finite,
+oversized, malformed, or mismatched responses fail closed. An offline response produces `UNKNOWN`
+rather than trusting stale relay telemetry.
+
+The Cloud v2 status endpoint is POST-based even though it is observational. Forge Companion exposes
+no arbitrary endpoint, `Switch.Set`, `set/switch`, `toggle_after`, actuator, scheduling, automatic
+retry, or hopper-plan transition through this adapter. The authorization key is necessarily sent to
+the assigned Shelly Cloud host as required by the provider API, so errors and terminal output are
+sanitized and redirects are forbidden. The Cloud Control API is provider-managed and may change;
+invalid or incompatible responses fail closed. Never port-forward a Shelly RPC endpoint as a
+substitute for this path.
 
 Shelly status is electrical telemetry, not mechanical feedback. `OFF` cannot prove that a winch was
 physically isolated, that a hopper moved, or that an endpoint was reached. A separately measured hard

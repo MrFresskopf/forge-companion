@@ -90,6 +90,7 @@ documented collection and token scope.
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
 | Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
 | Read a local Shelly switch state | `forge-companion hopper shelly-status ...` | 1 local GET request |
+| Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details.
@@ -99,9 +100,10 @@ available for advanced use and scripts. See the [command guide](docs/COMMANDS.md
 Brewing data is useful; accidental writes are not. Forge Companion starts with a deliberately small
 trust boundary:
 
-- the API client exposes only `GET`
+- the BrewForge API client exposes only `GET`; the separate Shelly Cloud adapter uses the provider's
+  POST-based observational endpoint but has no generic request, device command, or relay-write path
 - tokens come from a supported native OS credential store or an explicit `BREWFORGE_API_TOKEN`
-  environment override
+  environment override; Shelly Cloud uses a separate native-keyring profile with no plaintext fallback
 - report preferences contain no credentials and currently store only an explicit C/F choice
 - default `reports/` and `snapshots/` destinations stay local and are ignored by Git; custom output
   paths remain your responsibility
@@ -112,6 +114,8 @@ trust boundary:
 - the spunding advisor simulates a decision and never contacts hardware
 - hopper plans, arming, plan-status checks, and lifecycle rehearsals remain offline
 - `hopper shelly-status` exposes one narrow local GET-only device check; no physical pulse path exists
+- `hopper cloud-status` is a separate Internet check through the Shelly Cloud Control API, without
+  `Switch.Set`, `toggle_after`, scheduler, retry, or port forwarding
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
 assets. It describes telemetry but does not decide that fermentation is complete.
@@ -136,9 +140,9 @@ uv run mypy
 ## Project status
 
 Forge Companion is young and intentionally conservative. Collection snapshots, inventory audits,
-fermentation exports/reports, fail-closed spunding simulations, offline remote-hopper rehearsals, and
-read-only local Shelly status checks work today. MQTT, Home Assistant, authenticated Shelly access,
-and physical hardware actions remain future work.
+fermentation exports/reports, fail-closed spunding simulations, offline remote-hopper rehearsals,
+read-only local Shelly status checks, and read-only Shelly Cloud status checks work today. MQTT,
+Home Assistant, authenticated local Shelly access, and physical hardware actions remain future work.
 
 The snapshot command currently covers supported top-level collections. Its checksum detects accidental
 or deliberate file changes, but it is not a signature, proof of origin, or encryption. A snapshot is

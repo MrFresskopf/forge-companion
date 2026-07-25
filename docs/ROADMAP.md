@@ -52,6 +52,7 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] simulation-only spunding threshold advisor
 - [x] stale-data, timestamp-conflict, confirmation, and cadence gates
 - [x] read-only Shelly connectivity and strict local switch-state check
+- [x] read-only Shelly Cloud status check (no inbound port, VPN, or public RPC required)
 - [x] device-independent offline remote-hopper plan, explicit arming, lifecycle simulation, and lock
 - [ ] one-shot, explicitly armed Shelly action with timeout and idempotency
 - [ ] read-back verification and audit log

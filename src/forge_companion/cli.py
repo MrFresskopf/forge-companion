@@ -11,7 +11,12 @@ from uuid import UUID
 import httpx
 import typer
 
-from forge_companion import __version__, credentials, preferences
+from forge_companion import (
+    __version__,
+    credentials,
+    preferences,
+    shelly_cloud_credentials,
+)
 from forge_companion.backup import (
     SnapshotValidationError,
     create_backup,
@@ -40,6 +45,7 @@ from forge_companion.hopper import (
 )
 from forge_companion.inventory_audit import audit_inventory
 from forge_companion.shelly import ShellyReadOnlyClient, ShellyResponseError
+from forge_companion.shelly_cloud import ShellyCloudReadOnlyClient, ShellyCloudResponseError
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
 from forge_companion.spunding_report import render_spunding_advice
 from forge_companion.terminal_text import safe_terminal_text
@@ -58,6 +64,10 @@ snapshot_app = typer.Typer(
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
 hopper_app = typer.Typer(help="Prepare and rehearse offline remote-hopper plans.")
 app.add_typer(hopper_app, name="hopper", rich_help_panel="Safety experiments")
+cloud_auth_app = typer.Typer(
+    help="Manage Shelly Cloud authentication without displaying credentials."
+)
+hopper_app.add_typer(cloud_auth_app, name="cloud-auth")
 
 
 @app.callback()
@@ -274,6 +284,104 @@ def hopper_shelly_status_command(
     typer.echo("No switch command was sent.")
 
 
+@hopper_app.command("cloud-status")
+def hopper_cloud_status_command(
+    channel: Annotated[
+        int,
+        typer.Option("--channel", min=0, max=255, help="Shelly switch channel to read."),
+    ] = 0,
+) -> None:
+    """Read Shelly switch status through Cloud v2 without sending a switch command."""
+    try:
+        resolved = shelly_cloud_credentials.resolve_profile()
+        if resolved.profile is None:
+            typer.echo(
+                "Shelly Cloud status failed: run `forge-companion hopper cloud-auth login`.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        profile = resolved.profile
+        with ShellyCloudReadOnlyClient(
+            server=profile.server,
+            device_id=profile.device_id,
+            auth_key=profile.auth_key,
+        ) as client:
+            status = client.get_switch_status(channel=channel)
+    except typer.Exit:
+        raise
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo("Shelly Cloud status failed: credential store access failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (ShellyCloudResponseError, httpx.HTTPError, OSError, TypeError, ValueError):
+        typer.echo("Shelly Cloud status failed: request or response is invalid.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Shelly Cloud status read-only.")
+    typer.echo(f"Online: {'YES' if status.online else 'NO'}")
+    typer.echo(f"Channel: {status.channel}")
+    if status.output is None:
+        typer.echo("Output: UNKNOWN")
+    else:
+        typer.echo(f"Output: {'ON' if status.output else 'OFF'}")
+    if status.source is not None:
+        typer.echo(f"Source: {safe_terminal_text(status.source)}")
+    typer.echo("No switch command was sent.")
+
+
+@cloud_auth_app.command("login")
+def hopper_cloud_auth_login_command() -> None:
+    """Store one Shelly Cloud profile in the native OS credential store."""
+    server = typer.prompt("Shelly Cloud server")
+    device_id = typer.prompt("Shelly device ID")
+    auth_key = typer.prompt(
+        "Shelly Cloud authorization key",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    try:
+        shelly_cloud_credentials.store_profile(
+            server=server,
+            device_id=device_id,
+            auth_key=auth_key,
+        )
+    except ValueError:
+        typer.echo("Shelly Cloud login failed: profile values are invalid.", err=True)
+        raise typer.Exit(code=1) from None
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo("Shelly Cloud login failed: credential store access failed.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Shelly Cloud profile stored in the native OS credential store.")
+
+
+@cloud_auth_app.command("status")
+def hopper_cloud_auth_status_command() -> None:
+    """Show whether a Shelly Cloud profile exists without displaying its values."""
+    try:
+        resolved = shelly_cloud_credentials.resolve_profile()
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo(
+            "Shelly Cloud authentication status failed: credential store access failed.", err=True
+        )
+        raise typer.Exit(code=1) from None
+    if resolved.profile is None:
+        typer.echo("Shelly Cloud profile is not configured.", err=True)
+        raise typer.Exit(code=1)
+    typer.echo("Shelly Cloud profile is configured in the native OS credential store.")
+
+
+@cloud_auth_app.command("logout")
+def hopper_cloud_auth_logout_command() -> None:
+    """Remove the Shelly Cloud profile from the native OS credential store."""
+    try:
+        deleted = shelly_cloud_credentials.delete_profile()
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo("Shelly Cloud logout failed: credential store access failed.", err=True)
+        raise typer.Exit(code=1) from None
+    if deleted:
+        typer.echo("Shelly Cloud profile removed from the native OS credential store.")
+    else:
+        typer.echo("No stored Shelly Cloud profile was found.")
+
+
 @auth_app.command("login")
 def auth_login_command() -> None:
     """Store a BrewForge API token in the native OS credential store."""
@@ -390,6 +498,8 @@ def inventory_audit_command(
     snapshot: Annotated[
         Path,
         typer.Argument(help="Collection snapshot JSON file."),
+
+
     ] = Path("snapshots/brewforge-collections.json"),
     as_of: Annotated[
         str | None,
@@ -630,9 +740,7 @@ def _select_brew(client: BrewForgeClient, *, page: int, limit: int) -> _BrewChoi
         for index, choice in enumerate(choices, start=1):
             typer.echo(f"{index}  {choice.terminal_name}")
         if has_more:
-            typer.echo(
-                f"More brews available: rerun with --select --page {current_page + 1}."
-            )
+            typer.echo(f"More brews available: rerun with --select --page {current_page + 1}.")
             typer.echo("Enter n to load the next page.")
         if current_page > 1:
             typer.echo("Enter p for the previous page; enter q to cancel.")
@@ -890,6 +998,8 @@ def spunding_advisor_command(
             max_gap=timedelta(minutes=max_gap_minutes),
             confirmations=confirmations,
         )
+
+
         client = BrewForgeClient(token=_token_for_api())
         if select:
             canonical_id = _select_brew(client, page=page, limit=limit).id

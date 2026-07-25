@@ -1,8 +1,9 @@
 # Command guide
 
 Forge Companion uses a supported native OS credential store by default. `BREWFORGE_API_TOKEN` remains
-an explicit override for CI, scripts, and temporary sessions. The inventory audit is the exception:
-it only reads a local snapshot and needs no credential.
+an explicit override for CI, scripts, and temporary sessions. Shelly Cloud uses a separate native
+profile with no environment or plaintext fallback. The inventory audit is the exception: it only
+reads a local snapshot and needs no credential.
 
 BrewForge currently documents limits of 100 requests per hour and 1,000 requests per month. Forge
 Companion keeps network use explicit and avoids hidden one-request-per-item behavior.
@@ -234,7 +235,7 @@ documented 1,000 monthly requests.
 
 ## `hopper`
 
-Prepare and rehearse a remote-hop-dropper lifecycle entirely offline:
+Prepare and rehearse the hopper-plan lifecycle entirely offline:
 
 ```bash
 forge-companion hopper plan \
@@ -300,6 +301,36 @@ This prevents an inherited proxy configuration from silently rerouting the local
 `Output: OFF` confirms only the Shelly's reported electrical relay state. It does not prove that a
 winch is isolated, that a hopper moved, or that a mechanical endpoint was reached. No pulse duration
 from an LED test is a safe motor-runtime recommendation.
+
+Configure the separate Shelly Cloud read-only profile and query the same electrical state through
+the Internet:
+
+```bash
+forge-companion hopper cloud-auth login
+forge-companion hopper cloud-auth status
+forge-companion hopper cloud-status --channel 0
+forge-companion hopper cloud-auth logout
+```
+
+`cloud-auth login` prompts for the assigned Shelly Cloud server, 12-hex device ID, and authorization
+key. The key prompt is hidden and confirmed; the complete versioned profile is stored only in Windows
+Credential Manager, macOS Keychain, or Linux Secret Service. `status` reports only whether the profile
+exists, and `logout` can remove even a malformed stored entry without printing it. These three
+credential commands are offline.
+
+`cloud-status` resolves that profile and sends exactly one HTTPS POST to the provider's documented
+Cloud v2 **Get device(s) state** endpoint, selecting only `status.switch:CHANNEL`. The POST method is
+required by the observational Cloud API; this command has no switch/set endpoint. Only an exact
+`*.shelly.cloud` host and 12-hex device ID are accepted. Redirects and environment proxies are disabled,
+the timeout is five seconds, responses are streamed under a 64 KiB limit, and invalid or mismatched
+payloads fail closed. Output never includes the server, device ID, authorization key, request URL, or
+raw transport error. `Online: NO` deliberately reports `Output: UNKNOWN` instead of trusting stale
+relay telemetry.
+
+This cloud check works through the Shelly's existing outbound provider connection and therefore needs
+no router port forwarding, inbound public RPC endpoint, or VPN. It is not connected to hopper-plan
+state and exposes no `Switch.Set`, `set/switch`, `toggle_after`, scheduler, retry, or physical pulse.
+Do not expose the local Shelly RPC interface to the Internet.
 
 ## API scopes
 

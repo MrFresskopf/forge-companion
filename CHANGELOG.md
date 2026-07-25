@@ -19,6 +19,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   change detection, explicit one-shot locking, and no network or hardware path.
 - A narrow `hopper shelly-status` command for strict read-only local switch-state checks, with no
   generic RPC method, relay-write path, BrewForge credential lookup, or mechanical-success claim.
+- A separate read-only Shelly Cloud status adapter (`hopper cloud-status`) using the provider's
+  documented Cloud Control API v2. No inbound port, public device RPC, or VPN required.
+- A separate native-keyring Shelly Cloud profile through `hopper cloud-auth login`, `status`, and
+  `logout` with hidden confirmed input, strict schema validation, and no plaintext fallback.
 
 ### Changed
 
