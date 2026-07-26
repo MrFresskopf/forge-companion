@@ -9,6 +9,34 @@ class AtomicDestinationExistsError(FileExistsError):
     """Report that a create-only atomic destination already exists."""
 
 
+def _replace_file_durably(source: Path, destination: Path) -> None:
+    """Replace a file and flush the directory update before returning."""
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        move_file = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
+        move_file.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
+        move_file.restype = wintypes.BOOL
+        movefile_replace_existing = 0x1
+        movefile_write_through = 0x8
+        if not move_file(
+            str(source),
+            str(destination),
+            movefile_replace_existing | movefile_write_through,
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return
+
+    os.replace(source, destination)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    directory_fd = os.open(destination.parent, flags)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
 def atomic_write_text(content: str, destination: Path, *, newline: str) -> None:
     """Write UTF-8 text atomically without a predictable shared temporary path."""
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -24,7 +52,7 @@ def atomic_write_text(content: str, destination: Path, *, newline: str) -> None:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+        _replace_file_durably(temporary, destination)
     finally:
         temporary.unlink(missing_ok=True)
 

@@ -235,51 +235,98 @@ documented 1,000 monthly requests.
 
 ## `hopper`
 
-Prepare and rehearse the hopper-plan lifecycle entirely offline:
+The default hopper workflow remains an offline rehearsal:
 
 ```bash
 forge-companion hopper plan \
   --trigger-at 2026-08-01T18:00:00+00:00 \
   --pulse-ms 1500 \
   --brew-id BREW_ID
-
 forge-companion hopper arm automation/hopper-plan.json
-forge-companion hopper status automation/hopper-plan.json
 forge-companion hopper simulate automation/hopper-plan.json
+forge-companion hopper status automation/hopper-plan.json
 ```
 
 `plan` creates a `DRAFT` file and refuses to overwrite an existing destination. `arm` is a separate
 explicit transition and only succeeds before the trigger time. `simulate` succeeds only for an
-`ARMED` plan at or after the trigger and records this
-ordered lifecycle before permanently setting that file to `LOCKED`:
+`ARMED` `simulated-pulse` plan at or after the trigger and records the complete lifecycle without
+contacting hardware. It rejects Cloud one-shot plans:
 
 ```text
 DRAFT -> ARMED -> FIRE_REQUESTED -> PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED
 ```
 
-All four commands are local. They do not resolve a BrewForge token, call an API, connect to a Shelly,
-wait until the trigger time, or send a physical pulse. The optional brew UUID is metadata only.
-`simulate --at TIME` provides an explicit clock for deterministic offline rehearsals; it is not a
-scheduler and will not be part of any future hardware action.
+`simulate --at TIME` is available only for deterministic offline rehearsal. It is not a scheduler and
+is never accepted by the live fire command.
 
 Plan writes are atomic. Loading requires strict JSON, canonical UUIDs, UTC timestamps, an exact state
 history, and a matching canonical SHA-256 digest. Invalid, modified, early, already-used, or
 out-of-order plans fail closed without printing the file path or plan contents. The unkeyed digest is
 change detection, not authentication; anyone able to replace the file can recompute it.
 
-Plan creation and state transitions use a sibling `.PLAN_FILENAME.lock` file, so concurrent CLI
-processes cannot both consume the same `ARMED` state. A hard process or machine crash can leave this
-lock behind intentionally fail-closed. After confirming that no Forge Companion process is still
-using the plan, remove only that sidecar lock before retrying; never replace the plan to bypass a
-state validation failure.
+Plan transitions use an exclusive sibling `.PLAN_FILENAME.lock` file. A hard crash can leave this
+lock behind intentionally fail-closed. Remove it only after confirming no Forge Companion process is
+still using the plan. Never replace a plan to bypass state validation.
 
-The pulse value is required and bounded to 1–60,000 milliseconds so the plan is concrete, but this
-range is **not** a hardware recommendation. A future actuator must use the measured winch runtime,
-its own lower hard timeout, explicit device identity, state read-back, mechanical end protection, and
-manual override. Until that separate feature exists, `ARMED`, `PULSE_ACTIVE`, `VERIFIED_OFF`, and
-`LOCKED` describe only a simulation file.
+### Shelly Cloud one-shot
 
-Read one local Shelly switch channel separately:
+Configure and verify the native Shelly Cloud profile first:
+
+```bash
+forge-companion hopper cloud-auth login
+forge-companion hopper cloud-auth status
+forge-companion hopper cloud-status --channel 0
+```
+
+Then create and arm a plan bound to that stored tenant and device. The authorization key is not copied
+into the plan:
+
+```bash
+forge-companion hopper plan --cloud \
+  --trigger-at 2026-08-01T18:00:00+00:00 \
+  --pulse-ms 1500 \
+  --output automation/hopper-plan.json
+forge-companion hopper arm automation/hopper-plan.json
+forge-companion hopper status automation/hopper-plan.json
+```
+
+After the trigger time, the live command is:
+
+```bash
+forge-companion hopper fire automation/hopper-plan.json
+```
+
+`fire` validates the plan, resolves the matching native credential, and performs one read-only preflight.
+The device must be online and explicitly report electrical `OFF`; otherwise the command stops before
+showing the confirmation prompt. Live fire also requires an attached interactive terminal; piped or
+redirected `FIRE` input is rejected. After exact interactive confirmation, the command observes
+the provider's one-second request boundary, and atomically persists `FIRE_REQUESTED` immediately
+before the single switch attempt. The actuator sends exactly one Cloud v2
+`POST /v2/devices/api/set/switch` for fixed channel 0 with `on: true` and the bounded
+`toggle_after` value. Only HTTP 200 is accepted for the set request; its size-capped response body is
+drained but not interpreted, and the later status read-back determines whether the plan can lock. There
+is no automatic retry. The Cloud profile key is not persisted outside the native credential store; it is
+held in memory only as needed and transmitted only to the assigned Shelly Cloud host.
+
+After the device timer should have expired, the actuator waits at least one second to respect the
+provider request-rate boundary and performs one status read-back. Only an online, explicit electrical
+`OFF` result completes `PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED`. A rejected, timed-out, malformed,
+offline, or still-ON result leaves the durable plan at `FIRE_REQUESTED`; the outcome is ambiguous and
+must not be retried automatically.
+
+Cloud pulse duration is limited to 1–30,000 ms. This is a software ceiling, not a safe runtime
+recommendation. Use only a measured under-load runtime plus a conservative margin, device-side
+auto-off as an independent backstop, mechanical endpoint protection, and a manual isolation method.
+The command does not wait for the trigger, schedule itself, re-arm a used plan, or infer success from a
+transport timeout.
+
+An electrical `OFF` read-back proves neither winch travel nor magnet release nor actual hop addition.
+Qualify the complete Fermzilla, magnet, cable, and winch assembly repeatedly before relying on remote
+operation. One explicit confirmation authorizes one attempt only.
+
+### Read-only Shelly diagnostics
+
+Read one local switch channel without changing it:
 
 ```bash
 forge-companion hopper shelly-status \
@@ -287,50 +334,18 @@ forge-companion hopper shelly-status \
   --channel 0
 ```
 
-`shelly-status` makes exactly one local `GET /rpc/Switch.GetStatus?id=CHANNEL` request. It has no
-generic RPC entry point, no `Switch.Set` method, no scheduler, and no connection to hopper-plan state.
-It does not resolve a BrewForge token and never prints the device URL in status or error output.
-Only a bare `http://` or `https://` device base URL without credentials, path, query, or fragment is
-accepted. The current adapter does not implement Shelly authentication; an authenticated device will
-fail closed until separate credential support exists.
+The local diagnostic exposes only `GET /rpc/Switch.GetStatus`. It has no generic RPC entry point,
+write method, or connection to the Cloud actuator. Responses are streamed under 64 KiB, environment
+proxies are ignored, and owned HTTP clients are closed.
 
-Responses are streamed into a maximum 64 KiB buffer; a larger declared or observed body fails closed.
-The CLI-created local HTTP client ignores environment proxy settings and is closed after the request.
-This prevents an inherited proxy configuration from silently rerouting the local status request.
+The separate `cloud-status` command sends one observational POST to Cloud v2
+`/v2/devices/api/get`, selecting only `status.switch:CHANNEL`. It never calls the set endpoint. Only a
+canonical `*.shelly.cloud` host and 12-hex device ID are accepted; redirects, inherited proxies,
+oversized or ambiguous JSON, mismatched identities, and stale offline output fail closed.
 
-`Output: OFF` confirms only the Shelly's reported electrical relay state. It does not prove that a
-winch is isolated, that a hopper moved, or that a mechanical endpoint was reached. No pulse duration
-from an LED test is a safe motor-runtime recommendation.
-
-Configure the separate Shelly Cloud read-only profile and query the same electrical state through
-the Internet:
-
-```bash
-forge-companion hopper cloud-auth login
-forge-companion hopper cloud-auth status
-forge-companion hopper cloud-status --channel 0
-forge-companion hopper cloud-auth logout
-```
-
-`cloud-auth login` prompts for the assigned Shelly Cloud server, 12-hex device ID, and authorization
-key. The key prompt is hidden and confirmed; the complete versioned profile is stored only in Windows
-Credential Manager, macOS Keychain, or Linux Secret Service. `status` reports only whether the profile
-exists, and `logout` can remove even a malformed stored entry without printing it. These three
-credential commands are offline.
-
-`cloud-status` resolves that profile and sends exactly one HTTPS POST to the provider's documented
-Cloud v2 **Get device(s) state** endpoint, selecting only `status.switch:CHANNEL`. The POST method is
-required by the observational Cloud API; this command has no switch/set endpoint. Only an exact
-`*.shelly.cloud` host and 12-hex device ID are accepted. Redirects and environment proxies are disabled,
-the timeout is five seconds, responses are streamed under a 64 KiB limit, and invalid or mismatched
-payloads fail closed. Output never includes the server, device ID, authorization key, request URL, or
-raw transport error. `Online: NO` deliberately reports `Output: UNKNOWN` instead of trusting stale
-relay telemetry.
-
-This cloud check works through the Shelly's existing outbound provider connection and therefore needs
-no router port forwarding, inbound public RPC endpoint, or VPN. It is not connected to hopper-plan
-state and exposes no `Switch.Set`, `set/switch`, `toggle_after`, scheduler, retry, or physical pulse.
-Do not expose the local Shelly RPC interface to the Internet.
+Shelly Cloud uses the device's existing outbound provider connection, so no router port forwarding,
+public local RPC endpoint, or VPN is required. Never expose the local Shelly RPC interface to the
+Internet.
 
 ## API scopes
 

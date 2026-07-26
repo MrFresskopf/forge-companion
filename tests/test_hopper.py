@@ -12,6 +12,7 @@ from forge_companion.hopper import (
     HopperStatus,
     arm_hopper_plan,
     create_hopper_plan,
+    fire_hopper_plan,
     load_hopper_plan,
     simulate_hopper_plan,
     validate_hopper_plan,
@@ -265,3 +266,328 @@ def test_validation_rejects_resigned_incorrect_simulated_pulse_timing() -> None:
 
     with pytest.raises(HopperPlanValidationError, match="state history"):
         validate_hopper_plan(completed)
+
+def test_create_cloud_pulse_plan_stores_server_and_device_id_without_key() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        plan_id=PLAN_ID,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+
+    summary = validate_hopper_plan(payload)
+    assert summary.status is HopperStatus.DRAFT
+    assert payload["action"] == {
+        "kind": "cloud-pulse",
+        "pulse_duration_ms": 1500,
+        "server": "shelly-82-eu.shelly.cloud",
+        "device_id": "5432046e5f58",
+    }
+    assert "auth_key" not in payload["action"]
+    assert "auth_key" not in json.dumps(payload)
+
+
+def test_fire_cloud_pulse_plan_transitions_through_complete_cycle() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        plan_id=PLAN_ID,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    from forge_companion.shelly_cloud import ShellyCloudPulseResult, ShellyCloudSwitchStatus
+
+    class FakeActuator:
+        def __init__(self, **kwargs: object) -> None:
+            self.seen = kwargs
+            self.pulse_called = False
+
+        def __enter__(self) -> "FakeActuator":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def pulse(self, channel: int = 0, toggle_after_seconds: float = 1.0) -> object:
+            self.pulse_called = True
+            return ShellyCloudPulseResult(
+                accepted=True,
+                readback=ShellyCloudSwitchStatus(
+                    device_id="5432046e5f58",
+                    channel=0,
+                    online=True,
+                    output=False,
+                    source="cloud",
+                ),
+            )
+
+    actuator = FakeActuator()
+    completed = fire_hopper_plan(
+        armed,
+        at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+        actuator=actuator,
+        persist=lambda changed: None,
+    )
+
+    summary = validate_hopper_plan(completed)
+    assert summary.status is HopperStatus.LOCKED
+    assert actuator.pulse_called is True
+    assert [event["status"] for event in completed["state"]["events"]] == [
+        "DRAFT",
+        "ARMED",
+        "FIRE_REQUESTED",
+        "PULSE_ACTIVE",
+        "VERIFIED_OFF",
+        "LOCKED",
+    ]
+    verified_at = datetime.fromisoformat(completed["state"]["events"][4]["at"])
+    assert verified_at > datetime(2026, 7, 23, 18, 1, 1, 500_000, tzinfo=UTC)
+
+
+def test_create_cloud_plan_rejects_pulse_longer_than_actuator_limit() -> None:
+    with pytest.raises(ValueError, match="at most 30000"):
+        create_hopper_plan(
+            trigger_at=TRIGGER_AT,
+            pulse_duration_ms=30_001,
+            now=CREATED_AT,
+            server="shelly-82-eu.shelly.cloud",
+            device_id="5432046E5F58",
+        )
+
+
+def test_fire_persists_fire_requested_before_calling_actuator() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+    persisted: list[dict[str, object]] = []
+
+    class FailingActuator:
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            assert persisted
+            assert validate_hopper_plan(persisted[-1]).status is HopperStatus.FIRE_REQUESTED
+            raise RuntimeError("ambiguous transport failure")
+
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        fire_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+            actuator=FailingActuator(),
+            persist=lambda changed: persisted.append(deepcopy(changed)),
+        )
+
+    assert validate_hopper_plan(persisted[-1]).status is HopperStatus.FIRE_REQUESTED
+
+
+def test_fire_rejects_cloud_profile_that_does_not_match_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    from forge_companion import shelly_cloud_credentials
+
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-196-eu.shelly.cloud",
+        device_id="aaaaaaaaaaaa",
+        auth_key="synthetic-cloud-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(
+            profile=profile,
+            source="keyring",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="does not match"):
+        fire_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+            persist=lambda changed: None,
+        )
+
+
+def test_fire_closes_owned_actuator_when_initial_persistence_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-cloud-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+    exited = False
+
+    class TrackingActuator:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "TrackingActuator":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            nonlocal exited
+            exited = True
+
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            raise AssertionError("pulse must not be sent")
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", TrackingActuator)
+
+    def fail_persist(changed: dict[str, object]) -> None:
+        raise OSError("disk full")
+
+    with pytest.raises(OSError, match="disk full"):
+        fire_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+            persist=fail_persist,  # type: ignore[arg-type]
+        )
+
+    assert exited is True
+
+
+def test_validation_rejects_resigned_cloud_pulse_above_actuator_limit() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        plan_id=PLAN_ID,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    payload["action"]["pulse_duration_ms"] = 60_000
+    _resign(payload)
+
+    with pytest.raises(HopperPlanValidationError, match="pulse duration"):
+        validate_hopper_plan(payload)
+
+
+def test_validation_rejects_resigned_simulation_with_cloud_fields() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        plan_id=PLAN_ID,
+    )
+    payload["action"]["server"] = "shelly-82-eu.shelly.cloud"
+    payload["action"]["device_id"] = "5432046e5f58"
+    _resign(payload)
+
+    with pytest.raises(HopperPlanValidationError, match="schema validation"):
+        validate_hopper_plan(payload)
+
+
+def test_validation_rejects_resigned_noncanonical_cloud_target() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        plan_id=PLAN_ID,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    payload["action"]["server"] = "SHELLY-82-EU.SHELLY.CLOUD"
+    payload["action"]["device_id"] = "5432046E5F58"
+    _resign(payload)
+
+    with pytest.raises(HopperPlanValidationError, match="schema validation"):
+        validate_hopper_plan(payload)
+
+
+def test_fire_final_persistence_failure_leaves_durable_requested_snapshot() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    from forge_companion.shelly_cloud import ShellyCloudPulseResult, ShellyCloudSwitchStatus
+
+    pulse_count = 0
+
+    class FakeActuator:
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            nonlocal pulse_count
+            pulse_count += 1
+            return ShellyCloudPulseResult(
+                accepted=True,
+                readback=ShellyCloudSwitchStatus(
+                    device_id="5432046e5f58",
+                    channel=0,
+                    online=True,
+                    output=False,
+                    source="cloud",
+                ),
+            )
+
+    persisted: list[dict[str, object]] = []
+
+    def persist(changed: dict[str, object]) -> None:
+        if persisted:
+            raise OSError("final persistence failed")
+        persisted.append(deepcopy(changed))
+
+    with pytest.raises(OSError, match="final persistence failed"):
+        fire_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+            persist=persist,  # type: ignore[arg-type]
+            actuator=FakeActuator(),
+        )
+
+    assert pulse_count == 1
+    assert len(persisted) == 1
+    assert validate_hopper_plan(persisted[0]).status is HopperStatus.FIRE_REQUESTED
+
+
+def test_simulate_rejects_cloud_one_shot_plan() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=1500,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    with pytest.raises(ValueError, match="simulation plan"):
+        simulate_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+        )

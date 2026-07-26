@@ -5,7 +5,9 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from time import monotonic
+from time import sleep as sleep_seconds
+from typing import Annotated, Any
 from uuid import UUID
 
 import httpx
@@ -36,6 +38,7 @@ from forge_companion.hopper import (
     HopperPlanValidationError,
     arm_hopper_plan,
     create_hopper_plan,
+    fire_hopper_plan,
     hopper_plan_lock,
     load_hopper_plan,
     simulate_hopper_plan,
@@ -62,12 +65,17 @@ snapshot_app = typer.Typer(
     invoke_without_command=True,
 )
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
-hopper_app = typer.Typer(help="Prepare and rehearse offline remote-hopper plans.")
+hopper_app = typer.Typer(help="Prepare, rehearse, and fire guarded remote-hopper plans.")
 app.add_typer(hopper_app, name="hopper", rich_help_panel="Safety experiments")
 cloud_auth_app = typer.Typer(
     help="Manage Shelly Cloud authentication without displaying credentials."
 )
 hopper_app.add_typer(cloud_auth_app, name="cloud-auth")
+
+
+def _is_interactive_terminal() -> bool:
+    """Require a human-attended terminal for live hardware confirmation."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
 
 
 @app.callback()
@@ -132,11 +140,11 @@ def _token_for_api() -> str:
 def hopper_plan_command(
     trigger_at: Annotated[
         str,
-        typer.Option("--trigger-at", help="Timezone-aware ISO trigger time for the simulation."),
+        typer.Option("--trigger-at", help="Timezone-aware ISO trigger time."),
     ],
     pulse_ms: Annotated[
         str,
-        typer.Option("--pulse-ms", help="Simulated pulse duration in milliseconds."),
+        typer.Option("--pulse-ms", help="Pulse duration in milliseconds."),
     ],
     brew_id: Annotated[
         str | None,
@@ -149,16 +157,30 @@ def hopper_plan_command(
         Path,
         typer.Option("--output", "-o", help="Destination local plan file."),
     ] = Path("automation/hopper-plan.json"),
+    cloud: Annotated[
+        bool,
+        typer.Option("--cloud", help="Create a one-shot plan for the stored Shelly Cloud profile."),
+    ] = False,
 ) -> None:
-    """Create an offline draft that cannot contact or command hardware."""
+    """Create an offline draft; --cloud binds it to the stored device without its key."""
     try:
         trigger = datetime.fromisoformat(trigger_at)
         canonical_brew_id = UUID(brew_id) if brew_id is not None else None
+        server: str | None = None
+        device_id: str | None = None
+        if cloud:
+            resolved = shelly_cloud_credentials.resolve_profile()
+            if resolved.profile is None:
+                raise ValueError("no stored Shelly Cloud profile")
+            server = resolved.profile.server
+            device_id = resolved.profile.device_id
         with hopper_plan_lock(output):
             payload = create_hopper_plan(
                 trigger_at=trigger,
                 pulse_duration_ms=int(pulse_ms),
                 brew_id=canonical_brew_id,
+                server=server,
+                device_id=device_id,
             )
             write_new_hopper_plan(payload, output)
     except HopperPlanBusyError:
@@ -167,13 +189,25 @@ def hopper_plan_command(
     except HopperPlanExistsError:
         typer.echo("Hopper plan failed: destination already exists.", err=True)
         raise typer.Exit(code=1) from None
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo("Hopper plan failed: credential store access failed.", err=True)
+        raise typer.Exit(code=1) from None
     except OSError:
         typer.echo("Hopper plan failed: local file operation failed.", err=True)
         raise typer.Exit(code=1) from None
     except (TypeError, ValueError):
-        typer.echo("Hopper plan failed: trigger, pulse, or brew UUID is invalid.", err=True)
+        if cloud:
+            typer.echo(
+                "Hopper plan failed: trigger, pulse, brew UUID, or Cloud profile is invalid.",
+                err=True,
+            )
+        else:
+            typer.echo("Hopper plan failed: trigger, pulse, or brew UUID is invalid.", err=True)
         raise typer.Exit(code=1) from None
-    typer.echo("Hopper simulation plan written.")
+    if cloud:
+        typer.echo("Hopper Cloud one-shot plan written.")
+    else:
+        typer.echo("Hopper simulation plan written.")
     typer.echo("Status: DRAFT")
     typer.echo("No device or network was contacted.")
 
@@ -182,10 +216,11 @@ def hopper_plan_command(
 def hopper_arm_command(
     source: Annotated[Path, typer.Argument(help="Local hopper plan file.")],
 ) -> None:
-    """Explicitly arm a valid future simulation plan without contacting hardware."""
+    """Explicitly arm a valid future plan without contacting hardware."""
     try:
         with hopper_plan_lock(source):
             payload = load_hopper_plan(source)
+            is_cloud = payload["action"]["kind"] == "cloud-pulse"
             armed = arm_hopper_plan(payload, at=datetime.now(UTC))
             write_hopper_plan(armed, source)
     except HopperPlanBusyError:
@@ -197,7 +232,7 @@ def hopper_arm_command(
     except (HopperPlanValidationError, TypeError, ValueError):
         typer.echo("Hopper arm failed: plan is invalid, expired, or not a draft.", err=True)
         raise typer.Exit(code=1) from None
-    typer.echo("Hopper simulation plan armed.")
+    typer.echo("Hopper Cloud one-shot plan armed." if is_cloud else "Hopper simulation plan armed.")
     typer.echo("Status: ARMED")
     typer.echo("No device or network was contacted.")
 
@@ -213,7 +248,7 @@ def hopper_simulate_command(
         ),
     ] = None,
 ) -> None:
-    """Complete an armed plan as an offline rehearsal without sending a pulse."""
+    """Complete an armed simulation plan offline without sending a pulse."""
     try:
         simulation_time = datetime.fromisoformat(at) if at is not None else datetime.now(UTC)
         with hopper_plan_lock(source):
@@ -237,20 +272,131 @@ def hopper_simulate_command(
     typer.echo("No device or network was contacted; no physical pulse was sent.")
 
 
+@hopper_app.command("fire")
+def hopper_fire_command(
+    source: Annotated[Path, typer.Argument(help="Local armed Cloud one-shot plan file.")],
+) -> None:
+    """Send one explicitly confirmed Cloud pulse; never retries automatically."""
+    from forge_companion import shelly_cloud
+
+    if not _is_interactive_terminal():
+        typer.echo("Hopper fire blocked: an interactive terminal is required.", err=True)
+        raise typer.Exit(code=1)
+
+    fire_requested = False
+    try:
+        with hopper_plan_lock(source):
+            payload = load_hopper_plan(source)
+            summary = validate_hopper_plan(payload)
+            action = payload["action"]
+            if summary.status.value != "ARMED" or action.get("kind") != "cloud-pulse":
+                raise ValueError("plan is not an armed cloud pulse")
+            if datetime.now(UTC) < summary.trigger_at:
+                raise ValueError("plan trigger has not been reached")
+
+            resolved = shelly_cloud_credentials.resolve_profile()
+            if resolved.profile is None:
+                raise ValueError("Shelly Cloud credentials are not configured")
+            profile = resolved.profile
+            if profile.server != action["server"] or profile.device_id != action["device_id"]:
+                raise ValueError("Shelly Cloud profile does not match the plan")
+
+            preflight_started = monotonic()
+            with shelly_cloud.ShellyCloudReadOnlyClient(
+                server=profile.server,
+                device_id=profile.device_id,
+                auth_key=profile.auth_key,
+            ) as status_client:
+                preflight = status_client.get_switch_status(channel=0)
+            if not preflight.online or preflight.output is not False:
+                typer.echo(
+                    "Hopper fire blocked: preflight requires an online device reporting OFF.",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+
+            typer.echo(
+                f"Ready to send one {summary.pulse_duration_ms} ms Cloud pulse on channel 0."
+            )
+            confirmation = typer.prompt("Type FIRE to send one one-shot pulse")
+            if confirmation != "FIRE":
+                typer.echo("Hopper fire cancelled; no switch command was sent.")
+                raise typer.Exit(code=1)
+
+            elapsed = monotonic() - preflight_started
+            if elapsed < 1.0:
+                sleep_seconds(1.0 - elapsed)
+
+            def persist(changed: dict[str, Any]) -> None:
+                nonlocal fire_requested
+                write_hopper_plan(changed, source)
+                if changed["state"]["status"] == "FIRE_REQUESTED":
+                    fire_requested = True
+
+            with shelly_cloud.ShellyCloudActuator(
+                server=profile.server,
+                device_id=profile.device_id,
+                auth_key=profile.auth_key,
+            ) as actuator:
+                fire_hopper_plan(
+                    payload,
+                    at=datetime.now(UTC),
+                    persist=persist,
+                    actuator=actuator,
+                )
+    except typer.Exit:
+        raise
+    except HopperPlanBusyError:
+        typer.echo("Hopper fire failed: plan is busy or locked.", err=True)
+        raise typer.Exit(code=1) from None
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo(
+            "Hopper fire failed: credential store access failed; no retry was sent.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    except (
+        ShellyCloudResponseError,
+        httpx.HTTPError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
+        if fire_requested:
+            typer.echo(
+                "Hopper fire outcome is uncertain; the plan remains FIRE_REQUESTED. "
+                "Do not retry automatically.",
+                err=True,
+            )
+        else:
+            typer.echo("Hopper fire failed before a pulse request was recorded.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Hopper Cloud one-shot completed.")
+    typer.echo("Status: LOCKED")
+    typer.echo("Electrical read-back: OFF")
+    typer.echo("This does not prove mechanical hop release.")
+
 @hopper_app.command("status")
 def hopper_status_command(
     source: Annotated[Path, typer.Argument(help="Local hopper plan file.")],
 ) -> None:
-    """Validate a local simulation plan and show non-sensitive metadata."""
+    """Validate a local hopper plan and show non-sensitive metadata."""
     try:
-        summary = validate_hopper_plan(load_hopper_plan(source))
+        payload = load_hopper_plan(source)
+        summary = validate_hopper_plan(payload)
+        is_cloud = payload["action"]["kind"] == "cloud-pulse"
     except (HopperPlanValidationError, OSError, TypeError, ValueError):
         typer.echo("Hopper status failed: plan is invalid or unreadable.", err=True)
         raise typer.Exit(code=1) from None
-    typer.echo("Hopper simulation plan is valid.")
+    if is_cloud:
+        typer.echo("Hopper Cloud one-shot plan is valid.")
+    else:
+        typer.echo("Hopper simulation plan is valid.")
     typer.echo(f"Status: {summary.status.value}")
     typer.echo(f"Trigger: {summary.trigger_at.isoformat()}")
-    typer.echo(f"Pulse: {summary.pulse_duration_ms} ms (simulation only)")
+    pulse_kind = "Cloud one-shot" if is_cloud else "simulation only"
+    typer.echo(f"Pulse: {summary.pulse_duration_ms} ms ({pulse_kind})")
     typer.echo("No device or network was contacted.")
 
 
