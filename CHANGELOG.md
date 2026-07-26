@@ -23,10 +23,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   documented Cloud Control API v2. No inbound port, public device RPC, or VPN required.
 - A separate native-keyring Shelly Cloud profile through `hopper cloud-auth login`, `status`, and
   `logout` with hidden confirmed input, strict schema validation, and no plaintext fallback.
-- An experimental `hopper plan --cloud` and explicitly confirmed `hopper fire` one-shot with an
-  online-OFF preflight. It records `FIRE_REQUESTED` before one non-retried Cloud pulse, uses device-side
-  `toggle_after`, verifies an online electrical OFF read-back, and leaves ambiguous outcomes consumed
-  for manual investigation.
+- An experimental `hopper plan --cloud` and explicitly confirmed `hopper fire` one-shot with a fresh
+  online-OFF preflight after confirmation. It records `FIRE_REQUESTED` before one non-retried Cloud
+  pulse, uses device-side `toggle_after`, verifies an online electrical OFF read-back, and leaves
+  ambiguous outcomes consumed for manual investigation.
 
 ### Changed
 

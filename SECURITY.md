@@ -80,12 +80,12 @@ protection and manual override.
 Remote-hopper plans support two distinct modes. Simulation plans remain offline. A Cloud one-shot plan
 stores only the normalized tenant and device ID, never the authorization key, and accepts at most a
 30-second pulse. `hopper fire` requires an armed plan past its trigger and a native credential profile
-matching the plan. A read-only preflight must report the device online and electrically OFF before the
-command offers exact interactive `FIRE` confirmation on an attached terminal; piped input is rejected.
-It then observes the Cloud API rate boundary and persists `FIRE_REQUESTED` atomically before the one
-switch attempt. The file is flushed before replacement; Windows uses a write-through move and POSIX
-flushes the containing directory before the command proceeds. There is no scheduler or automatic
-retry.
+matching the plan. The command first requires exact interactive `FIRE` confirmation on an attached
+terminal; piped input is rejected. Only after confirmation does a fresh read-only preflight verify that
+the device is online and electrically OFF. It then observes the Cloud API rate boundary and persists
+`FIRE_REQUESTED` atomically before the one switch attempt. The file is flushed before replacement;
+Windows uses a write-through move and POSIX flushes the containing directory before the command
+proceeds. There is no scheduler or automatic retry.
 
 The actuator is a separate type from both read-only clients. It exposes one fixed channel pulse using
 Cloud v2 `/v2/devices/api/set/switch`, `on: true`, and `toggle_after`; it has no generic request or raw relay

@@ -472,6 +472,99 @@ def test_hopper_fire_requires_explicit_fire_confirmation(
     assert "mechanical hop release" in result.output
 
 
+
+def test_hopper_fire_confirms_before_fresh_off_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    events: list[str] = []
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+
+    def confirm(message: str) -> str:
+        events.append("confirmation")
+        return "FIRE"
+
+    monkeypatch.setattr("forge_companion.cli.typer.prompt", confirm)
+    monotonic_values = iter([10.0, 10.25])
+    monkeypatch.setattr("forge_companion.cli.monotonic", lambda: next(monotonic_values))
+
+    def wait_for_rate_boundary(seconds: float) -> None:
+        assert seconds == pytest.approx(0.75)
+        events.append("rate-wait")
+
+    monkeypatch.setattr("forge_companion.cli.sleep_seconds", wait_for_rate_boundary)
+
+    class FakeReadOnlyClient:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "FakeReadOnlyClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def get_switch_status(self, channel: int = 0) -> object:
+            events.append("preflight")
+            return shelly_cloud.ShellyCloudSwitchStatus(
+                device_id="5432046e5f58",
+                channel=channel,
+                online=True,
+                output=False,
+                source="timer",
+            )
+
+    class FakeActuator:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "FakeActuator":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            import time
+
+            events.append("pulse")
+            time.sleep(toggle_after_seconds)
+            return shelly_cloud.ShellyCloudPulseResult(
+                accepted=True,
+                readback=shelly_cloud.ShellyCloudSwitchStatus(
+                    device_id="5432046e5f58",
+                    channel=channel,
+                    online=True,
+                    output=False,
+                    source="timer",
+                ),
+            )
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FakeReadOnlyClient)
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", FakeActuator)
+
+    result = runner.invoke(app, ["hopper", "fire", str(destination)])
+
+    assert result.exit_code == 0
+    assert events == ["confirmation", "preflight", "rate-wait", "pulse"]
+
+
+
 def test_hopper_fire_cancellation_never_calls_actuator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -479,9 +572,19 @@ def test_hopper_fire_cancellation_never_calls_actuator(
     destination = tmp_path / "cloud-plan.json"
     _write_armed_cloud_plan(destination)
 
-    from forge_companion import shelly_cloud
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
 
-    _patch_cloud_preflight_off(monkeypatch)
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: (_ for _ in ()).throw(AssertionError("credentials must not be resolved")),
+    )
+    monkeypatch.setattr(
+        shelly_cloud,
+        "ShellyCloudReadOnlyClient",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("network must not be contacted")),
+    )
 
     class ForbiddenActuator:
         def __init__(self, **kwargs: object) -> None:
@@ -622,8 +725,58 @@ def test_hopper_fire_refuses_preflight_that_is_not_online_and_off(
 
     assert result.exit_code == 1
     assert "preflight requires an online device reporting OFF" in result.output
-    assert "Type FIRE" not in result.output
+    assert result.output.index("Type FIRE") < result.output.index("preflight requires")
     assert load_hopper_plan(destination)["state"]["status"] == "ARMED"
+
+
+
+def test_hopper_fire_preflight_error_never_constructs_actuator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+
+    class FailingReadOnlyClient:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "FailingReadOnlyClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def get_switch_status(self, channel: int = 0) -> object:
+            raise shelly_cloud.ShellyCloudResponseError("synthetic preflight failure")
+
+    class ForbiddenActuator:
+        def __init__(self, **kwargs: object) -> None:
+            raise AssertionError("actuator must not be created after preflight failure")
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FailingReadOnlyClient)
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
+
+    result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
+
+    assert result.exit_code == 1
+    assert "failed before a pulse request was recorded" in result.output
+    assert load_hopper_plan(destination)["state"]["status"] == "ARMED"
+
 
 
 def test_hopper_fire_refuses_noninteractive_input_before_any_network(
