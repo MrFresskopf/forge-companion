@@ -3,6 +3,7 @@
 import os
 import tempfile
 from pathlib import Path
+from typing import Any, cast
 
 
 class AtomicDestinationExistsError(FileExistsError):
@@ -15,7 +16,8 @@ def _replace_file_durably(source: Path, destination: Path) -> None:
         import ctypes
         from ctypes import wintypes
 
-        move_file = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
+        win_ctypes = cast(Any, ctypes)
+        move_file = win_ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
         move_file.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
         move_file.restype = wintypes.BOOL
         movefile_replace_existing = 0x1
@@ -25,7 +27,7 @@ def _replace_file_durably(source: Path, destination: Path) -> None:
             str(destination),
             movefile_replace_existing | movefile_write_through,
         ):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise win_ctypes.WinError(win_ctypes.get_last_error())
         return
 
     os.replace(source, destination)

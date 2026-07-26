@@ -6,6 +6,12 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Linux CI type-checking now resolves Windows-only `ctypes` symbols lazily without weakening the
+  durable Windows `MoveFileExW` replacement path.
+- Mypy now checks `src` directly so an older installed wheel cannot mask working-tree changes.
+
 ## [0.2.0] — 2026-07-26
 
 ### Added
