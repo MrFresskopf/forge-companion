@@ -89,6 +89,7 @@ documented collection and token scope.
 | Diagnose API access | `forge-companion doctor` | 7 GET requests |
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
 | Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
+| Fire an armed Cloud one-shot | `forge-companion hopper fire PLAN` | 1 set POST + 2 status POSTs |
 | Read a local Shelly switch state | `forge-companion hopper shelly-status ...` | 1 local GET request |
 | Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
 
@@ -112,10 +113,10 @@ trust boundary:
 - `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v2 files offline;
   fermentation exports keep valid readings but report every rejection and timestamp conflict
 - the spunding advisor simulates a decision and never contacts hardware
-- hopper plans, arming, plan-status checks, and lifecycle rehearsals remain offline
-- `hopper shelly-status` exposes one narrow local GET-only device check; no physical pulse path exists
-- `hopper cloud-status` is a separate Internet check through the Shelly Cloud Control API, without
-  `Switch.Set`, `toggle_after`, scheduler, retry, or port forwarding
+- hopper planning, arming, status checks, and lifecycle rehearsals remain offline
+- `hopper shelly-status` and `hopper cloud-status` remain separate narrow read-only diagnostics
+- experimental `hopper fire` sends one explicitly confirmed, pre-recorded Cloud pulse with device
+  timer, OFF read-back, native-keyring binding, no scheduler, and no automatic retry
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
 assets. It describes telemetry but does not decide that fermentation is complete.
@@ -141,8 +142,9 @@ uv run mypy
 
 Forge Companion is young and intentionally conservative. Collection snapshots, inventory audits,
 fermentation exports/reports, fail-closed spunding simulations, offline remote-hopper rehearsals,
-read-only local Shelly status checks, and read-only Shelly Cloud status checks work today. MQTT,
-Home Assistant, authenticated local Shelly access, and physical hardware actions remain future work.
+read-only local/Cloud Shelly diagnostics, and an experimental guarded Shelly Cloud one-shot work
+today. MQTT, Home Assistant, authenticated local Shelly access, and unattended scheduling remain
+future work. Electrical OFF is not mechanical proof of a successful hop drop.
 
 The snapshot command currently covers supported top-level collections. Its checksum detects accidental
 or deliberate file changes, but it is not a signature, proof of origin, or encryption. A snapshot is

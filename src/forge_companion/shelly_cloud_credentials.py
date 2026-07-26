@@ -1,4 +1,4 @@
-"""Native credential storage for one Shelly Cloud read-only profile."""
+"""Native credential storage for one Shelly Cloud profile."""
 
 import json
 from dataclasses import dataclass

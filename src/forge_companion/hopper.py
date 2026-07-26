@@ -1,8 +1,8 @@
-"""Offline, simulation-only plans for a future remote hop dropper."""
+"""Digest-protected one-shot plans for rehearsal or guarded remote hop drops."""
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -25,7 +25,7 @@ _CANONICALIZATION = "json-sort-keys-compact-utf8-without-digest"
 
 
 class HopperStatus(StrEnum):
-    """Lifecycle states for a simulation-only hopper plan."""
+    """Lifecycle states for a rehearsal or guarded Cloud one-shot plan."""
 
     DRAFT = "DRAFT"
     ARMED = "ARMED"
@@ -103,8 +103,10 @@ def create_hopper_plan(
     now: datetime | None = None,
     plan_id: UUID | None = None,
     brew_id: UUID | None = None,
+    server: str | None = None,
+    device_id: str | None = None,
 ) -> dict[str, Any]:
-    """Create an offline draft that can only describe a simulated pulse."""
+    """Create an offline simulation or Cloud-bound one-shot draft."""
     created_at = _utc_timestamp(now or datetime.now(UTC), field="creation time")
     trigger = _utc_timestamp(trigger_at, field="trigger time")
     if trigger <= created_at:
@@ -117,17 +119,32 @@ def create_hopper_plan(
         raise ValueError("pulse duration must be a positive integer of milliseconds")
     if pulse_duration_ms > 60_000:
         raise ValueError("simulated pulse duration must be at most 60000 milliseconds")
+    if server is not None and pulse_duration_ms > 30_000:
+        raise ValueError("cloud pulse duration must be at most 30000 milliseconds")
     canonical_plan_id = str(plan_id or uuid4())
+    if server is not None and device_id is not None:
+        from forge_companion.shelly_cloud import normalize_cloud_device_id, normalize_cloud_server
+
+        action: dict[str, Any] = {
+            "kind": "cloud-pulse",
+            "pulse_duration_ms": pulse_duration_ms,
+            "server": normalize_cloud_server(server),
+            "device_id": normalize_cloud_device_id(device_id),
+        }
+    elif server is None and device_id is None:
+        action = {
+            "kind": "simulated-pulse",
+            "pulse_duration_ms": pulse_duration_ms,
+        }
+    else:
+        raise ValueError("both server and device_id are required for a cloud-pulse plan")
     payload: dict[str, Any] = {
         "format": _FORMAT,
         "plan_id": canonical_plan_id,
         "created_at": created_at.isoformat(),
         "trigger_at": trigger.isoformat(),
         "brew_id": str(brew_id) if brew_id is not None else None,
-        "action": {
-            "kind": "simulated-pulse",
-            "pulse_duration_ms": pulse_duration_ms,
-        },
+        "action": action,
         "state": {
             "status": HopperStatus.DRAFT.value,
             "events": [{"status": HopperStatus.DRAFT.value, "at": created_at.isoformat()}],
@@ -158,7 +175,7 @@ def _parse_utc_timestamp(value: object) -> datetime:
 
 
 def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
-    """Strictly validate a simulation-only plan and its state history."""
+    """Strictly validate an offline simulation or Cloud one-shot plan."""
     try:
         if payload.get("format") != _FORMAT:
             raise HopperPlanValidationError("unsupported hopper plan format")
@@ -191,7 +208,30 @@ def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
         action = payload["action"]
         state = payload["state"]
         integrity = payload["integrity"]
-        if not isinstance(action, dict) or set(action) != {"kind", "pulse_duration_ms"}:
+        if not isinstance(action, dict):
+            raise HopperPlanValidationError("hopper plan schema validation failed")
+        action_kind = action.get("kind")
+        if action_kind == "simulated-pulse":
+            if set(action) != {"kind", "pulse_duration_ms"}:
+                raise HopperPlanValidationError("hopper plan schema validation failed")
+        elif action_kind == "cloud-pulse":
+            if set(action) != {"kind", "pulse_duration_ms", "server", "device_id"}:
+                raise HopperPlanValidationError("hopper plan schema validation failed")
+            from forge_companion.shelly_cloud import (
+                normalize_cloud_device_id,
+                normalize_cloud_server,
+            )
+
+            server = action.get("server")
+            device_id = action.get("device_id")
+            if (
+                not isinstance(server, str)
+                or not isinstance(device_id, str)
+                or normalize_cloud_server(server) != server
+                or normalize_cloud_device_id(device_id) != device_id
+            ):
+                raise HopperPlanValidationError("hopper plan schema validation failed")
+        else:
             raise HopperPlanValidationError("hopper plan schema validation failed")
         if not isinstance(state, dict) or set(state) != {"status", "events"}:
             raise HopperPlanValidationError("hopper plan schema validation failed")
@@ -214,13 +254,12 @@ def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
         if not compare_digest(digest, _plan_digest(payload)):
             raise HopperPlanValidationError("hopper plan integrity check failed")
 
-        if action.get("kind") != "simulated-pulse":
-            raise HopperPlanValidationError("unsupported hopper action")
         pulse_duration_ms = action["pulse_duration_ms"]
+        maximum_pulse_duration_ms = 30_000 if action_kind == "cloud-pulse" else 60_000
         if (
             isinstance(pulse_duration_ms, bool)
             or not isinstance(pulse_duration_ms, int)
-            or not 1 <= pulse_duration_ms <= 60_000
+            or not 1 <= pulse_duration_ms <= maximum_pulse_duration_ms
         ):
             raise HopperPlanValidationError("invalid pulse duration")
 
@@ -251,10 +290,15 @@ def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
             raise HopperPlanValidationError("hopper plan state history is invalid")
         if len(event_times) >= 4 and event_times[3] != event_times[2]:
             raise HopperPlanValidationError("hopper plan state history is invalid")
-        if len(event_times) >= 5 and event_times[4] - event_times[3] != timedelta(
-            milliseconds=pulse_duration_ms
-        ):
-            raise HopperPlanValidationError("hopper plan state history is invalid")
+        if len(event_times) >= 5:
+            pulse_elapsed = event_times[4] - event_times[3]
+            minimum_pulse = timedelta(milliseconds=pulse_duration_ms)
+            if (
+                action_kind == "simulated-pulse" and pulse_elapsed != minimum_pulse
+            ) or (
+                action_kind == "cloud-pulse" and pulse_elapsed < minimum_pulse
+            ):
+                raise HopperPlanValidationError("hopper plan state history is invalid")
         if len(event_times) >= 6 and event_times[5] != event_times[4]:
             raise HopperPlanValidationError("hopper plan state history is invalid")
     except HopperPlanValidationError:
@@ -294,6 +338,8 @@ def arm_hopper_plan(payload: dict[str, Any], *, at: datetime) -> dict[str, Any]:
 def simulate_hopper_plan(payload: dict[str, Any], *, at: datetime) -> dict[str, Any]:
     """Run the complete lifecycle in memory without waiting or contacting hardware."""
     summary = validate_hopper_plan(payload)
+    if payload["action"]["kind"] != "simulated-pulse":
+        raise ValueError("only a simulated-pulse plan can run as a simulation plan")
     simulation_time = _utc_timestamp(at, field="simulation time")
     if summary.status is not HopperStatus.ARMED:
         raise ValueError("only an armed hopper plan can be simulated")
@@ -308,6 +354,74 @@ def simulate_hopper_plan(payload: dict[str, Any], *, at: datetime) -> dict[str, 
     changed = _append_status(changed, HopperStatus.VERIFIED_OFF, pulse_end)
     changed = _append_status(changed, HopperStatus.LOCKED, pulse_end)
     return changed
+
+
+def fire_hopper_plan(
+    payload: dict[str, Any],
+    *,
+    at: datetime,
+    persist: Callable[[dict[str, Any]], None],
+    actuator: Any = None,
+) -> dict[str, Any]:
+    """Execute one cloud pulse after durably recording its one-shot request."""
+    summary = validate_hopper_plan(payload)
+    fire_time = _utc_timestamp(at, field="fire time")
+    if summary.status is not HopperStatus.ARMED:
+        raise ValueError("only an armed hopper plan can be fired")
+    if fire_time < summary.trigger_at:
+        raise ValueError("hopper fire cannot run before its trigger time")
+    action = payload["action"]
+    if action.get("kind") != "cloud-pulse":
+        raise ValueError("only a cloud-pulse plan can be fired")
+
+    close_actuator = False
+    if actuator is None:
+        from forge_companion.shelly_cloud_credentials import resolve_profile
+
+        resolved = resolve_profile()
+        if resolved.profile is None:
+            raise ValueError("hopper fire failed: no Shelly Cloud profile is stored")
+        profile = resolved.profile
+        if profile.server != action["server"] or profile.device_id != action["device_id"]:
+            raise ValueError("stored Shelly Cloud profile does not match hopper plan")
+        from forge_companion.shelly_cloud import ShellyCloudActuator
+
+        actuator_instance = ShellyCloudActuator(
+            server=profile.server,
+            device_id=profile.device_id,
+            auth_key=profile.auth_key,
+        )
+        actuator_instance.__enter__()
+        close_actuator = True
+    else:
+        actuator_instance = actuator
+
+    try:
+        requested = _append_status(payload, HopperStatus.FIRE_REQUESTED, fire_time)
+        persist(requested)
+        result = actuator_instance.pulse(
+            channel=0,
+            toggle_after_seconds=summary.pulse_duration_ms / 1000.0,
+        )
+        if (
+            not result.accepted
+            or result.readback is None
+            or not result.readback.online
+            or result.readback.output is not False
+        ):
+            raise RuntimeError("Shelly Cloud pulse outcome is not verified OFF")
+        verified_time = datetime.now(UTC)
+        minimum_verified_time = fire_time + timedelta(milliseconds=summary.pulse_duration_ms)
+        if verified_time < minimum_verified_time:
+            raise RuntimeError("Shelly Cloud OFF read-back arrived before the pulse timer elapsed")
+        changed = _append_status(requested, HopperStatus.PULSE_ACTIVE, fire_time)
+        changed = _append_status(changed, HopperStatus.VERIFIED_OFF, verified_time)
+        changed = _append_status(changed, HopperStatus.LOCKED, verified_time)
+        persist(changed)
+        return changed
+    finally:
+        if close_actuator:
+            actuator_instance.__exit__(None, None, None)
 
 
 def _strict_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

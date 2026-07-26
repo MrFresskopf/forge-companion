@@ -51,3 +51,27 @@ def test_atomic_create_text_refuses_dangling_symlink(tmp_path: Path) -> None:
 
     assert destination.is_symlink()
     assert list(destination.parent.glob(f".{destination.name}.*.tmp")) == []
+
+
+def test_atomic_write_uses_durable_replace_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import os
+
+    from forge_companion import file_io
+
+    destination = tmp_path / "plan.json"
+    replaced = False
+
+    def durable_replace(source: Path, target: Path) -> None:
+        nonlocal replaced
+        replaced = True
+        os.replace(source, target)
+
+    monkeypatch.setattr(file_io, "_replace_file_durably", durable_replace, raising=False)
+
+    atomic_write_text("requested\n", destination, newline="\n")
+
+    assert replaced is True
+    assert destination.read_text(encoding="utf-8") == "requested\n"

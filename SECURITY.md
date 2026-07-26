@@ -39,11 +39,11 @@ If a token is exposed, revoke it in BrewForge immediately and create a replaceme
 ## Current access model
 
 Version 0.1 does not create, change, or delete BrewForge data. The BrewForge HTTP client exposes only
-GET requests. The separate Shelly Cloud status adapter uses the provider's documented POST-based
-**Get device(s) state** endpoint, but exposes no generic request, device command, relay write, plan
-transition, scheduler, or retry interface. Collection snapshots are local JSON files and may contain
-private brewing data, so users are responsible for protecting and encrypting them. They are not
-complete or directly restorable account backups.
+GET requests. Shelly integration is a separate trust boundary: read-only local and Cloud status
+adapters remain narrow, while the experimental `hopper fire` command can send one explicitly
+confirmed Cloud pulse for a previously armed plan. Collection snapshots are local JSON files and may
+contain private brewing data, so users are responsible for protecting and encrypting them. They are
+not complete or directly restorable account backups.
 
 New v2 collection snapshots include a strict manifest and canonical SHA-256 digest. `snapshot
 validate` rejects ambiguous JSON, unsupported schema variants, inconsistent collection counts, and
@@ -77,21 +77,29 @@ Its output cannot verify pressure, valve position, regulator behavior, PRV condi
 success. Never use it as an overpressure safeguard or as a substitute for independent mechanical
 protection and manual override.
 
-Remote-hopper plans are also simulation-only and offline. `hopper plan`, `arm`, `simulate`, and
-`status` never contact BrewForge, a Shelly, or any other device, and they never wait for or send a
-physical pulse. Plans use strict JSON, an exact state-history schema, atomic replacement, and an
-unkeyed canonical SHA-256 digest. The digest detects accidental edits but is not authentication: a
-person who can replace the file can also recompute it. `ARMED` and `LOCKED` describe only the local
-simulation file and provide no hardware safety guarantee. The accepted 1–60,000 ms simulation value
-does not establish a safe motor runtime; that must come from a measured bench test and an independent
-hard timeout before any future actuator integration.
+Remote-hopper plans support two distinct modes. Simulation plans remain offline. A Cloud one-shot plan
+stores only the normalized tenant and device ID, never the authorization key, and accepts at most a
+30-second pulse. `hopper fire` requires an armed plan past its trigger and a native credential profile
+matching the plan. A read-only preflight must report the device online and electrically OFF before the
+command offers exact interactive `FIRE` confirmation on an attached terminal; piped input is rejected.
+It then observes the Cloud API rate boundary and persists `FIRE_REQUESTED` atomically before the one
+switch attempt. The file is flushed before replacement; Windows uses a write-through move and POSIX
+flushes the containing directory before the command proceeds. There is no scheduler or automatic
+retry.
 
-Hopper CLI transitions use an exclusive sidecar lock and atomic replacement. A competing process
-fails closed instead of consuming the same armed state, and plan creation refuses an existing output.
-A hard crash may leave a stale lock; remove it only after confirming no Forge Companion process is
-still working on that plan. These local file controls are not a substitute for device-side
-idempotency, a hardware timeout, or mechanical protection in any future actuator.
+The actuator is a separate type from both read-only clients. It exposes one fixed channel pulse using
+Cloud v2 `/v2/devices/api/set/switch`, `on: true`, and `toggle_after`; it has no generic request or raw relay
+method. After waiting for the device timer and at least the provider's one-second request interval, it
+reads status once. Only online electrical `OFF` completes the plan as `LOCKED`. Any ambiguous outcome
+leaves the plan consumed at `FIRE_REQUESTED`, preventing an ordinary second attempt. A crash can leave
+the exclusive sidecar lock in place; remove only the stale lock after confirming no process remains,
+never modify the plan to make it fireable again.
 
+These controls do not provide provider-side idempotency or mechanical feedback. A timeout may mean the
+pulse executed even though its response was lost. Electrical `OFF` cannot prove winch motion, cable
+travel, magnet release, or hop addition. The complete installed mechanism needs repeated under-load
+qualification, a conservative measured pulse, device-side auto-off, mechanical protection, and manual
+isolation. One confirmation authorizes exactly one attempt.
 `hopper shelly-status` is a separate read-only local-network check. Its client exposes only
 `GET /rpc/Switch.GetStatus`, rejects redirects, ambiguous base URLs, malformed or duplicate-key JSON,
 and responses larger than 64 KiB. Its internally owned HTTP client ignores environment proxy settings
@@ -111,9 +119,9 @@ status, disables redirects and environment proxies, uses a five-second timeout, 
 oversized, malformed, or mismatched responses fail closed. An offline response produces `UNKNOWN`
 rather than trusting stale relay telemetry.
 
-The Cloud v2 status endpoint is POST-based even though it is observational. Forge Companion exposes
-no arbitrary endpoint, `Switch.Set`, `set/switch`, `toggle_after`, actuator, scheduling, automatic
-retry, or hopper-plan transition through this adapter. The authorization key is necessarily sent to
+The Cloud v2 status endpoint is POST-based even though it is observational. The read-only adapter
+exposes no arbitrary endpoint, `Switch.Set`, actuator, scheduling, retry, or hopper transition. The
+live one-shot actuator is a separate type and command with the controls described above. The authorization key is necessarily sent to
 the assigned Shelly Cloud host as required by the provider API, so errors and terminal output are
 sanitized and redirects are forbidden. The Cloud Control API is provider-managed and may change;
 invalid or incompatible responses fail closed. Never port-forward a Shelly RPC endpoint as a

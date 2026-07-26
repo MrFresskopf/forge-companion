@@ -1,8 +1,11 @@
-"""Narrow read-only client for Shelly Cloud v2 switch status."""
+"""Narrow read-only client and actuator for Shelly Cloud v2."""
 
 import json
 import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any
 
 import httpx
@@ -47,6 +50,14 @@ class ShellyCloudSwitchStatus:
     online: bool
     output: bool | None
     source: str | None
+
+
+@dataclass(frozen=True)
+class ShellyCloudPulseResult:
+    """Result of one cloud actuator pulse request."""
+
+    accepted: bool
+    readback: ShellyCloudSwitchStatus | None
 
 
 class ShellyCloudResponseError(ValueError):
@@ -197,3 +208,98 @@ class ShellyCloudReadOnlyClient:
             device_id=self._device_id,
             channel=channel,
         )
+
+
+class ShellyCloudActuator:
+    """Send one switch pulse through the Shelly Cloud Control API v2."""
+
+    def __init__(
+        self,
+        *,
+        server: str,
+        device_id: str,
+        auth_key: str,
+        http: httpx.Client | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._base_url = f"https://{normalize_cloud_server(server)}"
+        self._device_id = normalize_cloud_device_id(device_id)
+        self._auth_key = normalize_cloud_auth_key(auth_key)
+        self._owns_http = http is None
+        self._http = http if http is not None else httpx.Client(timeout=5.0, trust_env=False)
+        self._sleep = sleep
+
+    def __enter__(self) -> "ShellyCloudActuator":
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Close only an internally owned HTTP client."""
+        if self._owns_http:
+            self._http.close()
+
+    def _read_status(self, channel: int = 0) -> ShellyCloudSwitchStatus:
+        """Read one switch state through the cloud status endpoint."""
+        try:
+            with self._http.stream(
+                "POST",
+                f"{self._base_url}/v2/devices/api/get",
+                params={"auth_key": self._auth_key},
+                json={
+                    "ids": [self._device_id],
+                    "select": ["status"],
+                    "pick": {"status": [f"switch:{channel}"]},
+                },
+                headers={"Accept": "application/json"},
+                follow_redirects=False,
+            ) as response:
+                response.raise_for_status()
+                content = _read_cloud_status_content(response)
+        except httpx.HTTPError:
+            raise ShellyCloudResponseError("Shelly Cloud pulse read-back failed") from None
+        payload = _decode_cloud_status_json(content)
+        return _parse_cloud_switch_status(
+            payload,
+            device_id=self._device_id,
+            channel=channel,
+        )
+
+    def pulse(
+        self, channel: int = 0, toggle_after_seconds: float = 1.0
+    ) -> ShellyCloudPulseResult:
+        """Send exactly one channel-0 ON pulse with auto-off. Never retries."""
+        if type(channel) is not int or channel != 0:
+            raise ValueError("invalid Shelly Cloud channel")
+        if (
+            isinstance(toggle_after_seconds, bool)
+            or not isinstance(toggle_after_seconds, (int, float))
+            or not isfinite(float(toggle_after_seconds))
+            or toggle_after_seconds <= 0
+            or toggle_after_seconds > 30.0
+        ):
+            raise ValueError("toggle_after_seconds must be a positive float up to 30.0")
+        try:
+            with self._http.stream(
+                "POST",
+                f"{self._base_url}/v2/devices/api/set/switch",
+                params={"auth_key": self._auth_key},
+                json={
+                    "id": self._device_id,
+                    "channel": channel,
+                    "on": True,
+                    "toggle_after": toggle_after_seconds,
+                },
+                headers={"Accept": "application/json"},
+                follow_redirects=False,
+            ) as response:
+                _read_cloud_status_content(response)
+                accepted = response.status_code == 200
+        except httpx.HTTPError:
+            raise ShellyCloudResponseError("Shelly Cloud pulse request failed") from None
+        if not accepted:
+            return ShellyCloudPulseResult(accepted=False, readback=None)
+        self._sleep(max(1.0, float(toggle_after_seconds)))
+        readback = self._read_status(channel=channel)
+        return ShellyCloudPulseResult(accepted=True, readback=readback)

@@ -205,7 +205,7 @@ def test_write_html_preserves_existing_file_and_cleans_temp_on_replace_failure(
     def fail_replace(_source: Path, _destination: Path) -> None:
         raise OSError("replace failed")
 
-    monkeypatch.setattr(file_io.os, "replace", fail_replace)
+    monkeypatch.setattr(file_io, "_replace_file_durably", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
         write_html("replacement", destination)
