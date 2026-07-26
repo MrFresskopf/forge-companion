@@ -294,7 +294,6 @@ class ShellyCloudActuator:
                 headers={"Accept": "application/json"},
                 follow_redirects=False,
             ) as response:
-                _read_cloud_status_content(response)
                 accepted = response.status_code == 200
         except httpx.HTTPError:
             raise ShellyCloudResponseError("Shelly Cloud pulse request failed") from None

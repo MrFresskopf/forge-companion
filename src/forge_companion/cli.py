@@ -294,6 +294,14 @@ def hopper_fire_command(
             if datetime.now(UTC) < summary.trigger_at:
                 raise ValueError("plan trigger has not been reached")
 
+            typer.echo(
+                f"Ready to send one {summary.pulse_duration_ms} ms Cloud pulse on channel 0."
+            )
+            confirmation = typer.prompt("Type FIRE to send one one-shot pulse")
+            if confirmation != "FIRE":
+                typer.echo("Hopper fire cancelled; no switch command was sent.")
+                raise typer.Exit(code=1)
+
             resolved = shelly_cloud_credentials.resolve_profile()
             if resolved.profile is None:
                 raise ValueError("Shelly Cloud credentials are not configured")
@@ -313,14 +321,6 @@ def hopper_fire_command(
                     "Hopper fire blocked: preflight requires an online device reporting OFF.",
                     err=True,
                 )
-                raise typer.Exit(code=1)
-
-            typer.echo(
-                f"Ready to send one {summary.pulse_duration_ms} ms Cloud pulse on channel 0."
-            )
-            confirmation = typer.prompt("Type FIRE to send one one-shot pulse")
-            if confirmation != "FIRE":
-                typer.echo("Hopper fire cancelled; no switch command was sent.")
                 raise typer.Exit(code=1)
 
             elapsed = monotonic() - preflight_started

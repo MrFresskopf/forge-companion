@@ -1,4 +1,5 @@
 import json
+from collections.abc import Iterator
 
 import httpx
 import pytest
@@ -74,6 +75,53 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
     )
     # Verify exactly one status read-back was made
     assert len(get_requests) == 1
+
+
+def test_cloud_actuator_ignores_http_200_set_response_body() -> None:
+    requests: list[httpx.Request] = []
+
+    class ForbiddenSetBody(httpx.SyncByteStream):
+        def __iter__(self) -> Iterator[bytes]:
+            raise AssertionError("set response body must not be read")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/set/switch"):
+            return httpx.Response(
+                200,
+                headers={"Content-Length": str(128 * 1024)},
+                stream=ForbiddenSetBody(),
+            )
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "5432046e5f58",
+                    "online": 1,
+                    "status": {
+                        "switch:0": {"id": 0, "output": False, "source": "timer"}
+                    },
+                }
+            ],
+        )
+
+    actuator = ShellyCloudActuator(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+        auth_key="synthetic-cloud-key",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        sleep=lambda seconds: None,
+    )
+
+    result = actuator.pulse(channel=0, toggle_after_seconds=1.5)
+
+    assert result.accepted is True
+    assert result.readback is not None
+    assert result.readback.output is False
+    assert [request.url.path for request in requests] == [
+        "/v2/devices/api/set/switch",
+        "/v2/devices/api/get",
+    ]
 
 
 @pytest.mark.parametrize(
