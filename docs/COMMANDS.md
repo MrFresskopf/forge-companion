@@ -109,7 +109,7 @@ data, access control, or encryption. Keep snapshots private and protect them lik
 export.
 
 > [!WARNING]
-> This is not yet a complete or restorable account backup. Version 0.1 does not fetch per-brew
+> This is not yet a complete or restorable account backup. Version 0.2 does not fetch per-brew
 > details, notes, fermentation readings, or data unavailable through the documented API.
 
 ## `inventory`
@@ -290,6 +290,20 @@ forge-companion hopper arm automation/hopper-plan.json
 forge-companion hopper status automation/hopper-plan.json
 ```
 
+After the trigger, rehearse the complete read-only readiness path without arming, modifying the plan,
+or constructing an actuator:
+
+```bash
+forge-companion hopper check automation/hopper-plan.json
+```
+
+`check` validates an `ARMED` Cloud plan, confirms that its trigger has been reached, verifies that the
+native credential profile matches the digest-protected target, and sends exactly one observational
+Cloud status POST. Success requires `online` and explicit electrical `OFF`. It prints no host, device
+ID, key, plan path, or provider response text. The plan remains byte-for-byte unchanged and no switch
+request is sent. A passing result is temporary electrical readiness only: it does not authorize a later
+pulse, replace the fresh preflight inside `fire`, or prove mechanical release.
+
 After the trigger time, the live command is:
 
 ```bash
@@ -322,7 +336,9 @@ transport timeout.
 
 An electrical `OFF` read-back proves neither winch travel nor magnet release nor actual hop addition.
 Qualify the complete Fermzilla, magnet, cable, and winch assembly repeatedly before relying on remote
-operation. One explicit confirmation authorizes one attempt only.
+operation. One explicit confirmation authorizes one attempt only. Record full-assembly evidence with
+the [mechanical qualification protocol](HOPPER_QUALIFICATION.md) and its CSV template; the protocol
+does not calculate or certify a safe duration.
 
 ### Read-only Shelly diagnostics
 

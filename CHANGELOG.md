@@ -6,6 +6,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-26
+
 ### Added
 
 - Native OS credential storage through `auth login`, `auth status`, and `auth logout`, with an explicit `BREWFORGE_API_TOKEN` override and no plaintext fallback.
@@ -27,6 +29,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   online-OFF preflight after confirmation. It records `FIRE_REQUESTED` before one non-retried Cloud
   pulse, uses device-side `toggle_after`, verifies an online electrical OFF read-back, and leaves
   ambiguous outcomes consumed for manual investigation.
+- A read-only `hopper check PLAN` rehearsal that validates the armed plan, reached trigger, exact
+  credential target, and one live online/OFF status response without constructing an actuator or
+  changing the plan.
+- A supervised full-assembly hopper qualification protocol and reusable ten-trial CSV template.
 
 ### Changed
 
@@ -36,6 +42,11 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - HTML, Markdown, and CSV exports share one atomic text writer without weakening temporary-file cleanup or replacement semantics.
 - Read-only Shelly status requests now reject responses above 64 KiB, ignore environment proxy
   settings for internally created clients, and close owned HTTP resources deterministically.
+- Product messaging now distinguishes read-only BrewForge access and diagnostics from the isolated,
+  guarded experimental Shelly actuator.
+- The Windows-only `pywin32` dependency now carries an explicit platform marker.
+- Pytest now imports the working tree from `src`, preventing an older installed wheel from masking
+  uncommitted source changes during local verification.
 
 ## [0.1.1] — 2026-07-19
 
@@ -68,6 +79,7 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.0
 [0.1.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.1
 [0.1.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.0

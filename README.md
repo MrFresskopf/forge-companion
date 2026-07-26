@@ -18,8 +18,9 @@ anything in BrewForge.
 > BrewForge.
 
 > [!NOTE]
-> **Developer preview:** Forge Companion is source-installable, read-only, and not yet a complete
-> backup solution. Interfaces and snapshot formats may change before 1.0.
+> **Developer preview:** BrewForge access is read-only. Guarded experimental Shelly automation is
+> isolated behind explicit one-shot safety controls. Interfaces and snapshot formats may change before
+> 1.0, and snapshots are not yet a complete backup solution.
 
 ## Get running in three steps
 
@@ -89,6 +90,7 @@ documented collection and token scope.
 | Diagnose API access | `forge-companion doctor` | 7 GET requests |
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
 | Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
+| Check an armed Cloud one-shot without switching | `forge-companion hopper check PLAN` | 1 status POST (Cloud v2) |
 | Fire an armed Cloud one-shot | `forge-companion hopper fire PLAN` | 1 set POST + 2 status POSTs |
 | Read a local Shelly switch state | `forge-companion hopper shelly-status ...` | 1 local GET request |
 | Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
@@ -96,13 +98,15 @@ documented collection and token scope.
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details.
 
-## Why read-only?
+## Why read-only by default?
 
 Brewing data is useful; accidental writes are not. Forge Companion starts with a deliberately small
 trust boundary:
 
-- the BrewForge API client exposes only `GET`; the separate Shelly Cloud adapter uses the provider's
-  POST-based observational endpoint but has no generic request, device command, or relay-write path
+- the BrewForge API client exposes only `GET`; the separate observational Shelly Cloud client uses the
+  provider's POST-based status endpoint but has no generic request or device command
+- the experimental Shelly actuator is a separate narrow trust boundary limited to one guarded channel-0
+  pulse; it is never used by reports, BrewForge operations, or read-only hopper checks
 - tokens come from a supported native OS credential store or an explicit `BREWFORGE_API_TOKEN`
   environment override; Shelly Cloud uses a separate native-keyring profile with no plaintext fallback
 - report preferences contain no credentials and currently store only an explicit C/F choice
@@ -113,8 +117,8 @@ trust boundary:
 - `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v2 files offline;
   fermentation exports keep valid readings but report every rejection and timestamp conflict
 - the spunding advisor simulates a decision and never contacts hardware
-- hopper planning, arming, status checks, and lifecycle rehearsals remain offline
-- `hopper shelly-status` and `hopper cloud-status` remain separate narrow read-only diagnostics
+- hopper planning, arming, `hopper status`, and lifecycle rehearsals remain offline
+- `hopper shelly-status`, `hopper cloud-status`, and `hopper check` remain narrow read-only diagnostics
 - experimental `hopper fire` sends one explicitly confirmed, pre-recorded Cloud pulse with device
   timer, OFF read-back, native-keyring binding, no scheduler, and no automatic retry
 
@@ -144,7 +148,9 @@ Forge Companion is young and intentionally conservative. Collection snapshots, i
 fermentation exports/reports, fail-closed spunding simulations, offline remote-hopper rehearsals,
 read-only local/Cloud Shelly diagnostics, and an experimental guarded Shelly Cloud one-shot work
 today. MQTT, Home Assistant, authenticated local Shelly access, and unattended scheduling remain
-future work. Electrical OFF is not mechanical proof of a successful hop drop.
+future work. Electrical OFF is not mechanical proof of a successful hop drop. Use the
+[mechanical qualification protocol](docs/HOPPER_QUALIFICATION.md) before considering any remote
+operation.
 
 The snapshot command currently covers supported top-level collections. Its checksum detects accidental
 or deliberate file changes, but it is not a signature, proof of origin, or encryption. A snapshot is

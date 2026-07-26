@@ -37,6 +37,8 @@ def test_help_groups_commands_by_user_goal() -> None:
     assert "Start here" in result.output
     assert "Reports and exports" in result.output
     assert "Safety experiments" in result.output
+    assert "guarded experimental automation" in result.output
+    assert "read-only community tools" not in result.output
     assert "report" in result.output
     assert "inventory" in result.output
     assert "fermentation-html" not in result.output
@@ -114,7 +116,7 @@ def test_snapshot_validate_reports_safe_offline_summary(tmp_path: Path) -> None:
         "Snapshot is valid.\n"
         "Format: forge-companion-collection-snapshot-v2\n"
         "Created: 2026-07-20T18:00:00+00:00\n"
-        "Generator: Forge Companion 0.1.1\n"
+        "Generator: Forge Companion 0.2.0\n"
         "Collections: 7\n"
         "Records: 0\n"
         "SHA-256 integrity: verified.\n"
