@@ -3,6 +3,7 @@ import json
 import httpx
 import pytest
 
+from forge_companion import shelly_cloud
 from forge_companion.shelly_cloud import (
     ShellyCloudActuator,
     ShellyCloudPulseResult,
@@ -48,6 +49,12 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
 
     # Verify the set request
     assert seen["method"] == "POST"
+    set_url = seen["set_url"]
+    assert isinstance(set_url, httpx.URL)
+    assert set_url.scheme == "https"
+    assert set_url.host == "shelly-82-eu.shelly.cloud"
+    assert set_url.path == "/v2/devices/api/set/switch"
+    assert dict(set_url.params) == {"auth_key": "synthetic-cloud-key"}
     assert seen["set_body"] == {
         "id": "5432046e5f58",
         "channel": 0,
@@ -126,7 +133,7 @@ def test_cloud_actuator_returns_not_accepted_when_cloud_rejects() -> None:
     assert result == ShellyCloudPulseResult(accepted=False, readback=None)
 
 
-def test_cloud_actuator_context_closes_internal_http() -> None:
+def test_cloud_actuator_context_leaves_injected_http_open() -> None:
     http = httpx.Client(
         transport=httpx.MockTransport(
             lambda request: httpx.Response(200, json={"isok": True})
@@ -141,6 +148,52 @@ def test_cloud_actuator_context_closes_internal_http() -> None:
         assert http.is_closed is False
 
     assert http.is_closed is False  # injected client is not owned
+
+
+def test_cloud_actuator_context_closes_proxy_isolated_internal_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: dict[str, object] = {}
+    internal_http = httpx.Client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(500))
+    )
+
+    def create_http(**kwargs: object) -> httpx.Client:
+        created.update(kwargs)
+        return internal_http
+
+    monkeypatch.setattr(shelly_cloud.httpx, "Client", create_http)
+
+    with ShellyCloudActuator(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+        auth_key="synthetic-cloud-key",
+    ):
+        assert internal_http.is_closed is False
+
+    assert created == {"timeout": 5.0, "trust_env": False}
+    assert internal_http.is_closed is True
+
+
+def test_cloud_actuator_does_not_follow_set_redirect() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(307, headers={"Location": "https://example.invalid/redirect"})
+
+    actuator = ShellyCloudActuator(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+        auth_key="synthetic-cloud-key",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    result = actuator.pulse(channel=0, toggle_after_seconds=1.5)
+
+    assert result == ShellyCloudPulseResult(accepted=False, readback=None)
+    assert len(requests) == 1
+    assert requests[0].url.host == "shelly-82-eu.shelly.cloud"
 
 
 def test_cloud_actuator_never_retries_on_http_error() -> None:
