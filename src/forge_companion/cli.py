@@ -54,7 +54,10 @@ from forge_companion.spunding_report import render_spunding_advice
 from forge_companion.terminal_text import safe_terminal_text
 
 app = typer.Typer(
-    help="Unofficial, read-only community tools for BrewForge.",
+    help=(
+        "Unofficial BrewForge companion with read-only diagnostics, reports, "
+        "and guarded experimental automation."
+    ),
     no_args_is_help=False,
     invoke_without_command=True,
 )
@@ -270,6 +273,67 @@ def hopper_simulate_command(
     typer.echo("Hopper simulation completed.")
     typer.echo("Status: LOCKED")
     typer.echo("No device or network was contacted; no physical pulse was sent.")
+
+
+@hopper_app.command("check")
+def hopper_check_command(
+    source: Annotated[Path, typer.Argument(help="Local armed Cloud one-shot plan file.")],
+) -> None:
+    """Check plan, credential binding, and live electrical readiness without switching."""
+    from forge_companion import shelly_cloud
+
+    try:
+        payload = load_hopper_plan(source)
+        summary = validate_hopper_plan(payload)
+        action = payload["action"]
+        if summary.status.value != "ARMED" or action.get("kind") != "cloud-pulse":
+            raise ValueError("plan is not an armed cloud pulse")
+        if datetime.now(UTC) < summary.trigger_at:
+            raise ValueError("plan trigger has not been reached")
+
+        resolved = shelly_cloud_credentials.resolve_profile()
+        if resolved.profile is None:
+            raise ValueError("Shelly Cloud credentials are not configured")
+        profile = resolved.profile
+        if profile.server != action["server"] or profile.device_id != action["device_id"]:
+            raise ValueError("Shelly Cloud profile does not match the plan")
+
+        with shelly_cloud.ShellyCloudReadOnlyClient(
+            server=profile.server,
+            device_id=profile.device_id,
+            auth_key=profile.auth_key,
+        ) as status_client:
+            preflight = status_client.get_switch_status(channel=0)
+        if not preflight.online or preflight.output is not False:
+            typer.echo(
+                "Hopper check failed: electrical preflight requires "
+                "an online device reporting OFF.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except shelly_cloud_credentials.ShellyCloudCredentialError:
+        typer.echo("Hopper check failed: credential store access failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (ShellyCloudResponseError, httpx.HTTPError, RuntimeError):
+        typer.echo("Hopper check failed: Cloud status request failed.", err=True)
+        raise typer.Exit(code=1) from None
+    except (HopperPlanValidationError, OSError, TypeError, ValueError):
+        typer.echo(
+            "Hopper check failed: plan, trigger, or Cloud profile is not ready.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+
+    typer.echo("Hopper Cloud one-shot readiness check passed.")
+    typer.echo("Status: ARMED")
+    typer.echo("Trigger: reached")
+    typer.echo(f"Pulse: {summary.pulse_duration_ms} ms")
+    typer.echo("Credential target: matched")
+    typer.echo("Electrical preflight: ONLINE / OFF")
+    typer.echo("Mechanical release: NOT VERIFIED")
+    typer.echo("No switch command was sent and the plan was not changed.")
 
 
 @hopper_app.command("fire")

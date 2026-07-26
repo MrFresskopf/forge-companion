@@ -55,7 +55,9 @@ safety work may advance ahead of broader exports or integrations when that creat
 - [x] read-only Shelly Cloud status check (no inbound port, VPN, or public RPC required)
 - [x] device-independent offline remote-hopper plan, explicit arming, lifecycle simulation, and lock
 - [x] one-shot, explicitly armed Shelly Cloud action with device timeout and durable pre-request consumption
+- [x] read-only armed-plan readiness check with exact credential binding and one live OFF preflight
 - [x] electrical OFF read-back verification and local state-history audit trail
+- [x] supervised full-assembly qualification protocol and reusable ten-trial CSV template
 - [ ] mechanical release sensing and repeated full-assembly qualification
 - [x] explicit experimental warning and mechanical safety requirements
 

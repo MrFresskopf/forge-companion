@@ -410,6 +410,289 @@ def _write_armed_cloud_plan(destination: Path) -> None:
     write_hopper_plan(armed, destination)
 
 
+
+def test_hopper_check_reports_read_only_cloud_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "private-cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+    before = destination.read_bytes()
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+    request_count = 0
+
+    class FakeReadOnlyClient:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs == {
+                "server": "shelly-82-eu.shelly.cloud",
+                "device_id": "5432046e5f58",
+                "auth_key": "synthetic-secret-key",
+            }
+
+        def __enter__(self) -> "FakeReadOnlyClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def get_switch_status(self, channel: int = 0) -> object:
+            nonlocal request_count
+            request_count += 1
+            return shelly_cloud.ShellyCloudSwitchStatus(
+                device_id="5432046e5f58",
+                channel=channel,
+                online=True,
+                output=False,
+                source="timer",
+            )
+
+    class ForbiddenActuator:
+        def __init__(self, **kwargs: object) -> None:
+            raise AssertionError("read-only check must not construct an actuator")
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FakeReadOnlyClient)
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
+
+    result = runner.invoke(app, ["hopper", "check", str(destination)])
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "Hopper Cloud one-shot readiness check passed.\n"
+        "Status: ARMED\n"
+        "Trigger: reached\n"
+        "Pulse: 100 ms\n"
+        "Credential target: matched\n"
+        "Electrical preflight: ONLINE / OFF\n"
+        "Mechanical release: NOT VERIFIED\n"
+        "No switch command was sent and the plan was not changed.\n"
+    )
+    assert request_count == 1
+    assert destination.read_bytes() == before
+    assert "synthetic-secret-key" not in result.output
+    assert "private-cloud-plan" not in result.output
+
+
+
+
+def test_hopper_check_rejects_early_plan_before_credentials_or_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "early-cloud-plan.json"
+    payload = create_hopper_plan(
+        trigger_at=datetime(2099, 1, 1, 18, 0, tzinfo=UTC),
+        pulse_duration_ms=100,
+        now=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 1, 1, 1, 0, tzinfo=UTC))
+    write_hopper_plan(armed, destination)
+    before = destination.read_bytes()
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    credential_calls = 0
+
+    def forbidden_profile() -> object:
+        nonlocal credential_calls
+        credential_calls += 1
+        raise AssertionError("early plan must fail before credentials")
+
+    monkeypatch.setattr(shelly_cloud_credentials, "resolve_profile", forbidden_profile)
+    monkeypatch.setattr(
+        shelly_cloud,
+        "ShellyCloudReadOnlyClient",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("network must not be contacted")),
+    )
+
+    result = runner.invoke(app, ["hopper", "check", str(destination)])
+
+    assert result.exit_code == 1
+    assert result.output == "Hopper check failed: plan, trigger, or Cloud profile is not ready.\n"
+    assert credential_calls == 0
+    assert destination.read_bytes() == before
+
+
+
+
+def test_hopper_check_rejects_profile_mismatch_before_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+    before = destination.read_bytes()
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    mismatched = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="aaaaaaaaaaaa",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(
+            profile=mismatched,
+            source="keyring",
+        ),
+    )
+    monkeypatch.setattr(
+        shelly_cloud,
+        "ShellyCloudReadOnlyClient",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("network must not be contacted")),
+    )
+
+    result = runner.invoke(app, ["hopper", "check", str(destination)])
+
+    assert result.exit_code == 1
+    assert result.output == "Hopper check failed: plan, trigger, or Cloud profile is not ready.\n"
+    assert destination.read_bytes() == before
+    assert "aaaaaaaaaaaa" not in result.output
+
+
+
+
+@pytest.mark.parametrize(
+    ("online", "output"),
+    [(True, True), (False, False), (True, None)],
+)
+def test_hopper_check_requires_online_explicit_off_without_actuator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    online: bool,
+    output: bool | None,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+    before = destination.read_bytes()
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+    request_count = 0
+
+    class UnsafeReadOnlyClient:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "UnsafeReadOnlyClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def get_switch_status(self, channel: int = 0) -> object:
+            nonlocal request_count
+            request_count += 1
+            return shelly_cloud.ShellyCloudSwitchStatus(
+                device_id="5432046e5f58",
+                channel=channel,
+                online=online,
+                output=output,
+                source="HTTP",
+            )
+
+    class ForbiddenActuator:
+        def __init__(self, **kwargs: object) -> None:
+            raise AssertionError("read-only check must not construct an actuator")
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", UnsafeReadOnlyClient)
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
+
+    result = runner.invoke(app, ["hopper", "check", str(destination)])
+
+    assert result.exit_code == 1
+    assert result.output == (
+        "Hopper check failed: electrical preflight requires an online device reporting OFF.\n"
+    )
+    assert request_count == 1
+    assert destination.read_bytes() == before
+
+
+
+
+@pytest.mark.parametrize("failure_kind", ["transport", "response"])
+def test_hopper_check_sanitizes_cloud_status_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+    before = destination.read_bytes()
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    secret = "synthetic-secret-key"
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key=secret,
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+
+    class FailingReadOnlyClient:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "FailingReadOnlyClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def get_switch_status(self, channel: int = 0) -> object:
+            if failure_kind == "response":
+                raise shelly_cloud.ShellyCloudResponseError(
+                    f"provider reflected {secret}\x1b[31m"
+                )
+            raise httpx.RequestError(f"provider reflected {secret}\x1b[31m")
+
+    class ForbiddenActuator:
+        def __init__(self, **kwargs: object) -> None:
+            raise AssertionError("read-only check must not construct an actuator")
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FailingReadOnlyClient)
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
+
+    result = runner.invoke(app, ["hopper", "check", str(destination)])
+
+    assert result.exit_code == 1
+    assert result.output == "Hopper check failed: Cloud status request failed.\n"
+    assert secret not in result.output
+    assert "\x1b" not in result.output
+    assert destination.read_bytes() == before
+
+
+
 def test_hopper_fire_requires_explicit_fire_confirmation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

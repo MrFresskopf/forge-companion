@@ -38,7 +38,7 @@ If a token is exposed, revoke it in BrewForge immediately and create a replaceme
 
 ## Current access model
 
-Version 0.1 does not create, change, or delete BrewForge data. The BrewForge HTTP client exposes only
+Version 0.2 does not create, change, or delete BrewForge data. The BrewForge HTTP client exposes only
 GET requests. Shelly integration is a separate trust boundary: read-only local and Cloud status
 adapters remain narrow, while the experimental `hopper fire` command can send one explicitly
 confirmed Cloud pulse for a previously armed plan. Collection snapshots are local JSON files and may
@@ -79,7 +79,12 @@ protection and manual override.
 
 Remote-hopper plans support two distinct modes. Simulation plans remain offline. A Cloud one-shot plan
 stores only the normalized tenant and device ID, never the authorization key, and accepts at most a
-30-second pulse. `hopper fire` requires an armed plan past its trigger and a native credential profile
+30-second pulse. `hopper check` is a separate read-only rehearsal: it validates an armed, reached Cloud
+plan, verifies exact native-profile target binding, sends one status request, requires online electrical
+`OFF`, never constructs an actuator, and never changes the plan. Its result is temporary telemetry and
+neither authorizes a pulse nor replaces the fresh preflight in `hopper fire`.
+
+`hopper fire` requires an armed plan past its trigger and a native credential profile
 matching the plan. The command first requires exact interactive `FIRE` confirmation on an attached
 terminal; piped input is rejected. Only after confirmation does a fresh read-only preflight verify that
 the device is online and electrically OFF. It then observes the Cloud API rate boundary and persists
