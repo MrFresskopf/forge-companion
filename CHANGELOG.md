@@ -14,6 +14,7 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- CI actions now run natively on Node.js 24 while retaining explicit cache-pruning behavior.
 - `report` now validates explicit brew UUIDs before credential or API access and points
   non-interactive users to `forge-companion brews` for UUID discovery.
 - Inventory audits now validate `--as-of` before reading a snapshot and explain how to create a
