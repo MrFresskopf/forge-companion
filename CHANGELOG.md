@@ -6,6 +6,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-07-28
+
 ### Changed
 
 - Interactive brew selection now recovers from invalid choices without refetching the current page.
@@ -96,7 +98,8 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.1
 [0.2.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.0
 [0.1.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.1
 [0.1.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.0
