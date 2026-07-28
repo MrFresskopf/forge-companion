@@ -27,6 +27,9 @@ def test_no_argument_start_page_exits_successfully_with_primary_next_steps() -> 
     assert result.exit_code == 0
     assert "forge-companion report" in result.output
     assert "forge-companion auth login" in result.output
+    assert result.output.index("forge-companion auth login") < result.output.index(
+        "forge-companion report"
+    )
     assert "fermentation-csv" not in result.output
 
 
@@ -89,6 +92,15 @@ def test_backup_command_writes_file_and_reports_destination(
     assert destination.exists()
     assert str(destination) in result.output
     assert "test-token" not in destination.read_text(encoding="utf-8")
+
+
+def test_snapshot_help_explains_create_and_validate_modes() -> None:
+    result = runner.invoke(app, ["snapshot", "--help"])
+
+    assert result.exit_code == 0
+    assert "Run without a subcommand to create" in result.output
+    assert "snapshot validate" in result.output
+    assert "offline" in result.output
 
 
 def test_snapshot_validate_reports_safe_offline_summary(tmp_path: Path) -> None:
@@ -261,6 +273,46 @@ def test_inventory_uses_default_snapshot_path(
 
     assert result.exit_code == 0
     assert result.output == "0 finding(s)\n"
+
+
+def test_inventory_rejects_invalid_as_of_before_reading_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["inventory", "--as-of", "not-a-date"])
+
+    assert result.exit_code == 1
+    assert result.output == "Inventory audit failed: --as-of must use YYYY-MM-DD.\n"
+
+
+@pytest.mark.parametrize(
+    "as_of",
+    ["20260728", "2026-W31-2", "２０２６-０７-２８", "2026-02-29"],
+)
+def test_inventory_requires_exact_calendar_date_syntax_before_reading_snapshot(
+    as_of: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["inventory", "--as-of", as_of])
+
+    assert result.exit_code == 1
+    assert result.output == "Inventory audit failed: --as-of must use YYYY-MM-DD.\n"
+
+
+def test_inventory_missing_default_snapshot_explains_how_to_create_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["inventory"])
+
+    assert result.exit_code == 1
+    assert result.output == (
+        "Inventory audit failed: no standard snapshot found.\n"
+        "Run `forge-companion snapshot` first.\n"
+    )
 
 
 def test_inventory_audit_accepts_new_validated_v2_snapshot(tmp_path: Path) -> None:

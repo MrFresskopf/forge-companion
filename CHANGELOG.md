@@ -6,8 +6,18 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Interactive brew selection now recovers from invalid choices without refetching the current page.
+- Bare `auth`, `hopper`, and `hopper cloud-auth` groups now show their available commands without
+  performing an action, while snapshot and first-run guidance explain the intended next step.
+
 ### Fixed
 
+- `report` now validates explicit brew UUIDs before credential or API access and points
+  non-interactive users to `forge-companion brews` for UUID discovery.
+- Inventory audits now validate `--as-of` before reading a snapshot and explain how to create a
+  missing standard snapshot.
 - Linux CI type-checking now resolves Windows-only `ctypes` symbols lazily without weakening the
   durable Windows `MoveFileExW` replacement path.
 - Mypy now checks `src` directly so an older installed wheel cannot mask working-tree changes.

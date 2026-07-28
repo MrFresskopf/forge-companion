@@ -21,6 +21,26 @@ from forge_companion.hopper import (
 runner = CliRunner()
 
 
+def test_hopper_without_subcommand_shows_available_commands() -> None:
+    result = runner.invoke(app, ["hopper"])
+
+    assert result.exit_code == 0
+    assert "plan" in result.output
+    assert "status" in result.output
+    assert "fire" in result.output
+    assert "Missing command" not in result.output
+
+
+def test_cloud_auth_without_subcommand_shows_available_commands() -> None:
+    result = runner.invoke(app, ["hopper", "cloud-auth"])
+
+    assert result.exit_code == 0
+    assert "login" in result.output
+    assert "status" in result.output
+    assert "logout" in result.output
+    assert "Missing command" not in result.output
+
+
 def _patch_cloud_preflight_off(monkeypatch: pytest.MonkeyPatch) -> None:
     from forge_companion import shelly_cloud, shelly_cloud_credentials
 

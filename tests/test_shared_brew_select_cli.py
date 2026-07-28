@@ -143,3 +143,50 @@ def test_shared_selection_non_integer_then_eof_never_requests_readings(
     assert calls == ["brews"]
     assert not destination.exists()
     assert "Traceback" not in result.output
+
+
+def test_shared_selection_reprompts_after_invalid_input_without_refetching_page(
+    monkeypatch, tmp_path
+) -> None:
+    calls: list[str] = []
+
+    class StubClient:
+        def __init__(self, *, token: str) -> None:
+            assert token == "test-token"
+
+        def get(self, path: str, params=None) -> dict[str, object]:
+            calls.append(path)
+            if path == "brews":
+                return {
+                    "data": [{"id": BREW_ID, "name": "Selected after typo"}],
+                    "pagination": {"hasMore": False, "total": 1},
+                }
+            if path == f"brews/{BREW_ID}/readings":
+                return {
+                    "data": [
+                        {
+                            "id": "reading-1",
+                            "timestamp": "2026-07-27T18:00:00Z",
+                            "gravity": 1.012,
+                        }
+                    ]
+                }
+            raise AssertionError(f"unexpected GET: {path}")
+
+    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    destination = tmp_path / "selected.csv"
+
+    result = runner.invoke(
+        app,
+        ["fermentation-csv", "--select", "--output", str(destination)],
+        input="n\np\nnot-a-number\n2\n1\n",
+        env={"BREWFORGE_API_TOKEN": "test-token"},
+    )
+
+    assert result.exit_code == 0
+    assert calls == ["brews", f"brews/{BREW_ID}/readings"]
+    assert "brew selection has no next page" in result.output
+    assert "brew selection has no previous page" in result.output
+    assert "brew selection must be a number, n, p, or q" in result.output
+    assert "brew number must be between 1 and 1" in result.output
+    assert destination.exists()

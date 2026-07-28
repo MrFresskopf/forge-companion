@@ -20,7 +20,14 @@ def test_report_auto_selection_requires_interactive_input_and_output(monkeypatch
     monkeypatch.setattr(cli.sys, "stdin", _TTYStub(True))
     monkeypatch.setattr(cli.sys, "stdout", _TTYStub(False))
 
-    assert cli._terminal_is_interactive() is False
+    assert cli._is_interactive_terminal() is False
+
+
+def test_report_auto_selection_rejects_noninteractive_input(monkeypatch) -> None:
+    monkeypatch.setattr(cli.sys, "stdin", _TTYStub(False))
+    monkeypatch.setattr(cli.sys, "stdout", _TTYStub(True))
+
+    assert cli._is_interactive_terminal() is False
 
 
 def test_report_without_uuid_noninteractive_requires_explicit_uuid(monkeypatch) -> None:
@@ -42,13 +49,35 @@ def test_report_without_uuid_noninteractive_requires_explicit_uuid(monkeypatch) 
     assert result.exit_code == 1
     assert "interactive terminal" in result.output
     assert "pass an exact brew UUID" in result.output
+    assert "forge-companion brews" in result.output
+    assert created is False
+
+
+def test_report_rejects_invalid_uuid_as_report_input_error_before_client(monkeypatch) -> None:
+    created = False
+
+    class ForbiddenClient:
+        def __init__(self, *, token: str) -> None:
+            nonlocal created
+            created = True
+
+    monkeypatch.setattr(cli, "BrewForgeClient", ForbiddenClient)
+
+    result = runner.invoke(
+        app,
+        ["report", "not-a-uuid"],
+        env={"BREWFORGE_API_TOKEN": "bfk_test_report_token"},
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "Report failed: brew ID must be an exact UUID.\n"
     assert created is False
 
 
 def test_report_without_uuid_selects_brew_and_writes_html(
     monkeypatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(cli, "_terminal_is_interactive", lambda: True)
+    monkeypatch.setattr(cli, "_is_interactive_terminal", lambda: True)
     token = "bfk_test_report_token"
     monkeypatch.setenv("BREWFORGE_API_TOKEN", token)
     brew_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
@@ -102,7 +131,7 @@ def test_report_without_uuid_selects_brew_and_writes_html(
 
 
 def test_report_selection_can_navigate_pages_explicitly(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(cli, "_terminal_is_interactive", lambda: True)
+    monkeypatch.setattr(cli, "_is_interactive_terminal", lambda: True)
     monkeypatch.setenv("BREWFORGE_API_TOKEN", "bfk_test_report_token")
     first_id = "54d34560-f1af-49f0-9a26-6caca3397f75"
     second_id = "d995e6f0-69ee-422a-a781-1dd08427563a"
@@ -161,7 +190,7 @@ def test_report_selection_can_navigate_pages_explicitly(monkeypatch, tmp_path: P
 
 
 def test_report_selection_can_cancel_without_requesting_readings(monkeypatch) -> None:
-    monkeypatch.setattr(cli, "_terminal_is_interactive", lambda: True)
+    monkeypatch.setattr(cli, "_is_interactive_terminal", lambda: True)
     monkeypatch.setenv("BREWFORGE_API_TOKEN", "bfk_test_report_token")
     calls: list[str] = []
 
