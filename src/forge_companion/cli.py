@@ -61,17 +61,27 @@ app = typer.Typer(
     no_args_is_help=False,
     invoke_without_command=True,
 )
-auth_app = typer.Typer(help="Manage BrewForge authentication without displaying tokens.")
+auth_app = typer.Typer(
+    help="Manage BrewForge authentication without displaying tokens.",
+    no_args_is_help=False,
+    invoke_without_command=True,
+)
 app.add_typer(auth_app, name="auth", rich_help_panel="Start here")
 snapshot_app = typer.Typer(
-    help="Create or validate local BrewForge collection snapshots.",
+    help="Run without a subcommand to create; use snapshot validate to verify offline.",
     invoke_without_command=True,
 )
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
-hopper_app = typer.Typer(help="Prepare, rehearse, and fire guarded remote-hopper plans.")
+hopper_app = typer.Typer(
+    help="Prepare, rehearse, and fire guarded remote-hopper plans.",
+    no_args_is_help=False,
+    invoke_without_command=True,
+)
 app.add_typer(hopper_app, name="hopper", rich_help_panel="Safety experiments")
 cloud_auth_app = typer.Typer(
-    help="Manage Shelly Cloud authentication without displaying credentials."
+    help="Manage Shelly Cloud authentication without displaying credentials.",
+    no_args_is_help=False,
+    invoke_without_command=True,
 )
 hopper_app.add_typer(cloud_auth_app, name="cloud-auth")
 
@@ -95,11 +105,32 @@ def main(
         raise typer.Exit()
     if context.invoked_subcommand is None:
         typer.echo("Forge Companion\n")
-        typer.echo("Create a visual fermentation report:")
-        typer.echo("  forge-companion report\n")
         typer.echo("First use:")
-        typer.echo("  forge-companion auth login")
+        typer.echo("  forge-companion auth login\n")
+        typer.echo("Then create a visual fermentation report:")
+        typer.echo("  forge-companion report")
         typer.echo("\nMore tools: forge-companion --help")
+
+
+@auth_app.callback()
+def auth_command(context: typer.Context) -> None:
+    """Manage BrewForge authentication without displaying tokens."""
+    if context.invoked_subcommand is None:
+        typer.echo(context.get_help())
+
+
+@hopper_app.callback()
+def hopper_command(context: typer.Context) -> None:
+    """Prepare, rehearse, and fire guarded remote-hopper plans."""
+    if context.invoked_subcommand is None:
+        typer.echo(context.get_help())
+
+
+@cloud_auth_app.callback()
+def cloud_auth_command(context: typer.Context) -> None:
+    """Manage Shelly Cloud authentication without displaying credentials."""
+    if context.invoked_subcommand is None:
+        typer.echo(context.get_help())
 
 
 def _authentication_failed(error: credentials.CredentialStoreError) -> None:
@@ -718,11 +749,31 @@ def inventory_audit_command(
 ) -> None:
     """Audit inventory data from a local collection snapshot."""
     try:
+        if as_of is None:
+            audit_date = date.today()
+        else:
+            year, month, day = as_of[:4], as_of[5:7], as_of[8:10]
+            if (
+                len(as_of) != 10
+                or as_of[4] != "-"
+                or as_of[7] != "-"
+                or not (year.isascii() and month.isascii() and day.isascii())
+                or not (year.isdecimal() and month.isdecimal() and day.isdecimal())
+            ):
+                raise ValueError
+            audit_date = date.fromisoformat(as_of)
+    except ValueError:
+        typer.echo("Inventory audit failed: --as-of must use YYYY-MM-DD.", err=True)
+        raise typer.Exit(code=1) from None
+    if snapshot == Path("snapshots/brewforge-collections.json") and not snapshot.exists():
+        typer.echo("Inventory audit failed: no standard snapshot found.", err=True)
+        typer.echo("Run `forge-companion snapshot` first.", err=True)
+        raise typer.Exit(code=1)
+    try:
         payload = load_snapshot_file(snapshot, allow_legacy_v1=True)
         resources = payload.get("resources")
         if not isinstance(resources, dict):
             raise TypeError("snapshot resources is not an object")
-        audit_date = date.fromisoformat(as_of) if as_of is not None else date.today()
         findings = audit_inventory(resources, as_of=audit_date)
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as error:
         typer.echo(f"Inventory audit failed: {error}", err=True)
@@ -957,26 +1008,31 @@ def _select_brew(client: BrewForgeClient, *, page: int, limit: int) -> _BrewChoi
         else:
             typer.echo("Enter q to cancel.")
 
-        response = str(typer.prompt("Brew number")).strip().lower()
-        if response == "n":
-            if not has_more:
-                raise ValueError("no next brew page is available")
-            current_page += 1
-            continue
-        if response == "p":
-            if current_page <= 1:
-                raise ValueError("no previous brew page is available")
-            current_page -= 1
-            continue
-        if response == "q":
-            raise _BrewSelectionCancelled("brew selection cancelled")
-        try:
-            selected_number = int(response)
-        except ValueError:
-            raise ValueError("brew selection must be a number, n, p, or q") from None
-        if not 1 <= selected_number <= len(choices):
-            raise ValueError(f"brew number must be between 1 and {len(choices)}")
-        return choices[selected_number - 1]
+        while True:
+            response = str(typer.prompt("Brew number")).strip().lower()
+            if response == "n":
+                if not has_more:
+                    typer.echo("brew selection has no next page", err=True)
+                    continue
+                current_page += 1
+                break
+            if response == "p":
+                if current_page <= 1:
+                    typer.echo("brew selection has no previous page", err=True)
+                    continue
+                current_page -= 1
+                break
+            if response == "q":
+                raise _BrewSelectionCancelled("brew selection cancelled")
+            try:
+                selected_number = int(response)
+            except ValueError:
+                typer.echo("brew selection must be a number, n, p, or q", err=True)
+                continue
+            if not 1 <= selected_number <= len(choices):
+                typer.echo(f"brew number must be between 1 and {len(choices)}", err=True)
+                continue
+            return choices[selected_number - 1]
 
 
 def _selection_mode_brew_id(
@@ -989,10 +1045,6 @@ def _selection_mode_brew_id(
     if not select and (page != 1 or limit != 100):
         raise ValueError("--page and --limit require --select")
     return None if select else str(UUID(str(brew_id)))
-
-
-def _terminal_is_interactive() -> bool:
-    return sys.stdin.isatty() and sys.stdout.isatty()
 
 
 @app.command("fermentation-html", hidden=True)
@@ -1099,13 +1151,21 @@ def report_command(
     ] = False,
 ) -> None:
     """Create the standard visual report, choosing a brew when needed."""
-    if brew_id is None and not _terminal_is_interactive():
+    if brew_id is None and not _is_interactive_terminal():
         typer.echo(
             "Report failed: automatic brew selection requires an interactive terminal; "
-            "pass an exact brew UUID for scripts and pipelines.",
+            "pass an exact brew UUID for scripts and pipelines. "
+            "Run `forge-companion brews` to list UUIDs.",
             err=True,
         )
         raise typer.Exit(code=1)
+    canonical_brew_id: str | None = None
+    if brew_id is not None:
+        try:
+            canonical_brew_id = str(UUID(brew_id))
+        except ValueError:
+            typer.echo("Report failed: brew ID must be an exact UUID.", err=True)
+            raise typer.Exit(code=1) from None
     explicit_unit = temperature_unit.upper() if temperature_unit is not None else None
     if explicit_unit not in {None, "C", "F"}:
         typer.echo("Report failed: temperature unit must be C or F.", err=True)
@@ -1125,7 +1185,7 @@ def report_command(
             )
             raise typer.Exit(code=1) from None
     effective_unit = explicit_unit or configured_unit
-    selected_id = brew_id
+    selected_id = canonical_brew_id
     selected_title = title
     if selected_id is None:
         try:

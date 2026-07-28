@@ -8,6 +8,24 @@ from forge_companion.cli import app
 runner = CliRunner()
 
 
+def test_auth_without_subcommand_shows_available_commands_without_side_effects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        credentials,
+        "resolve_token",
+        lambda: pytest.fail("auth help must not access credentials"),
+    )
+
+    result = runner.invoke(app, ["auth"])
+
+    assert result.exit_code == 0
+    assert "login" in result.output
+    assert "status" in result.output
+    assert "logout" in result.output
+    assert "Missing command" not in result.output
+
+
 def test_auth_login_prompts_twice_without_echoing_token(monkeypatch: pytest.MonkeyPatch) -> None:
     token = "credential-store-test-token"
     stored: list[str] = []
