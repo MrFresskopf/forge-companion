@@ -52,7 +52,8 @@ deprecation and migration path.
 #### 0.3 — Public contracts
 
 - define stable human-versus-machine output boundaries and exit codes
-- add `doctor --json` and `inventory --json`
+- [x] add versioned `doctor --json`
+- [ ] add versioned `inventory --json`
 - define snapshot compatibility, migration, and deprecation rules
 - modularize CLI command registration where that reduces pre-1.0 maintenance risk
 
@@ -110,7 +111,7 @@ deprecation and migration path.
 - [x] read-only Markdown fermentation brief with data-quality metrics
 - [x] standalone HTML fermentation charts
 - [ ] conservative Brewfather/BrewForge comparison report
-- [ ] machine-readable `doctor --json` output
+- [x] machine-readable `doctor --json` output
 
 ## Milestone 2 — Understand fermentation
 

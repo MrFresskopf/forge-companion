@@ -28,6 +28,11 @@ from forge_companion.backup import (
 )
 from forge_companion.client import BrewForgeClient
 from forge_companion.diagnostics import run_doctor
+from forge_companion.doctor_output import (
+    DoctorSetupErrorCode,
+    build_doctor_document,
+    render_doctor_json,
+)
 from forge_companion.fermentation import analyze_readings, parse_readings
 from forge_companion.fermentation_csv import render_csv, write_csv
 from forge_companion.fermentation_html import render_html, write_html
@@ -472,6 +477,7 @@ def hopper_fire_command(
     typer.echo("Electrical read-back: OFF")
     typer.echo("This does not prove mechanical hop release.")
 
+
 @hopper_app.command("status")
 def hopper_status_command(
     source: Annotated[Path, typer.Argument(help="Local hopper plan file.")],
@@ -674,11 +680,55 @@ def auth_logout_command() -> None:
     _report_environment_state("BREWFORGE_API_TOKEN remains active and was not changed.")
 
 
+def _echo_doctor_json(document: dict[str, object]) -> None:
+    typer.echo(render_doctor_json(document))
+
+
+def _doctor_credential_error_code(
+    error: credentials.CredentialStoreError,
+) -> DoctorSetupErrorCode:
+    if isinstance(error, credentials.InvalidEnvironmentCredentialError):
+        return "invalid_environment_credential"
+    if isinstance(error, credentials.InvalidStoredCredentialError):
+        return "invalid_stored_credential"
+    return "credential_store_error"
+
+
 @app.command(rich_help_panel="Start here")
-def doctor() -> None:
+def doctor(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit the versioned machine-readable result."),
+    ] = False,
+) -> None:
     """Check authentication and documented read-only API collections."""
-    client = BrewForgeClient(token=_token_for_api())
+    if json_output:
+        try:
+            resolved = credentials.resolve_token()
+        except credentials.CredentialStoreError as error:
+            _echo_doctor_json(
+                build_doctor_document([], error_code=_doctor_credential_error_code(error))
+            )
+            raise typer.Exit(code=1) from None
+        if resolved.token is None:
+            _echo_doctor_json(build_doctor_document([], error_code="authentication_required"))
+            raise typer.Exit(code=2)
+        token = resolved.token
+    else:
+        token = _token_for_api()
+    try:
+        client = BrewForgeClient(token=token)
+    except (httpx.InvalidURL, ImportError, OSError, ValueError):
+        if json_output:
+            _echo_doctor_json(build_doctor_document([], error_code="client_setup_error"))
+            raise typer.Exit(code=1) from None
+        raise
     checks = run_doctor(client)
+    if json_output:
+        _echo_doctor_json(build_doctor_document(checks))
+        if any(not check.ok for check in checks):
+            raise typer.Exit(code=1)
+        return
     for check in checks:
         marker = "OK" if check.ok else "FAIL"
         detail = str(check.status) if check.status is not None else check.error or "unknown error"
@@ -739,8 +789,6 @@ def inventory_audit_command(
     snapshot: Annotated[
         Path,
         typer.Argument(help="Collection snapshot JSON file."),
-
-
     ] = Path("snapshots/brewforge-collections.json"),
     as_of: Annotated[
         str | None,
@@ -1268,7 +1316,6 @@ def spunding_advisor_command(
             max_gap=timedelta(minutes=max_gap_minutes),
             confirmations=confirmations,
         )
-
 
         client = BrewForgeClient(token=_token_for_api())
         if select:

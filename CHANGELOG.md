@@ -6,6 +6,17 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `doctor --json` with a closed, packaged `forge-companion-doctor-v1` JSON Schema, fixed endpoint order,
+  correlated outcomes, stable setup and endpoint error codes, and documented exit semantics.
+
+### Changed
+
+- Doctor diagnostics no longer reflect invalid-response exception details in human output; the JSON
+  form emits only allowlisted paths, statuses, HTTP codes, and fixed error codes, including a
+  data-minimal classification for local HTTP-client setup failures.
+
 ## [0.2.1] — 2026-07-28
 
 ### Changed
