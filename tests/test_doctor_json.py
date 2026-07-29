@@ -5,6 +5,7 @@ from importlib.resources import files
 import httpx
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
+from typer.main import get_command
 from typer.testing import CliRunner
 
 import forge_companion.cli as cli
@@ -435,7 +436,8 @@ def test_doctor_help_lists_json_without_credentials(monkeypatch: pytest.MonkeyPa
         lambda: pytest.fail("doctor help must not access credentials"),
     )
 
+    doctor_command = get_command(app).commands["doctor"]
     result = runner.invoke(app, ["doctor", "--help"])
 
     assert result.exit_code == 0
-    assert "--json" in result.output
+    assert any("--json" in parameter.opts for parameter in doctor_command.params)
