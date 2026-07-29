@@ -5,6 +5,89 @@ Forge Companion complements BrewForge instead of reproducing its recipe designer
 Milestones describe capability tracks rather than a strict delivery order. Read-only analysis and
 safety work may advance ahead of broader exports or integrations when that creates practical value.
 
+## Path to 1.0
+
+Forge Companion 1.0 means a stable, documented read-only BrewForge core. It does not require every
+capability track below to be complete. The guarded Shelly Cloud one-shot may remain available, but it
+stays explicitly experimental and outside the 1.0 compatibility promise until independent mechanical
+feedback and repeated installed-system qualification exist.
+
+### Stable 1.0 scope
+
+- native credential storage and explicit CI/environment override behavior
+- BrewForge read-only API access, diagnostics, and explicit paginated brew selection
+- Markdown, CSV, and standalone HTML fermentation reports
+- versioned snapshots, strict offline validation, and inventory audits
+- documented CLI names, options, exit codes, machine-readable schemas, and file-format compatibility
+- offline hopper planning and simulation plus narrow read-only Shelly diagnostics
+
+Human-readable wording may continue to improve after 1.0. Documented JSON schemas, file formats,
+exit-code meanings, and non-experimental command behavior require compatibility or an announced
+deprecation and migration path.
+
+### 1.0 release gates
+
+- [ ] publish a compatibility and deprecation policy for CLI commands, exit codes, JSON output,
+  configuration, and persisted file formats
+- [ ] freeze the supported snapshot schema and document how older snapshot versions are read or
+  migrated
+- [ ] add an optional, rate-limit-aware full export of brew details, notes, and readings while keeping
+  restore and BrewForge writes out of scope
+- [ ] add stable machine-readable output for inventory audits and doctor diagnostics
+- [ ] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
+  the minimum supported Python version
+- [ ] maintain sanitized BrewForge contract tests for pagination, missing or additional fields, rate
+  limits, timeouts, and incompatible responses
+- [ ] document a stable end-user installation path from a version tag or package index instead of
+  treating `@main` as the primary installation target
+- [ ] publish the 0.x-to-1.0 upgrade guide, support window, security scope, and experimental-feature
+  boundary
+- [ ] review the CLI composition root and complete any intended command-module split before the public
+  interface freeze; this is a maintainability improvement, not a feature requirement
+- [ ] publish and exercise `1.0.0rc1` before the final release, including an independent security and
+  release-artifact review
+
+### Planned stabilization sequence
+
+#### 0.3 — Public contracts
+
+- define stable human-versus-machine output boundaries and exit codes
+- add `doctor --json` and `inventory --json`
+- define snapshot compatibility, migration, and deprecation rules
+- modularize CLI command registration where that reduces pre-1.0 maintenance risk
+
+#### 0.4 — Export and platform hardening
+
+- add the optional full, rate-limit-aware export and optional compression
+- add BrewForge response-contract and failure-mode coverage
+- add macOS CI and installed-package/keyring smoke tests across supported platforms
+- document the stable installation and upgrade path
+
+#### 1.0.0rc1 — Stability candidate
+
+- stop adding broad features and accept only compatibility, documentation, security, and correctness
+  fixes
+- run real read-only BrewForge and three-platform installation smokes with sanitized evidence
+- verify wheel, source distribution, checksums, tag provenance, and rendered public documentation
+- keep live Shelly actuation explicitly experimental
+
+#### 1.0.0 — Stable core
+
+- release only after the candidate contract and artifacts pass without unresolved blockers
+- carry forward the read-only BrewForge boundary and the separately documented experimental actuator
+  boundary
+
+### Explicitly not required for 1.0
+
+- Brewfather comparison reports
+- attenuation, fermentation-rate, and configurable outlier analytics
+- shareable PNG/SVG fermentation briefs
+- split-batch comparison while BrewForge's own implementation remains under evaluation
+- webhook relays, MQTT, InfluxDB/Grafana, Home Assistant, and notifications
+- authenticated local Shelly access or unattended scheduling
+- BrewForge restore or any BrewForge write operation
+- promoting `hopper fire` from experimental status without mechanical success sensing
+
 ## Milestone 0 — Foundation (working)
 
 - [x] installable Python package and CLI
