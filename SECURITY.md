@@ -52,6 +52,12 @@ authenticate the author or source, prevent a capable attacker from replacing bot
 encrypt private data. Inventory audit validates v2 before analysis; legacy v1 files remain readable but
 do not have an embedded integrity proof.
 
+`doctor --json` serializes only allowlisted endpoint paths, status values, HTTP status codes, and fixed
+error codes under the closed `forge-companion-doctor-v1` schema. It never includes response bodies,
+exception text, or credential values. The normal human doctor output likewise reduces invalid-response
+failures to a generic message instead of reflecting parser details. Diagnostic results can still reveal
+which documented scopes succeeded, so treat automation logs according to their operational context.
+
 Fermentation briefs can contain brew names, comments, timestamps, and measurements. Keep them in
 the gitignored `reports/` directory unless you deliberately review and share a report.
 

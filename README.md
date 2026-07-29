@@ -87,7 +87,7 @@ documented collection and token scope.
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
 | Verify the standard snapshot | `forge-companion snapshot validate` | Offline |
 | Check inventory from the standard snapshot | `forge-companion inventory` | Offline |
-| Diagnose API access | `forge-companion doctor` | 7 GET requests |
+| Diagnose API access | `forge-companion doctor [--json]` | 7 GET requests |
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
 | Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
 | Check an armed Cloud one-shot without switching | `forge-companion hopper check PLAN` | 1 status POST (Cloud v2) |
@@ -97,8 +97,14 @@ documented collection and token scope.
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details. The
-[pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface and draft
-machine-readable contracts without implying that the planned `--json` options already exist.
+[pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface, the implemented
+closed Doctor contract, and the draft Inventory contract without implying that `inventory --json`
+already exists.
+
+`doctor --json` emits the closed `forge-companion-doctor-v1` machine contract for scripts and future
+adapters. Its packaged [JSON Schema](src/forge_companion/schemas/doctor-v1.schema.json) defines endpoint
+order, outcome correlations, and setup error codes without exposing response bodies or exception text;
+the [command guide](docs/COMMANDS.md#doctor) defines the corresponding exit semantics.
 
 ## Why read-only by default?
 

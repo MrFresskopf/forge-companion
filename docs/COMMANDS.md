@@ -12,8 +12,8 @@ Run `forge-companion` without arguments for the shortest start page. The primary
 are `report`, `snapshot`, and `inventory`; older format-specific commands remain available for scripts.
 
 The [pre-1.0 compatibility policy](COMPATIBILITY.md) records the planned stable CLI, exit-code,
-snapshot, and machine-readable contracts. Its draft schemas do not mean that version 0.2.1 already
-implements `doctor --json` or `inventory --json`.
+snapshot, and machine-readable contracts. `doctor --json` is implemented with the closed packaged
+schema documented below; the draft Inventory schema does not mean that `inventory --json` exists yet.
 
 ## `auth`
 
@@ -67,10 +67,33 @@ Check authentication and every documented read-only collection used by Forge Com
 
 ```bash
 forge-companion doctor
+forge-companion doctor --json
 ```
 
 The command checks brews, inventory, equipment, and style profiles with seven API requests. Each
 endpoint reports `OK` or `FAIL` independently.
+
+`--json` emits exactly one compact JSON document on standard output after CLI parsing succeeds. It uses
+the closed `forge-companion-doctor-v1` contract defined by the packaged
+[`doctor-v1.schema.json`](../src/forge_companion/schemas/doctor-v1.schema.json). The document always has
+`schema_version`, `status`, `checks`, and `error` fields:
+
+- `status: "ok"` contains seven successful checks and exits `0`.
+- `status: "failed"` contains all seven ordered checks, at least one failed check, and exits `1`.
+- `status: "error"` contains no checks. Missing authentication uses
+  `authentication_required` and exits `2`; invalid environment credentials, invalid stored
+  credentials, native credential-store failures, and local HTTP-client setup failures use fixed codes
+  and exit `1`. HTTP-client setup failures use `client_setup_error`.
+
+Each endpoint check contains only its documented path, `ok` or `failed`, an HTTP status or `null`, and
+a fixed error code or `null`. Response bodies, exception text, credentials, and raw API data are never
+included. Setup errors make no API request; completed diagnostics still make exactly seven. Invalid
+CLI syntax is rejected by Typer before the command runs and therefore remains a normal human-readable
+usage error rather than a doctor-v1 document.
+
+The v1 schema is closed: unknown fields, endpoint reordering, contradictory status/error combinations,
+and unsupported error codes are invalid. A future incompatible shape requires a new schema version;
+consumers should select behavior by the exact `schema_version` value.
 
 ## `brews`
 

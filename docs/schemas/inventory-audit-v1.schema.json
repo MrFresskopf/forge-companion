@@ -310,8 +310,12 @@
       ],
       "properties": {
         "code": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*$"
+          "enum": [
+            "invalid-as-of",
+            "snapshot-not-found",
+            "snapshot-invalid",
+            "snapshot-read-failed"
+          ]
         },
         "message": {
           "type": "string"

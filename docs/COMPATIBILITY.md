@@ -1,9 +1,10 @@
 # Compatibility policy
 
 > [!IMPORTANT]
-> This is the pre-1.0 compatibility design for Forge Companion. Version 0.2.1 does not yet implement
-> the planned `--json` options. The policy becomes binding for the stable scope when 1.0 is released;
-> until then, incompatible changes remain possible when they are documented in the changelog.
+> This is the pre-1.0 compatibility design for Forge Companion. Version 0.2.1 implements neither JSON
+> option. The current unreleased code implements `doctor --json`; `inventory --json` remains planned.
+> The policy becomes binding for the stable scope when 1.0 is released; until then, incompatible changes
+> remain possible when they are documented in the changelog.
 
 Forge Companion follows semantic versioning for its documented, non-experimental public surface. The
 1.0 goal is a stable read-only BrewForge core, not completion of every roadmap capability.
@@ -25,9 +26,10 @@ experimental actuator is not evidence that a pulse reached or released hops mech
 
 - Patch releases fix defects, improve human wording, and may tighten validation for input already
   outside the documented contract without removing a supported successful workflow.
-- Minor releases may add commands, options, JSON object members, finding codes, or report sections.
-  New collections require a contract that already permits them or a new schema or format identifier.
-  Consumers must ignore unknown JSON object members and unknown advisory finding codes.
+- Minor releases may add commands, options, report sections, and members or finding codes where a
+  versioned schema explicitly permits additive evolution. Closed schemas require a new schema identifier
+  for any shape or code outside their declared set. New collections require a contract that already
+  permits them or a new schema or format identifier.
 - Major releases may remove or rename documented commands, options, fields, formats, or established
   meanings after migration guidance.
 - Security fixes may additionally reject previously accepted input when continuing to accept it would
@@ -92,52 +94,44 @@ from human-readable text; machine-readable error codes are the stable discrimina
 - Raw credentials, authorization headers, private custom paths, remote exception strings, and
   attacker-controlled terminal sequences are never reflected in errors.
 
-## Planned machine-readable output
+## Machine-readable output
 
-`doctor --json` and `inventory --json` will emit one UTF-8 JSON object followed by a newline and no
-other standard-output text. Their versioned draft schemas are:
+`doctor --json` is implemented and governed by the closed packaged
+[`doctor-v1.schema.json`](../src/forge_companion/schemas/doctor-v1.schema.json). `inventory --json` remains
+planned and is governed by the additive draft
+[`inventory-audit-v1.schema.json`](schemas/inventory-audit-v1.schema.json). Doctor emits one compact UTF-8
+JSON object followed by a newline and no other standard-output text after CLI parsing succeeds; Inventory
+will follow the same stream rule when implemented.
 
-- [`doctor-v1.schema.json`](schemas/doctor-v1.schema.json)
-- [`inventory-audit-v1.schema.json`](schemas/inventory-audit-v1.schema.json)
+The Doctor schema is closed: consumers reject unknown object members, codes, and endpoint order. Any
+new Doctor member or code requires a new schema identifier. The draft Inventory schema is additive:
+consumers ignore unknown object members and unknown advisory finding codes, while removal or semantic
+change of a required member requires a new identifier.
 
-The schemas use additive evolution: consumers must ignore unknown object members. Removing a required
-member, changing a member's type or meaning, or reusing an established code for a different condition
-requires a new schema identifier.
+Schemas validate the public structure, not the absence of sensitive values in future user-controlled
+content. Implementations use allowlisted output serializers and recursive privacy tests; schema validity
+alone is never treated as proof that output is safe to share. JSON mode contains no ANSI control
+sequences, credentials, raw transport exceptions, remote response bodies, private custom paths, or local
+keyring details.
 
-Schemas validate the public structure, not the absence of sensitive values in unknown future members.
-Implementations use allowlisted output serializers and recursive privacy tests; schema validity alone
-is never treated as proof that output is safe to share.
-
-A recognized command that reaches JSON execution emits the command schema for both successful and
-operationally failed outcomes. Errors rejected earlier by the CLI parser may remain plain usage output
-with exit code 2, even when the original arguments contained `--json`.
-
-Common rules:
-
-- `schema` identifies the contract independently of the package version.
-- `generated_at` is an RFC 3339 UTC timestamp ending in `Z`.
-- `status` is `ok`, `partial`, or `error` where allowed by the command schema.
-- `errors[].code` is stable; `errors[].message` is explanatory and may improve.
-- Known arrays have deterministic order.
-- JSON mode contains no ANSI control sequences.
-- Error objects never contain credentials, raw transport exceptions, remote response bodies, private
-  custom paths, or local keyring details.
+A recognized command that reaches JSON execution emits its command schema for both successful and
+operationally failed outcomes. Errors rejected earlier by the CLI parser remain plain usage output with
+exit code 2, even when the original arguments contained `--json`.
 
 ### Doctor v1
 
-Doctor v1 preserves explicit request accounting and one result per documented collection. A complete
-seven-endpoint run uses seven requests. Authentication or setup failure before client construction uses
-zero requests and returns `status: "error"`. Endpoint failures return `status: "partial"`, retain all
-seven checks, and use exit code 1.
+Doctor v1 uses `schema_version: "forge-companion-doctor-v1"` and always includes `status`, `checks`, and
+`error`. A completed seven-endpoint run retains the fixed endpoint order and uses seven requests:
 
-Consumers use `checks[].code`, not `checks[].message`, for decisions. HTTP status is reported only as an
-integer or `null`; response text and transport exception text are excluded.
+- `status: "ok"` contains seven successful checks and exits 0;
+- `status: "failed"` contains seven checks with at least one failure and exits 1;
+- `status: "error"` contains no checks, performs no API request, and uses a structured setup error.
 
-Initial endpoint codes are `ok`, `http-error`, `request-failed`, and `invalid-response`. Initial
-command-level setup codes are `authentication-not-configured`, `credential-invalid`, and
-`credential-store-failed`. New codes are compatible additions when they retain the same privacy rules.
-Missing authentication returns the structured error with exit code 2; invalid credentials or credential
-store failure use exit code 1.
+Each check contains only `path`, `status`, `http_status`, and `error_code`. Fixed endpoint error codes are
+`http_error`, `request_error`, and `invalid_response`; successful checks use `null`. Fixed setup codes are
+`authentication_required`, `client_setup_error`, `credential_store_error`,
+`invalid_environment_credential`, and `invalid_stored_credential`. Missing authentication exits 2; the
+other setup errors exit 1. Response text, raw API data, and exception text are excluded.
 
 ### Inventory audit v1
 
@@ -154,12 +148,14 @@ structured identifiers rather than parsing `message`.
 `possible-duplicate` includes non-empty, distinct `item_id` and `related_item_id` values for the two
 matching items. The implementation must add and test that structured relationship before inventory JSON
 v1 can leave draft status. A successful audit always reports the effective `as_of` date; only an error
-produced before date resolution may use `null`. The schema enforces this chronology for the initial
-known error codes; future producers must classify and test new codes before adding them.
+produced before date resolution may use `null`. The schema enforces this chronology for every permitted
+command-level error code.
 
 Initial finding codes are `expired`, `negative-quantity`, `missing-unit`, and `possible-duplicate`.
 Initial command-level error codes are `invalid-as-of`, `snapshot-not-found`, `snapshot-invalid`, and
-`snapshot-read-failed`. New finding codes are compatible additions and remain advisory.
+`snapshot-read-failed`. New finding codes are compatible additions and remain advisory. Command-level
+error codes are closed; adding one requires a new schema identifier with explicit date-resolution
+semantics.
 
 ## Snapshot compatibility
 

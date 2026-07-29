@@ -6,44 +6,15 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
-_SCHEMA_DIR = Path(__file__).parents[1] / "docs" / "schemas"
-_RESOURCES = [
-    "brews",
-    "inventory/fermentables",
-    "inventory/hops",
-    "inventory/yeasts",
-    "inventory/miscs",
-    "profiles/equipment",
-    "profiles/styles",
-]
+_SCHEMA_PATH = (
+    Path(__file__).parents[1] / "docs" / "schemas" / "inventory-audit-v1.schema.json"
+)
 
 
-def _validator(name: str) -> Draft202012Validator:
-    schema = json.loads((_SCHEMA_DIR / name).read_text(encoding="utf-8"))
+def _validator() -> Draft202012Validator:
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema, format_checker=FormatChecker())
-
-
-def _doctor_check(resource: str) -> dict[str, object]:
-    return {
-        "resource": resource,
-        "status": "ok",
-        "http_status": 200,
-        "code": "ok",
-        "message": "OK",
-    }
-
-
-def _doctor_ok() -> dict[str, Any]:
-    return {
-        "schema": "forge-companion-doctor-v1",
-        "generated_at": "2026-07-29T06:00:00Z",
-        "command": "doctor",
-        "status": "ok",
-        "request_count": 7,
-        "checks": [_doctor_check(resource) for resource in _RESOURCES],
-        "errors": [],
-    }
 
 
 def _inventory_ok() -> dict[str, Any]:
@@ -65,45 +36,10 @@ def _inventory_ok() -> dict[str, Any]:
     }
 
 
-def test_draft_machine_output_schemas_are_valid_and_accept_expected_outcomes() -> None:
-    doctor = _validator("doctor-v1.schema.json")
-    inventory = _validator("inventory-audit-v1.schema.json")
-    doctor.validate(_doctor_ok())
-
-    partial = _doctor_ok()
-    partial["status"] = "partial"
-    partial["checks"][2] = {
-        "resource": "inventory/hops",
-        "status": "fail",
-        "http_status": 500,
-        "code": "http-error",
-        "message": "HTTP 500",
-    }
-    doctor.validate(partial)
-
-    future_failure = deepcopy(partial)
-    future_failure["checks"][2]["code"] = "future-check-failed"
-    future_failure["checks"][2]["http_status"] = None
-    doctor.validate(future_failure)
-    doctor.validate(
-        {
-            "schema": "forge-companion-doctor-v1",
-            "generated_at": "2026-07-29T06:00:00Z",
-            "command": "doctor",
-            "status": "error",
-            "request_count": 0,
-            "checks": [],
-            "errors": [
-                {
-                    "code": "authentication-not-configured",
-                    "message": "Authentication is required.",
-                }
-            ],
-        }
-    )
-
-    inventory.validate(_inventory_ok())
-    inventory.validate(
+def test_inventory_schema_is_valid_and_accepts_expected_outcomes() -> None:
+    validator = _validator()
+    validator.validate(_inventory_ok())
+    validator.validate(
         {
             "schema": "forge-companion-inventory-audit-v1",
             "generated_at": "2026-07-29T06:00:00Z",
@@ -116,7 +52,7 @@ def test_draft_machine_output_schemas_are_valid_and_accept_expected_outcomes() -
             "errors": [{"code": "invalid-as-of", "message": "Use YYYY-MM-DD."}],
         }
     )
-    inventory.validate(
+    validator.validate(
         {
             "schema": "forge-companion-inventory-audit-v1",
             "generated_at": "2026-07-29T06:00:00Z",
@@ -136,77 +72,6 @@ def test_draft_machine_output_schemas_are_valid_and_accept_expected_outcomes() -
 @pytest.mark.parametrize(
     "case",
     [
-        "ok-without-checks",
-        "partial-without-failure",
-        "error-with-checks",
-        "error-without-errors",
-        "duplicate-resource",
-        "reordered-resources",
-        "truncated-checks",
-        "oversized-checks",
-        "ok-with-http-error",
-        "ok-with-null-http-status",
-        "fail-with-ok-code",
-        "future-failure-with-success-http",
-    ],
-)
-def test_doctor_schema_rejects_contradictory_outcomes(case: str) -> None:
-    validator = _validator("doctor-v1.schema.json")
-    document = _doctor_ok()
-    if case == "ok-without-checks":
-        document["request_count"] = 0
-        document["checks"] = []
-    elif case == "partial-without-failure":
-        document["status"] = "partial"
-    elif case == "error-with-checks":
-        document["status"] = "error"
-        document["request_count"] = 0
-        document["errors"] = [{"code": "setup-failed", "message": "Setup failed."}]
-    elif case == "error-without-errors":
-        document["status"] = "error"
-        document["request_count"] = 0
-        document["checks"] = []
-    elif case == "duplicate-resource":
-        document["checks"][1]["resource"] = "brews"
-    elif case == "reordered-resources":
-        document["checks"][0], document["checks"][1] = (
-            document["checks"][1],
-            document["checks"][0],
-        )
-    elif case == "truncated-checks":
-        document["checks"].pop()
-    elif case == "oversized-checks":
-        document["checks"].append(_doctor_check("brews"))
-    elif case == "ok-with-http-error":
-        document["checks"][0].update(
-            status="ok",
-            http_status=500,
-            code="http-error",
-        )
-    elif case == "ok-with-null-http-status":
-        document["checks"][0]["http_status"] = None
-    elif case == "fail-with-ok-code":
-        document["status"] = "partial"
-        document["checks"][0].update(
-            status="fail",
-            http_status=None,
-            code="ok",
-        )
-    else:
-        document["status"] = "partial"
-        document["checks"][0].update(
-            status="fail",
-            http_status=200,
-            code="future-check-failed",
-        )
-
-    with pytest.raises(ValidationError):
-        validator.validate(document)
-
-
-@pytest.mark.parametrize(
-    "case",
-    [
         "impossible-date",
         "ok-without-as-of-date",
         "ok-without-snapshot",
@@ -220,11 +85,13 @@ def test_doctor_schema_rejects_contradictory_outcomes(case: str) -> None:
         "duplicate-without-related-id",
         "duplicate-with-empty-related-id",
         "finding-with-empty-item-id",
+        "unknown-command-error-before-date-resolution",
+        "unknown-command-error-after-date-resolution",
         "network-request",
     ],
 )
 def test_inventory_schema_rejects_contradictory_outcomes(case: str) -> None:
-    validator = _validator("inventory-audit-v1.schema.json")
+    validator = _validator()
     document = _inventory_ok()
     if case == "impossible-date":
         document["as_of"] = "2026-02-31"
@@ -305,6 +172,17 @@ def test_inventory_schema_rejects_contradictory_outcomes(case: str) -> None:
                 "message": "expired",
             }
         ]
+    elif case == "unknown-command-error-before-date-resolution":
+        document["status"] = "error"
+        document["as_of"] = None
+        document["snapshot"] = None
+        document["findings"] = []
+        document["errors"] = [{"code": "future-error", "message": "future error"}]
+    elif case == "unknown-command-error-after-date-resolution":
+        document["status"] = "error"
+        document["snapshot"] = None
+        document["findings"] = []
+        document["errors"] = [{"code": "future-error", "message": "future error"}]
     else:
         document["request_count"] = 1
 
@@ -312,33 +190,12 @@ def test_inventory_schema_rejects_contradictory_outcomes(case: str) -> None:
         validator.validate(document)
 
 
-def test_machine_output_schemas_allow_additive_object_members() -> None:
-    doctor = _doctor_ok()
-    doctor["future_top_level"] = True
-    doctor["checks"][0]["future_check_field"] = "value"
-    _validator("doctor-v1.schema.json").validate(doctor)
-
-    doctor_error = {
-        "schema": "forge-companion-doctor-v1",
-        "generated_at": "2026-07-29T06:00:00Z",
-        "command": "doctor",
-        "status": "error",
-        "request_count": 0,
-        "checks": [],
-        "errors": [
-            {
-                "code": "authentication-not-configured",
-                "message": "Authentication is required.",
-                "future_error_field": True,
-            }
-        ],
-    }
-    _validator("doctor-v1.schema.json").validate(doctor_error)
-
-    inventory = deepcopy(_inventory_ok())
-    inventory["future_top_level"] = True
-    inventory["snapshot"]["future_snapshot_field"] = "value"
-    inventory["findings"] = [
+def test_inventory_schema_allows_additive_members_and_finding_codes() -> None:
+    validator = _validator()
+    document = deepcopy(_inventory_ok())
+    document["future_top_level"] = True
+    document["snapshot"]["future_snapshot_field"] = "value"
+    document["findings"] = [
         {
             "code": "future-advisory",
             "severity": "info",
@@ -349,9 +206,9 @@ def test_machine_output_schemas_allow_additive_object_members() -> None:
             "future_finding_field": True,
         }
     ]
-    _validator("inventory-audit-v1.schema.json").validate(inventory)
+    validator.validate(document)
 
-    inventory_error = {
+    error_document = {
         "schema": "forge-companion-inventory-audit-v1",
         "generated_at": "2026-07-29T06:00:00Z",
         "command": "inventory",
@@ -368,4 +225,4 @@ def test_machine_output_schemas_allow_additive_object_members() -> None:
             }
         ],
     }
-    _validator("inventory-audit-v1.schema.json").validate(inventory_error)
+    validator.validate(error_document)

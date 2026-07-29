@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFresskopf/forge-companion/schemas/doctor-v1",
+  "title": "Forge Companion doctor v1 result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "checks",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "forge-companion-doctor-v1"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "failed",
+        "error"
+      ]
+    },
+    "checks": {
+      "type": "array"
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "status": {
+          "const": "ok"
+        },
+        "checks": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/checks"
+            },
+            {
+              "not": {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "failed"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "properties": {
+        "status": {
+          "const": "failed"
+        },
+        "checks": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/checks"
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "failed"
+                  }
+                }
+              },
+              "minContains": 1
+            }
+          ]
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "properties": {
+        "status": {
+          "const": "error"
+        },
+        "checks": {
+          "maxItems": 0
+        },
+        "error": {
+          "type": "object",
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "authentication_required",
+                "client_setup_error",
+                "credential_store_error",
+                "invalid_environment_credential",
+                "invalid_stored_credential"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "check": {
+      "type": "object",
+      "required": [
+        "path",
+        "status",
+        "http_status",
+        "error_code"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "failed"
+          ]
+        },
+        "http_status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "http_status": {
+              "const": 200
+            },
+            "error_code": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "failed"
+            },
+            "http_status": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 199
+                },
+                {
+                  "type": "integer",
+                  "minimum": 300,
+                  "maximum": 599
+                }
+              ]
+            },
+            "error_code": {
+              "const": "http_error"
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "failed"
+            },
+            "http_status": {
+              "type": "null"
+            },
+            "error_code": {
+              "enum": [
+                "request_error",
+                "invalid_response"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "brews"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "inventory/fermentables"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "inventory/hops"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "inventory/yeasts"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "inventory/miscs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "profiles/equipment"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "profiles/styles"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
