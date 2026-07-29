@@ -174,6 +174,29 @@ def _load_strict_json_object(source: Path) -> dict[str, Any]:
     return payload
 
 
+def _validate_legacy_v1(payload: dict[str, Any]) -> None:
+    if set(payload) != {"format", "created_at", "resources"}:
+        raise SnapshotValidationError("Snapshot schema validation failed.")
+    created_at = payload["created_at"]
+    if not isinstance(created_at, str):
+        raise SnapshotValidationError("Snapshot schema validation failed.")
+    try:
+        timestamp = datetime.fromisoformat(created_at)
+    except ValueError:
+        raise SnapshotValidationError("Snapshot schema validation failed.") from None
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise SnapshotValidationError("Snapshot schema validation failed.")
+    resources = payload.get("resources")
+    if not isinstance(resources, dict) or set(resources) != set(_RESOURCES):
+        raise SnapshotValidationError("Snapshot schema validation failed.")
+    if any(
+        not isinstance(records, list)
+        or any(not isinstance(record, dict) for record in records)
+        for records in resources.values()
+    ):
+        raise SnapshotValidationError("Snapshot schema validation failed.")
+
+
 def load_snapshot_file(
     source: Path,
     *,
@@ -185,8 +208,7 @@ def load_snapshot_file(
     if snapshot_format == _FORMAT:
         validate_backup(payload)
     elif allow_legacy_v1 and snapshot_format == "forge-companion-collection-snapshot-v1":
-        if not isinstance(payload.get("resources"), dict):
-            raise SnapshotValidationError("Snapshot schema validation failed.")
+        _validate_legacy_v1(payload)
     else:
         raise SnapshotValidationError("Snapshot has an unsupported format.")
     return payload

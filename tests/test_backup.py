@@ -2,6 +2,7 @@ import json
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from hashlib import sha256
+from pathlib import Path
 
 import pytest
 
@@ -27,6 +28,22 @@ class StubClient:
                 "pagination": {"hasMore": False, "total": 2},
             }
         return {"data": [], "pagination": {"hasMore": False, "total": 0}}
+
+
+def _legacy_v1_payload() -> dict[str, object]:
+    return {
+        "format": "forge-companion-collection-snapshot-v1",
+        "created_at": "2026-07-17T12:30:00+00:00",
+        "resources": {
+            "brews": [],
+            "inventory_fermentables": [],
+            "inventory_hops": [],
+            "inventory_yeasts": [],
+            "inventory_miscs": [],
+            "profiles_equipment": [],
+            "profiles_styles": [],
+        },
+    }
 
 
 def test_create_backup_collects_every_page_and_supported_resource() -> None:
@@ -223,8 +240,6 @@ def test_validate_backup_file_rejects_duplicate_object_keys(tmp_path: object) ->
 
 
 def test_write_backup_creates_json_without_secret_material(tmp_path: object) -> None:
-    from pathlib import Path
-
     destination = Path(str(tmp_path)) / "backup.json"
     payload = {
         "format": "forge-companion-collection-snapshot-v1",
@@ -236,6 +251,50 @@ def test_write_backup_creates_json_without_secret_material(tmp_path: object) -> 
 
     assert json.loads(destination.read_text(encoding="utf-8")) == payload
     assert "token" not in destination.read_text(encoding="utf-8").lower()
+
+
+def test_load_legacy_v1_rejects_missing_historical_collection(tmp_path: Path) -> None:
+    source = tmp_path / "missing-collection-v1.json"
+    payload = _legacy_v1_payload()
+    resources = payload["resources"]
+    assert isinstance(resources, dict)
+    resources.pop("profiles_styles")
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
+        backup.load_snapshot_file(source, allow_legacy_v1=True)
+
+
+def test_load_legacy_v1_rejects_missing_creation_timestamp(tmp_path: Path) -> None:
+    source = tmp_path / "missing-created-at-v1.json"
+    payload = _legacy_v1_payload()
+    payload.pop("created_at")
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
+        backup.load_snapshot_file(source, allow_legacy_v1=True)
+
+
+def test_load_legacy_v1_rejects_naive_creation_timestamp(tmp_path: Path) -> None:
+    source = tmp_path / "naive-created-at-v1.json"
+    payload = _legacy_v1_payload()
+    payload["created_at"] = "2026-07-17T12:30:00"
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
+        backup.load_snapshot_file(source, allow_legacy_v1=True)
+
+
+def test_load_legacy_v1_rejects_non_object_collection_record(tmp_path: Path) -> None:
+    source = tmp_path / "non-object-record-v1.json"
+    payload = _legacy_v1_payload()
+    resources = payload["resources"]
+    assert isinstance(resources, dict)
+    resources["inventory_hops"] = ["not-an-object"]
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
+        backup.load_snapshot_file(source, allow_legacy_v1=True)
 
 
 def test_write_backup_does_not_reuse_predictable_temp_file(tmp_path: object) -> None:

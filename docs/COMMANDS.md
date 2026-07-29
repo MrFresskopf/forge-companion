@@ -11,6 +11,10 @@ Companion keeps network use explicit and avoids hidden one-request-per-item beha
 Run `forge-companion` without arguments for the shortest start page. The primary everyday commands
 are `report`, `snapshot`, and `inventory`; older format-specific commands remain available for scripts.
 
+The [pre-1.0 compatibility policy](COMPATIBILITY.md) records the planned stable CLI, exit-code,
+snapshot, and machine-readable contracts. `doctor --json` is implemented with the closed packaged
+schema documented below; the draft Inventory schema does not mean that `inventory --json` exists yet.
+
 ## `auth`
 
 Manage authentication without displaying a token:

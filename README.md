@@ -96,7 +96,10 @@ documented collection and token scope.
 | Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
-available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details.
+available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details. The
+[pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface, the implemented
+closed Doctor contract, and the draft Inventory contract without implying that `inventory --json`
+already exists.
 
 `doctor --json` emits the closed `forge-companion-doctor-v1` machine contract for scripts and future
 adapters. Its packaged [JSON Schema](src/forge_companion/schemas/doctor-v1.schema.json) defines endpoint
