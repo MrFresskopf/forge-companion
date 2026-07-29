@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from forge_companion.diagnostics import run_doctor
 
@@ -51,7 +52,7 @@ def test_doctor_reports_invalid_payload_and_continues() -> None:
         def get(self, path: str, params: object = None) -> dict[str, object]:
             self.paths.append(path)
             if path == "inventory/miscs":
-                raise ValueError("invalid JSON")
+                raise ValueError("private invalid JSON detail")
             return {"data": []}
 
     client = InvalidPayloadClient()
@@ -61,7 +62,8 @@ def test_doctor_reports_invalid_payload_and_continues() -> None:
     misc = next(check for check in checks if check.path == "inventory/miscs")
     assert misc.ok is False
     assert misc.status is None
-    assert misc.error == "invalid response: invalid JSON"
+    assert misc.error == "invalid response"
+    assert "private invalid JSON detail" not in (misc.error or "")
     assert client.paths[-1] == "profiles/styles"
 
 
@@ -79,3 +81,19 @@ def test_doctor_does_not_echo_token_from_transport_exception() -> None:
     assert all(check.status is None and not check.ok for check in checks)
     assert all(token not in (check.error or "") for check in checks)
     assert all("\x1b" not in (check.error or "") for check in checks)
+
+
+@pytest.mark.parametrize("status", [200, 700])
+def test_doctor_classifies_incoherent_http_status_as_invalid_response(status: int) -> None:
+    class NonstandardStatusClient:
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            request = httpx.Request("GET", f"https://brewforge.sh/api/v1/{path}")
+            response = httpx.Response(status, request=request)
+            raise httpx.HTTPStatusError("private status detail", request=request, response=response)
+
+    checks = run_doctor(NonstandardStatusClient())
+
+    assert len(checks) == 7
+    assert all(check.status is None for check in checks)
+    assert {check.error for check in checks} == {"invalid response"}
+    assert {check.error_code for check in checks} == {"invalid_response"}

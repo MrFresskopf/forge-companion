@@ -1,6 +1,7 @@
 """Read-only connectivity and endpoint diagnostics."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
@@ -15,6 +16,7 @@ class EndpointCheck:
     ok: bool
     status: int | None
     error: str | None = None
+    error_code: Literal["http_error", "request_error", "invalid_response"] | None = None
 
 
 _ENDPOINTS = (
@@ -35,25 +37,45 @@ def run_doctor(client: ReadClient) -> list[EndpointCheck]:
         try:
             client.get(path)
         except httpx.HTTPStatusError as error:
-            checks.append(
-                EndpointCheck(
-                    path=path,
-                    ok=False,
-                    status=error.response.status_code,
-                    error=f"HTTP {error.response.status_code}",
+            status = error.response.status_code
+            if 100 <= status <= 199 or 300 <= status <= 599:
+                checks.append(
+                    EndpointCheck(
+                        path=path,
+                        ok=False,
+                        status=status,
+                        error=f"HTTP {status}",
+                        error_code="http_error",
+                    )
                 )
-            )
+            else:
+                checks.append(
+                    EndpointCheck(
+                        path=path,
+                        ok=False,
+                        status=None,
+                        error="invalid response",
+                        error_code="invalid_response",
+                    )
+                )
         except httpx.HTTPError:
-            checks.append(
-                EndpointCheck(path=path, ok=False, status=None, error="API request failed")
-            )
-        except (TypeError, ValueError) as error:
             checks.append(
                 EndpointCheck(
                     path=path,
                     ok=False,
                     status=None,
-                    error=f"invalid response: {error}",
+                    error="API request failed",
+                    error_code="request_error",
+                )
+            )
+        except (TypeError, ValueError, RecursionError):
+            checks.append(
+                EndpointCheck(
+                    path=path,
+                    ok=False,
+                    status=None,
+                    error="invalid response",
+                    error_code="invalid_response",
                 )
             )
         else:
