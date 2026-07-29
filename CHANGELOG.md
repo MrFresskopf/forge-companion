@@ -6,6 +6,16 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A pre-1.0 compatibility policy and executable draft JSON schemas now define the planned stable CLI,
+  snapshot, exit-code, `doctor`, and inventory-audit contracts.
+
+### Fixed
+
+- Legacy v1 inventory snapshots now require the complete historical schema before audit findings are
+  calculated, preventing malformed or partial collections from producing a misleading successful audit.
+
 ## [0.2.1] — 2026-07-28
 
 ### Changed

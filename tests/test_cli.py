@@ -14,6 +14,24 @@ from forge_companion.cli import app
 runner = CliRunner()
 
 
+def _legacy_v1_payload(**resource_overrides: object) -> dict[str, object]:
+    resources: dict[str, object] = {
+        "brews": [],
+        "inventory_fermentables": [],
+        "inventory_hops": [],
+        "inventory_yeasts": [],
+        "inventory_miscs": [],
+        "profiles_equipment": [],
+        "profiles_styles": [],
+    }
+    resources.update(resource_overrides)
+    return {
+        "format": "forge-companion-collection-snapshot-v1",
+        "created_at": "2026-07-17T12:30:00+00:00",
+        "resources": resources,
+    }
+
+
 def test_version_option_prints_package_version() -> None:
     result = runner.invoke(app, ["--version"])
 
@@ -225,20 +243,17 @@ def test_inventory_audit_command_reports_findings_from_snapshot(tmp_path: Path) 
     snapshot = tmp_path / "snapshot.json"
     snapshot.write_text(
         json.dumps(
-            {
-                "format": "forge-companion-collection-snapshot-v1",
-                "resources": {
-                    "inventory_yeasts": [
-                        {
-                            "id": "yeast-1",
-                            "name": "Example Yeast",
-                            "quantity": 1,
-                            "quantityUnit": "pkg",
-                            "expiryDate": "2026-07-01",
-                        }
-                    ]
-                },
-            }
+            _legacy_v1_payload(
+                inventory_yeasts=[
+                    {
+                        "id": "yeast-1",
+                        "name": "Example Yeast",
+                        "quantity": 1,
+                        "quantityUnit": "pkg",
+                        "expiryDate": "2026-07-01",
+                    }
+                ]
+            )
         ),
         encoding="utf-8",
     )
@@ -260,12 +275,7 @@ def test_inventory_uses_default_snapshot_path(
     snapshot = Path("snapshots/brewforge-collections.json")
     snapshot.parent.mkdir(parents=True)
     snapshot.write_text(
-        json.dumps(
-            {
-                "format": "forge-companion-collection-snapshot-v1",
-                "resources": {"inventory_yeasts": []},
-            }
-        ),
+        json.dumps(_legacy_v1_payload()),
         encoding="utf-8",
     )
 
@@ -386,6 +396,26 @@ def test_inventory_audit_rejects_duplicate_keys_in_legacy_v1_snapshot(
 
     assert result.exit_code == 1
     assert "finding(s)" not in result.output
+
+
+def test_inventory_audit_rejects_non_list_collection_in_legacy_v1_snapshot(
+    tmp_path: Path,
+) -> None:
+    snapshot = tmp_path / "malformed-v1.json"
+    snapshot.write_text(
+        json.dumps(_legacy_v1_payload(inventory_hops="not-a-collection")),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["inventory", str(snapshot), "--as-of", "2026-07-17"],
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "Inventory audit failed: Snapshot schema validation failed.\n"
+    assert "finding(s)" not in result.output
+    assert "malformed-v1" not in result.output
 
 
 def test_inventory_audit_hides_unreadable_snapshot_path(tmp_path: Path) -> None:
