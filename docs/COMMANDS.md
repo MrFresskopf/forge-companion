@@ -12,8 +12,8 @@ Run `forge-companion` without arguments for the shortest start page. The primary
 are `report`, `snapshot`, and `inventory`; older format-specific commands remain available for scripts.
 
 The [pre-1.0 compatibility policy](COMPATIBILITY.md) records the planned stable CLI, exit-code,
-snapshot, and machine-readable contracts. `doctor --json` is implemented with the closed packaged
-schema documented below; the draft Inventory schema does not mean that `inventory --json` exists yet.
+snapshot, and machine-readable contracts. `doctor --json` and `inventory --json` are implemented with
+the packaged schemas documented below.
 
 ## `auth`
 
@@ -146,6 +146,7 @@ Audit a local Forge Companion snapshot without contacting BrewForge:
 ```bash
 forge-companion inventory
 forge-companion inventory snapshots/my-brewforge-collections.json --as-of 2026-07-17
+forge-companion inventory --as-of 2026-07-17 --json
 ```
 
 Without a path it reuses `snapshots/brewforge-collections.json`, the output of the default `snapshot`
@@ -155,6 +156,13 @@ Current checks cover expired inventory, negative quantities, missing yeast or mi
 units, and conservative possible duplicates. Findings are advisory; Forge Companion never merges or
 changes inventory. v2 input must pass schema and SHA-256 validation before any finding is calculated;
 legacy v1 snapshots remain accepted but have no embedded integrity proof.
+
+`--json` emits exactly one compact JSON document after CLI parsing succeeds, using the packaged
+[`inventory-audit-v1.schema.json`](../src/forge_companion/schemas/inventory-audit-v1.schema.json).
+The command remains offline and always reports `request_count: 0`. Successful audits exit `0`, including
+when advisory findings exist. Missing, invalid, or unreadable snapshots emit fixed structured errors and
+exit `1`; malformed `--as-of` emits `invalid-as-of` and exits `2` before snapshot access. Finding names,
+IDs, and messages are private inventory data, so JSON output should be protected like its source snapshot.
 
 ## Advanced report and export commands
 

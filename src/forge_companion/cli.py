@@ -20,6 +20,8 @@ from forge_companion import (
     shelly_cloud_credentials,
 )
 from forge_companion.backup import (
+    SnapshotNotFoundError,
+    SnapshotReadError,
     SnapshotValidationError,
     create_backup,
     load_snapshot_file,
@@ -52,6 +54,11 @@ from forge_companion.hopper import (
     write_new_hopper_plan,
 )
 from forge_companion.inventory_audit import audit_inventory
+from forge_companion.inventory_output import (
+    build_inventory_error_document,
+    build_inventory_success_document,
+    render_inventory_json,
+)
 from forge_companion.shelly import ShellyReadOnlyClient, ShellyResponseError
 from forge_companion.shelly_cloud import ShellyCloudReadOnlyClient, ShellyCloudResponseError
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
@@ -794,6 +801,10 @@ def inventory_audit_command(
         str | None,
         typer.Option("--as-of", help="Audit date in YYYY-MM-DD format."),
     ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit the versioned inventory JSON contract."),
+    ] = False,
 ) -> None:
     """Audit inventory data from a local collection snapshot."""
     try:
@@ -811,21 +822,97 @@ def inventory_audit_command(
                 raise ValueError
             audit_date = date.fromisoformat(as_of)
     except ValueError:
+        if json_output:
+            document = build_inventory_error_document(
+                "invalid-as-of",
+                "Use YYYY-MM-DD.",
+                as_of=None,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=2) from None
         typer.echo("Inventory audit failed: --as-of must use YYYY-MM-DD.", err=True)
         raise typer.Exit(code=1) from None
-    if snapshot == Path("snapshots/brewforge-collections.json") and not snapshot.exists():
-        typer.echo("Inventory audit failed: no standard snapshot found.", err=True)
-        typer.echo("Run `forge-companion snapshot` first.", err=True)
-        raise typer.Exit(code=1)
     try:
         payload = load_snapshot_file(snapshot, allow_legacy_v1=True)
         resources = payload.get("resources")
         if not isinstance(resources, dict):
             raise TypeError("snapshot resources is not an object")
         findings = audit_inventory(resources, as_of=audit_date)
-    except (json.JSONDecodeError, OSError, TypeError, ValueError) as error:
+    except SnapshotNotFoundError:
+        if json_output:
+            document = build_inventory_error_document(
+                "snapshot-not-found",
+                "Snapshot not found.",
+                as_of=audit_date,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=1) from None
+        if snapshot == Path("snapshots/brewforge-collections.json"):
+            typer.echo("Inventory audit failed: no standard snapshot found.", err=True)
+            typer.echo("Run `forge-companion snapshot` first.", err=True)
+        else:
+            typer.echo(
+                "Inventory audit failed: Snapshot is not readable strict JSON.", err=True
+            )
+        raise typer.Exit(code=1) from None
+    except SnapshotReadError as error:
+        if json_output:
+            document = build_inventory_error_document(
+                "snapshot-read-failed",
+                "Snapshot could not be read.",
+                as_of=audit_date,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=1) from None
         typer.echo(f"Inventory audit failed: {error}", err=True)
         raise typer.Exit(code=1) from None
+    except SnapshotValidationError as error:
+        if json_output:
+            document = build_inventory_error_document(
+                "snapshot-invalid",
+                "Snapshot is invalid.",
+                as_of=audit_date,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=1) from None
+        typer.echo(f"Inventory audit failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except OSError as error:
+        if json_output:
+            document = build_inventory_error_document(
+                "snapshot-read-failed",
+                "Snapshot could not be read.",
+                as_of=audit_date,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=1) from None
+        typer.echo(f"Inventory audit failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
+        if json_output:
+            document = build_inventory_error_document(
+                "snapshot-invalid",
+                "Snapshot is invalid.",
+                as_of=audit_date,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=1) from None
+        typer.echo(f"Inventory audit failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+
+    if json_output:
+        try:
+            document = build_inventory_success_document(payload, findings, as_of=audit_date)
+        except (TypeError, ValueError):
+            document = build_inventory_error_document(
+                "snapshot-invalid",
+                "Snapshot is invalid.",
+                as_of=audit_date,
+            )
+            typer.echo(render_inventory_json(document))
+            raise typer.Exit(code=1) from None
+        typer.echo(render_inventory_json(document))
+        return
 
     typer.echo(f"{len(findings)} finding(s)")
     for finding in findings:
@@ -844,9 +931,13 @@ def inventory_command(
         str | None,
         typer.Option("--as-of", help="Audit date in YYYY-MM-DD format."),
     ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit the versioned inventory JSON contract."),
+    ] = False,
 ) -> None:
     """Check inventory using the standard local snapshot by default."""
-    inventory_audit_command(snapshot=snapshot, as_of=as_of)
+    inventory_audit_command(snapshot=snapshot, as_of=as_of, json_output=json_output)
 
 
 @app.command("fermentation-brief", hidden=True)

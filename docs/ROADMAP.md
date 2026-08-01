@@ -53,7 +53,7 @@ deprecation and migration path.
 
 - define stable human-versus-machine output boundaries and exit codes
 - [x] add versioned `doctor --json`
-- [ ] add versioned `inventory --json`
+- [x] add versioned `inventory --json`
 - define snapshot compatibility, migration, and deprecation rules
 - modularize CLI command registration where that reduces pre-1.0 maintenance risk
 
@@ -107,7 +107,8 @@ deprecation and migration path.
 - [ ] optional, rate-limit-aware full export of brew details, notes, and readings
 - [ ] optional compression
 - [x] offline inventory audit for expiry, negative quantities, missing units, and conservative duplicates
-- [ ] machine-readable inventory audit output and additional plausibility rules
+- [x] machine-readable inventory audit output
+- [ ] additional inventory plausibility rules
 - [x] read-only Markdown fermentation brief with data-quality metrics
 - [x] standalone HTML fermentation charts
 - [ ] conservative Brewfather/BrewForge comparison report

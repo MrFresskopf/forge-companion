@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > This is the pre-1.0 compatibility design for Forge Companion. Version 0.2.1 implements neither JSON
-> option. The current unreleased code implements `doctor --json`; `inventory --json` remains planned.
+> option. The current unreleased code implements both `doctor --json` and `inventory --json`.
 > The policy becomes binding for the stable scope when 1.0 is released; until then, incompatible changes
 > remain possible when they are documented in the changelog.
 
@@ -96,15 +96,15 @@ from human-readable text; machine-readable error codes are the stable discrimina
 
 ## Machine-readable output
 
-`doctor --json` is implemented and governed by the closed packaged
-[`doctor-v1.schema.json`](../src/forge_companion/schemas/doctor-v1.schema.json). `inventory --json` remains
-planned and is governed by the additive draft
-[`inventory-audit-v1.schema.json`](schemas/inventory-audit-v1.schema.json). Doctor emits one compact UTF-8
-JSON object followed by a newline and no other standard-output text after CLI parsing succeeds; Inventory
-will follow the same stream rule when implemented.
+`doctor --json` is governed by the closed packaged
+[`doctor-v1.schema.json`](../src/forge_companion/schemas/doctor-v1.schema.json). `inventory --json` is
+governed by the additive packaged
+[`inventory-audit-v1.schema.json`](../src/forge_companion/schemas/inventory-audit-v1.schema.json). Both emit
+one compact UTF-8 JSON object followed by a newline and no other standard-output text after CLI parsing
+succeeds.
 
 The Doctor schema is closed: consumers reject unknown object members, codes, and endpoint order. Any
-new Doctor member or code requires a new schema identifier. The draft Inventory schema is additive:
+new Doctor member or code requires a new schema identifier. The Inventory schema is additive:
 consumers ignore unknown object members and unknown advisory finding codes, while removal or semantic
 change of a required member requires a new identifier.
 
@@ -146,10 +146,9 @@ snapshot paths and snapshot records are not included. Consumers use `findings[].
 structured identifiers rather than parsing `message`.
 
 `possible-duplicate` includes non-empty, distinct `item_id` and `related_item_id` values for the two
-matching items. The implementation must add and test that structured relationship before inventory JSON
-v1 can leave draft status. A successful audit always reports the effective `as_of` date; only an error
-produced before date resolution may use `null`. The schema enforces this chronology for every permitted
-command-level error code.
+matching items; the allowlisted producer enforces and tests this relationship. A successful audit always
+reports the effective `as_of` date; only an error produced before date resolution may use `null`. The
+schema enforces this chronology for every permitted command-level error code.
 
 Initial finding codes are `expired`, `negative-quantity`, `missing-unit`, and `possible-duplicate`.
 Initial command-level error codes are `invalid-as-of`, `snapshot-not-found`, `snapshot-invalid`, and

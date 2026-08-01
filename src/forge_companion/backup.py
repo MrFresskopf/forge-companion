@@ -49,6 +49,14 @@ class SnapshotValidationError(ValueError):
     """Report an invalid or unverifiable local collection snapshot."""
 
 
+class SnapshotReadError(SnapshotValidationError):
+    """Report a snapshot that could not be read from local storage."""
+
+
+class SnapshotNotFoundError(SnapshotReadError):
+    """Report a snapshot that was absent when the read was attempted."""
+
+
 def _snapshot_digest(payload: dict[str, Any]) -> str:
     unsigned = deepcopy(payload)
     unsigned["manifest"]["integrity"].pop("digest", None)
@@ -167,7 +175,11 @@ def _load_strict_json_object(source: Path) -> dict[str, Any]:
             object_pairs_hook=_strict_object,
             parse_constant=_reject_json_constant,
         )
-    except (OSError, UnicodeError, ValueError, RecursionError):
+    except FileNotFoundError:
+        raise SnapshotNotFoundError("Snapshot does not exist.") from None
+    except (OSError, UnicodeError):
+        raise SnapshotReadError("Snapshot is not readable strict JSON.") from None
+    except (ValueError, RecursionError):
         raise SnapshotValidationError("Snapshot is not readable strict JSON.") from None
     if not isinstance(payload, dict):
         raise SnapshotValidationError("Snapshot schema validation failed.")
@@ -197,13 +209,12 @@ def _validate_legacy_v1(payload: dict[str, Any]) -> None:
         raise SnapshotValidationError("Snapshot schema validation failed.")
 
 
-def load_snapshot_file(
-    source: Path,
+def validate_snapshot_payload(
+    payload: dict[str, Any],
     *,
     allow_legacy_v1: bool = False,
-) -> dict[str, Any]:
-    """Load a strict v2 snapshot or an explicitly allowed legacy v1 snapshot."""
-    payload = _load_strict_json_object(source)
+) -> None:
+    """Validate an in-memory snapshot using the same rules as file loading."""
     snapshot_format = payload.get("format")
     if snapshot_format == _FORMAT:
         validate_backup(payload)
@@ -211,6 +222,16 @@ def load_snapshot_file(
         _validate_legacy_v1(payload)
     else:
         raise SnapshotValidationError("Snapshot has an unsupported format.")
+
+
+def load_snapshot_file(
+    source: Path,
+    *,
+    allow_legacy_v1: bool = False,
+) -> dict[str, Any]:
+    """Load a strict v2 snapshot or an explicitly allowed legacy v1 snapshot."""
+    payload = _load_strict_json_object(source)
+    validate_snapshot_payload(payload, allow_legacy_v1=allow_legacy_v1)
     return payload
 
 

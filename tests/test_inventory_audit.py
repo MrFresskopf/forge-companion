@@ -92,6 +92,8 @@ def test_audit_flags_only_conservative_duplicate_hop_signature() -> None:
     duplicates = [finding for finding in findings if finding.code == "possible-duplicate"]
     assert len(duplicates) == 1
     assert duplicates[0].item_id == "hop-2"
+    assert duplicates[0].related_item_id == "hop-1"
+    assert duplicates[0].related_item_id != duplicates[0].item_id
     assert duplicates[0].message == "same identity fields as item hop-1"
 
 
