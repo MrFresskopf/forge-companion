@@ -1,18 +1,22 @@
 import json
 from copy import deepcopy
-from pathlib import Path
+from importlib.resources import files
 from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
-_SCHEMA_PATH = (
-    Path(__file__).parents[1] / "docs" / "schemas" / "inventory-audit-v1.schema.json"
-)
+
+def _schema() -> dict[str, Any]:
+    return json.loads(
+        files("forge_companion")
+        .joinpath("schemas/inventory-audit-v1.schema.json")
+        .read_text(encoding="utf-8")
+    )
 
 
 def _validator() -> Draft202012Validator:
-    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    schema = _schema()
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -226,3 +230,40 @@ def test_inventory_schema_allows_additive_members_and_finding_codes() -> None:
         ],
     }
     validator.validate(error_document)
+
+
+def test_inventory_schema_valid_outcomes_match_exactly_one_branch() -> None:
+    schema = _schema()
+    one_of = schema["oneOf"]
+    assert isinstance(one_of, list)
+    base_schema = deepcopy(schema)
+    del base_schema["oneOf"]
+    outcomes = [_inventory_ok()]
+    for code, as_of in [
+        ("invalid-as-of", None),
+        ("snapshot-not-found", "2026-07-29"),
+        ("snapshot-invalid", "2026-07-29"),
+        ("snapshot-read-failed", "2026-07-29"),
+    ]:
+        outcome = deepcopy(_inventory_ok())
+        outcome.update(
+            {
+                "status": "error",
+                "as_of": as_of,
+                "snapshot": None,
+                "findings": [],
+                "errors": [{"code": code, "message": "fixed message"}],
+            }
+        )
+        outcomes.append(outcome)
+
+    for outcome in outcomes:
+        matches = 0
+        for branch in one_of:
+            branch_schema = deepcopy(base_schema)
+            branch_schema["allOf"] = [branch]
+            validator = Draft202012Validator(
+                branch_schema, format_checker=FormatChecker()
+            )
+            matches += validator.is_valid(outcome)
+        assert matches == 1

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/MrFresskopf/forge-companion/main/docs/schemas/inventory-audit-v1.schema.json",
+  "$id": "https://github.com/MrFresskopf/forge-companion/schemas/inventory-audit-v1",
   "title": "Forge Companion inventory audit JSON v1",
-  "description": "Draft pre-1.0 output contract for forge-companion inventory --json.",
+  "description": "Pre-1.0 output contract for forge-companion inventory --json.",
   "type": "object",
   "required": [
     "schema",

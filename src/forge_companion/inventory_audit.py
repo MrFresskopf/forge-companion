@@ -24,6 +24,7 @@ class Finding:
     item_id: str
     name: str
     message: str
+    related_item_id: str | None = None
 
 
 _DUPLICATE_FIELDS = {
@@ -52,8 +53,12 @@ def audit_inventory(
         for raw_item in raw_items:
             if not isinstance(raw_item, dict):
                 continue
-            item_id = str(raw_item.get("id", ""))
-            name = str(raw_item.get("name", "Unnamed item"))
+            raw_item_id = raw_item.get("id", "")
+            raw_name = raw_item.get("name", "Unnamed item")
+            if not isinstance(raw_item_id, str) or not isinstance(raw_name, str):
+                raise ValueError("Inventory item id and name must be strings")
+            item_id = raw_item_id
+            name = raw_name
             signature_fields = _DUPLICATE_FIELDS.get(category)
             if signature_fields is not None:
                 signature = tuple(_normalized(raw_item.get(field)) for field in signature_fields)
@@ -70,6 +75,7 @@ def audit_inventory(
                                 item_id=item_id,
                                 name=name,
                                 message=f"same identity fields as item {previous_id}",
+                                related_item_id=previous_id,
                             )
                         )
             quantity = raw_item.get("quantity")

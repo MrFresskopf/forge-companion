@@ -86,7 +86,7 @@ documented collection and token scope.
 | Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
 | Verify the standard snapshot | `forge-companion snapshot validate` | Offline |
-| Check inventory from the standard snapshot | `forge-companion inventory` | Offline |
+| Check inventory from the standard snapshot | `forge-companion inventory [--json]` | Offline |
 | Diagnose API access | `forge-companion doctor [--json]` | 7 GET requests |
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
 | Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
@@ -97,14 +97,18 @@ documented collection and token scope.
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details. The
-[pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface, the implemented
-closed Doctor contract, and the draft Inventory contract without implying that `inventory --json`
-already exists.
+[pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface and the
+implemented Doctor and Inventory JSON contracts.
 
 `doctor --json` emits the closed `forge-companion-doctor-v1` machine contract for scripts and future
 adapters. Its packaged [JSON Schema](src/forge_companion/schemas/doctor-v1.schema.json) defines endpoint
 order, outcome correlations, and setup error codes without exposing response bodies or exception text;
 the [command guide](docs/COMMANDS.md#doctor) defines the corresponding exit semantics.
+
+`inventory --json` audits only a local snapshot and emits the additive
+`forge-companion-inventory-audit-v1` contract with `request_count: 0`. Its packaged
+[JSON Schema](src/forge_companion/schemas/inventory-audit-v1.schema.json) defines snapshot metadata,
+advisory findings, fixed command errors, and date-resolution semantics.
 
 ## Why read-only by default?
 

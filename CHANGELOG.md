@@ -10,8 +10,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `doctor --json` with a closed, packaged `forge-companion-doctor-v1` JSON Schema, fixed endpoint order,
   correlated outcomes, stable setup and endpoint error codes, and documented exit semantics.
-- A pre-1.0 compatibility policy and executable draft inventory-audit JSON Schema now define the planned
-  stable CLI, snapshot, exit-code, and inventory automation contracts.
+- `inventory --json` with an additive, packaged `forge-companion-inventory-audit-v1` JSON Schema,
+  allowlisted findings, fixed command errors, offline `request_count: 0`, and structured duplicate IDs.
+- A pre-1.0 compatibility policy defines the planned stable CLI, snapshot, exit-code, and machine-output
+  contracts.
 
 ### Changed
 

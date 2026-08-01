@@ -297,6 +297,21 @@ def test_load_legacy_v1_rejects_non_object_collection_record(tmp_path: Path) -> 
         backup.load_snapshot_file(source, allow_legacy_v1=True)
 
 
+def test_load_snapshot_file_classifies_operating_system_read_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "private-snapshot-name.json"
+    source.write_text("{}", encoding="utf-8")
+
+    def fail_read(path: Path, *, encoding: str) -> str:
+        raise OSError("private operating-system detail")
+
+    monkeypatch.setattr(Path, "read_text", fail_read)
+
+    with pytest.raises(backup.SnapshotReadError, match="not readable"):
+        backup.load_snapshot_file(source, allow_legacy_v1=True)
+
+
 def test_write_backup_does_not_reuse_predictable_temp_file(tmp_path: object) -> None:
     from pathlib import Path
 
