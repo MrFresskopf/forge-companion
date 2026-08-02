@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/forge-companion-hero.svg" alt="Forge Companion: understand your BrewForge data and leave it untouched" width="100%">
+  <img src="docs/assets/forge-companion-hero.svg" alt="Forge Companion: safe Shelly control for brewery automation" width="100%">
 </p>
 
 <p align="center">
@@ -9,23 +9,24 @@
   <img alt="BrewForge access" src="docs/assets/badges/brewforge-read-only.svg">
 </p>
 
-Forge Companion turns [BrewForge](https://brewforge.sh/) data into local snapshots,
-inventory checks, CSV exports, and fermentation reports. It never creates, changes, or deletes
-anything in BrewForge.
+Forge Companion provides fail-closed Shelly control for brewery automation: offline planning,
+read-only device checks, explicitly armed one-shot actions, and durable audit history. Optional
+[BrewForge](https://brewforge.sh/) access remains read-only and supplies brew context, telemetry,
+reports, and snapshots.
 
 > [!IMPORTANT]
 > Forge Companion is an unofficial community project and is not affiliated with or endorsed by
 > BrewForge.
 
 > [!NOTE]
-> **Developer preview:** BrewForge access is read-only. Guarded experimental Shelly automation is
-> isolated behind explicit one-shot safety controls. Interfaces and snapshot formats may change before
-> 1.0, and snapshots are not yet a complete backup solution.
+> **Developer preview:** Live Shelly actuation is experimental and isolated behind explicit one-shot
+> safety controls. Electrical `OFF` is not proof of mechanical success. BrewForge access is read-only;
+> interfaces and snapshot formats may change before 1.0.
 
-## Get running in three steps
+## Start with Shelly safely
 
-You need Python 3.11 or newer, a BrewForge plan with API access, and a token with the narrowest
-read scopes needed for your command.
+You need Python 3.11 or newer. Read-only local Shelly status needs only device reachability. Shelly
+Cloud commands use a separate native-keyring profile; optional BrewForge reports require API access.
 
 ### 1. Install
 
@@ -41,9 +42,26 @@ Or with [pipx](https://pipx.pypa.io/):
 pipx install git+https://github.com/MrFresskopf/forge-companion.git@main
 ```
 
-### 2. Store your token securely
+### 2. Inspect the guarded hopper workflow
 
-Use the native Windows Credential Manager, macOS Keychain, or Linux Secret Service:
+```bash
+forge-companion hopper --help
+```
+
+Planning, arming, simulation, and local status history are offline. Start with read-only status; never
+use `hopper fire` before the complete mechanism is qualified and a bounded pulse is deliberately armed.
+
+### 3. Configure only the credential you need
+
+For Shelly Cloud:
+
+```bash
+forge-companion hopper cloud-auth login
+forge-companion hopper cloud-status --channel 0
+```
+
+For optional BrewForge reports, use the native Windows Credential Manager, macOS Keychain, or Linux
+Secret Service:
 
 ```bash
 forge-companion auth login
@@ -57,7 +75,7 @@ Whitespace-only values are ignored; values containing whitespace are rejected an
 credential use until corrected or unset. Do not put a real token in a config file, issue, screenshot,
 command argument, or commit.
 
-### 3. Create your first report
+### Optional: create a fermentation report
 
 ```bash
 forge-companion report --temperature-unit C --remember
@@ -81,34 +99,29 @@ documented collection and token scope.
 
 | Goal | Command | Network use |
 |---|---|---:|
-| Store or inspect authentication | `forge-companion auth ...` | Offline |
+| Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
+| Read a local Shelly switch state | `forge-companion hopper shelly-status ...` | 1 local GET request |
+| Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
+| Check an armed Cloud one-shot without switching | `forge-companion hopper check PLAN` | 1 status POST (Cloud v2) |
+| Fire an armed Cloud one-shot | `forge-companion hopper fire PLAN` | 1 set POST + 2 status POSTs |
+| Store or inspect BrewForge authentication | `forge-companion auth ...` | Offline |
 | Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |
 | Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
 | Verify the standard snapshot | `forge-companion snapshot validate` | Offline |
-| Check inventory from the standard snapshot | `forge-companion inventory [--json]` | Offline |
-| Diagnose API access | `forge-companion doctor [--json]` | 7 GET requests |
+| Diagnose BrewForge API access | `forge-companion doctor [--json]` | 3 GET requests |
 | Simulate a spunding threshold | `forge-companion spunding-advisor --select ...` | 2 GET requests + explicit page changes |
-| Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
-| Check an armed Cloud one-shot without switching | `forge-companion hopper check PLAN` | 1 status POST (Cloud v2) |
-| Fire an armed Cloud one-shot | `forge-companion hopper fire PLAN` | 1 set POST + 2 status POSTs |
-| Read a local Shelly switch state | `forge-companion hopper shelly-status ...` | 1 local GET request |
-| Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
+
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details. The
 [pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface and the
-implemented Doctor and Inventory JSON contracts.
+implemented Doctor JSON contract.
 
-`doctor --json` emits the closed `forge-companion-doctor-v1` machine contract for scripts and future
-adapters. Its packaged [JSON Schema](src/forge_companion/schemas/doctor-v1.schema.json) defines endpoint
+`doctor --json` emits the closed `forge-companion-doctor-v2` machine contract for scripts and future
+adapters. Its packaged [JSON Schema](src/forge_companion/schemas/doctor-v2.schema.json) defines endpoint
 order, outcome correlations, and setup error codes without exposing response bodies or exception text;
 the [command guide](docs/COMMANDS.md#doctor) defines the corresponding exit semantics.
-
-`inventory --json` audits only a local snapshot and emits the additive
-`forge-companion-inventory-audit-v1` contract with `request_count: 0`. Its packaged
-[JSON Schema](src/forge_companion/schemas/inventory-audit-v1.schema.json) defines snapshot metadata,
-advisory findings, fixed command errors, and date-resolution semantics.
 
 ## Why read-only by default?
 
@@ -124,9 +137,9 @@ trust boundary:
 - report preferences contain no credentials and currently store only an explicit C/F choice
 - default `reports/` and `snapshots/` destinations stay local and are ignored by Git; custom output
   paths remain your responsibility
-- collection snapshots abort on invalid or incomplete pages; v2 snapshots include collection counts,
+- collection snapshots abort on invalid or incomplete pages; v3 snapshots include collection counts,
   explicit scope exclusions, and a canonical SHA-256 integrity digest
-- `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v2 files offline;
+- `snapshot validate` rejects malformed, ambiguous, unsupported, or modified v3 files offline;
   fermentation exports keep valid readings but report every rejection and timestamp conflict
 - the spunding advisor simulates a decision and never contacts hardware
 - hopper planning, arming, `hopper status`, and lifecycle rehearsals remain offline
@@ -156,11 +169,12 @@ uv run mypy
 
 ## Project status
 
-Forge Companion is young and intentionally conservative. Collection snapshots, inventory audits,
-fermentation exports/reports, fail-closed spunding simulations, offline remote-hopper rehearsals,
-read-only local/Cloud Shelly diagnostics, and an experimental guarded Shelly Cloud one-shot work
-today. MQTT, Home Assistant, authenticated local Shelly access, and unattended scheduling remain
-future work. Electrical OFF is not mechanical proof of a successful hop drop. Use the
+Forge Companion is young and intentionally conservative. Its primary purpose is safe Shelly control:
+offline remote-hopper rehearsals, read-only local/Cloud diagnostics, and an experimental guarded Cloud
+one-shot. Fermentation reports, fail-closed spunding simulations, and limited BrewForge snapshots
+remain supporting read-only tools. MQTT, Home Assistant, authenticated local Shelly access, and
+unattended scheduling remain future work. Electrical OFF is not mechanical proof of a successful hop
+drop. Use the
 [mechanical qualification protocol](docs/HOPPER_QUALIFICATION.md) before considering any remote
 operation.
 

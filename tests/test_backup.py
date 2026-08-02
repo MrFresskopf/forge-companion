@@ -30,37 +30,17 @@ class StubClient:
         return {"data": [], "pagination": {"hasMore": False, "total": 0}}
 
 
-def _legacy_v1_payload() -> dict[str, object]:
-    return {
-        "format": "forge-companion-collection-snapshot-v1",
-        "created_at": "2026-07-17T12:30:00+00:00",
-        "resources": {
-            "brews": [],
-            "inventory_fermentables": [],
-            "inventory_hops": [],
-            "inventory_yeasts": [],
-            "inventory_miscs": [],
-            "profiles_equipment": [],
-            "profiles_styles": [],
-        },
-    }
-
-
 def test_create_backup_collects_every_page_and_supported_resource() -> None:
     client = StubClient()
     now = datetime(2026, 7, 17, 12, 30, tzinfo=UTC)
 
     result = create_backup(client, now=now)
 
-    assert result["format"] == "forge-companion-collection-snapshot-v2"
+    assert result["format"] == "forge-companion-collection-snapshot-v3"
     assert result["created_at"] == "2026-07-17T12:30:00+00:00"
     assert result["resources"]["brews"] == [{"id": "brew-1"}, {"id": "brew-2"}]
     assert set(result["resources"]) == {
         "brews",
-        "inventory_fermentables",
-        "inventory_hops",
-        "inventory_yeasts",
-        "inventory_miscs",
         "profiles_equipment",
         "profiles_styles",
     }
@@ -68,10 +48,6 @@ def test_create_backup_collects_every_page_and_supported_resource() -> None:
         "generator": {"name": "forge-companion", "version": "0.2.1"},
         "collections": {
             "brews": 2,
-            "inventory_fermentables": 0,
-            "inventory_hops": 0,
-            "inventory_yeasts": 0,
-            "inventory_miscs": 0,
             "profiles_equipment": 0,
             "profiles_styles": 0,
         },
@@ -111,10 +87,10 @@ def test_validate_backup_returns_data_free_summary_for_generated_snapshot() -> N
 
     summary = backup.validate_backup(payload)
 
-    assert summary.format == "forge-companion-collection-snapshot-v2"
+    assert summary.format == "forge-companion-collection-snapshot-v3"
     assert summary.created_at == "2026-07-17T12:30:00+00:00"
     assert summary.generator_version == "0.2.1"
-    assert summary.collection_count == 7
+    assert summary.collection_count == 3
     assert summary.record_count == 2
     assert summary.digest == payload["manifest"]["integrity"]["digest"]
 
@@ -144,7 +120,7 @@ def test_validate_backup_rejects_tampered_resource_data() -> None:
 
 def test_validate_backup_rejects_resigned_unsupported_format() -> None:
     payload = create_backup(StubClient())
-    payload["format"] = "forge-companion-collection-snapshot-v1"
+    payload["format"] = "forge-companion-collection-snapshot-v2"
     payload["manifest"]["integrity"]["digest"] = backup._snapshot_digest(payload)
 
     with pytest.raises(backup.SnapshotValidationError, match="unsupported format"):
@@ -171,8 +147,8 @@ def test_validate_backup_rejects_resigned_schema_violation(case: str) -> None:
     if case == "wrong-count":
         payload["manifest"]["collections"]["brews"] = 3
     elif case == "missing-collection":
-        payload["resources"].pop("inventory_hops")
-        payload["manifest"]["collections"].pop("inventory_hops")
+        payload["resources"].pop("profiles_styles")
+        payload["manifest"]["collections"].pop("profiles_styles")
     elif case == "non-object-record":
         payload["resources"]["brews"][0] = "not-an-object"
     elif case == "wrong-generator":
@@ -203,7 +179,7 @@ def test_validate_backup_file_accepts_atomic_generated_snapshot(tmp_path: object
 
     summary = backup.validate_backup_file(destination)
 
-    assert summary.collection_count == 7
+    assert summary.collection_count == 3
     assert summary.record_count == 2
 
 
@@ -228,9 +204,9 @@ def test_validate_backup_file_rejects_duplicate_object_keys(tmp_path: object) ->
     payload = create_backup(StubClient())
     serialized = json.dumps(payload)
     duplicated = serialized.replace(
-        '"format": "forge-companion-collection-snapshot-v2"',
-        '"format": "forge-companion-collection-snapshot-v2", '
-        '"format": "forge-companion-collection-snapshot-v2"',
+        '"format": "forge-companion-collection-snapshot-v3"',
+        '"format": "forge-companion-collection-snapshot-v3", '
+        '"format": "forge-companion-collection-snapshot-v3"',
         1,
     )
     source.write_text(duplicated, encoding="utf-8")
@@ -242,7 +218,7 @@ def test_validate_backup_file_rejects_duplicate_object_keys(tmp_path: object) ->
 def test_write_backup_creates_json_without_secret_material(tmp_path: object) -> None:
     destination = Path(str(tmp_path)) / "backup.json"
     payload = {
-        "format": "forge-companion-collection-snapshot-v1",
+        "format": "test-format",
         "created_at": "2026-07-17T12:30:00+00:00",
         "resources": {"brews": []},
     }
@@ -253,51 +229,7 @@ def test_write_backup_creates_json_without_secret_material(tmp_path: object) -> 
     assert "token" not in destination.read_text(encoding="utf-8").lower()
 
 
-def test_load_legacy_v1_rejects_missing_historical_collection(tmp_path: Path) -> None:
-    source = tmp_path / "missing-collection-v1.json"
-    payload = _legacy_v1_payload()
-    resources = payload["resources"]
-    assert isinstance(resources, dict)
-    resources.pop("profiles_styles")
-    source.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
-        backup.load_snapshot_file(source, allow_legacy_v1=True)
-
-
-def test_load_legacy_v1_rejects_missing_creation_timestamp(tmp_path: Path) -> None:
-    source = tmp_path / "missing-created-at-v1.json"
-    payload = _legacy_v1_payload()
-    payload.pop("created_at")
-    source.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
-        backup.load_snapshot_file(source, allow_legacy_v1=True)
-
-
-def test_load_legacy_v1_rejects_naive_creation_timestamp(tmp_path: Path) -> None:
-    source = tmp_path / "naive-created-at-v1.json"
-    payload = _legacy_v1_payload()
-    payload["created_at"] = "2026-07-17T12:30:00"
-    source.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
-        backup.load_snapshot_file(source, allow_legacy_v1=True)
-
-
-def test_load_legacy_v1_rejects_non_object_collection_record(tmp_path: Path) -> None:
-    source = tmp_path / "non-object-record-v1.json"
-    payload = _legacy_v1_payload()
-    resources = payload["resources"]
-    assert isinstance(resources, dict)
-    resources["inventory_hops"] = ["not-an-object"]
-    source.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(backup.SnapshotValidationError, match="schema validation failed"):
-        backup.load_snapshot_file(source, allow_legacy_v1=True)
-
-
-def test_load_snapshot_file_classifies_operating_system_read_failure(
+def test_validate_backup_file_classifies_operating_system_read_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = tmp_path / "private-snapshot-name.json"
@@ -308,8 +240,8 @@ def test_load_snapshot_file_classifies_operating_system_read_failure(
 
     monkeypatch.setattr(Path, "read_text", fail_read)
 
-    with pytest.raises(backup.SnapshotReadError, match="not readable"):
-        backup.load_snapshot_file(source, allow_legacy_v1=True)
+    with pytest.raises(backup.SnapshotValidationError, match="not readable"):
+        backup.validate_backup_file(source)
 
 
 def test_write_backup_does_not_reuse_predictable_temp_file(tmp_path: object) -> None:
@@ -318,7 +250,7 @@ def test_write_backup_does_not_reuse_predictable_temp_file(tmp_path: object) -> 
     destination = Path(str(tmp_path)) / "snapshot.json"
     predictable_temp = Path(str(destination) + ".tmp")
     predictable_temp.write_text("other process", encoding="utf-8")
-    payload = {"format": "forge-companion-collection-snapshot-v1", "resources": {}}
+    payload = {"format": "test-format", "resources": {}}
 
     write_backup(payload, destination)
 

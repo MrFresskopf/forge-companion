@@ -45,15 +45,14 @@ confirmed Cloud pulse for a previously armed plan. Collection snapshots are loca
 contain private brewing data, so users are responsible for protecting and encrypting them. They are
 not complete or directly restorable account backups.
 
-New v2 collection snapshots include a strict manifest and canonical SHA-256 digest. `snapshot
+New v3 collection snapshots include a strict manifest and canonical SHA-256 digest. `snapshot
 validate` rejects ambiguous JSON, unsupported schema variants, inconsistent collection counts, and
 modified content without contacting BrewForge. The digest is unkeyed: it detects changes but does not
 authenticate the author or source, prevent a capable attacker from replacing both data and digest, or
-encrypt private data. Inventory audit validates v2 before analysis; legacy v1 files remain readable but
-do not have an embedded integrity proof.
+encrypt private data. Older snapshot formats are rejected rather than reinterpreted.
 
 `doctor --json` serializes only allowlisted endpoint paths, status values, HTTP status codes, and fixed
-error codes under the closed `forge-companion-doctor-v1` schema. It never includes response bodies,
+error codes under the closed `forge-companion-doctor-v2` schema. It never includes response bodies,
 exception text, or credential values. The normal human doctor output likewise reduces invalid-response
 failures to a generic message instead of reflecting parser details. Diagnostic results can still reveal
 which documented scopes succeeded, so treat automation logs according to their operational context.

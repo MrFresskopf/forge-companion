@@ -1,25 +1,26 @@
 # Roadmap
 
-Forge Companion complements BrewForge instead of reproducing its recipe designer or roadmap.
+Forge Companion focuses on safe Shelly control for brewery automation. BrewForge integration remains a
+supporting read-only source for brew context, telemetry, reports, and snapshots.
 
 Milestones describe capability tracks rather than a strict delivery order. Read-only analysis and
 safety work may advance ahead of broader exports or integrations when that creates practical value.
 
 ## Path to 1.0
 
-Forge Companion 1.0 means a stable, documented read-only BrewForge core. It does not require every
-capability track below to be complete. The guarded Shelly Cloud one-shot may remain available, but it
-stays explicitly experimental and outside the 1.0 compatibility promise until independent mechanical
-feedback and repeated installed-system qualification exist.
+Forge Companion 1.0 means a stable, documented safety core for offline Shelly planning, read-only
+device diagnostics, and fail-closed command boundaries. The guarded Shelly Cloud one-shot may remain
+experimental and outside the 1.0 compatibility promise until independent mechanical feedback and
+repeated installed-system qualification exist. Read-only BrewForge tools support this core.
 
 ### Stable 1.0 scope
 
-- native credential storage and explicit CI/environment override behavior
-- BrewForge read-only API access, diagnostics, and explicit paginated brew selection
-- Markdown, CSV, and standalone HTML fermentation reports
-- versioned snapshots, strict offline validation, and inventory audits
-- documented CLI names, options, exit codes, machine-readable schemas, and file-format compatibility
 - offline hopper planning and simulation plus narrow read-only Shelly diagnostics
+- guarded plan state transitions, explicit arming, durable one-shot consumption, and privacy-safe errors
+- native Shelly Cloud credential storage with no plaintext fallback
+- documented CLI names, options, exit codes, machine-readable schemas, and file-format compatibility
+- supporting BrewForge read-only diagnostics, explicit brew selection, fermentation reports, and
+  non-restorable snapshots
 
 Human-readable wording may continue to improve after 1.0. Documented JSON schemas, file formats,
 exit-code meanings, and non-experimental command behavior require compatibility or an announced
@@ -31,9 +32,9 @@ deprecation and migration path.
   configuration, and persisted file formats
 - [ ] freeze the supported snapshot schema and document how older snapshot versions are read or
   migrated
-- [ ] add an optional, rate-limit-aware full export of brew details, notes, and readings while keeping
-  restore and BrewForge writes out of scope
-- [ ] add stable machine-readable output for inventory audits and doctor diagnostics
+- [ ] complete repeated full-assembly qualification and evaluate independent release sensing
+- [ ] keep live actuation experimental until its mechanical evidence and failure boundaries pass review
+- [ ] retain stable machine-readable output for doctor diagnostics
 - [ ] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
   the minimum supported Python version
 - [ ] maintain sanitized BrewForge contract tests for pagination, missing or additional fields, rate
@@ -49,17 +50,19 @@ deprecation and migration path.
 
 ### Planned stabilization sequence
 
-#### 0.3 — Public contracts
+#### 0.3 — Shelly safety and qualification
+
+- run supervised winch bench characterization and record measured travel, current, and timing
+- repeat full-assembly release trials once the Fermzilla is available
+- evaluate practical mechanical release sensing without inferring success from relay state
+- preserve explicit confirmation, no-retry, device auto-off, and durable consumed-state guarantees
+
+#### 0.4 — Public contracts and platform hardening
 
 - define stable human-versus-machine output boundaries and exit codes
 - [x] add versioned `doctor --json`
-- [x] add versioned `inventory --json`
 - define snapshot compatibility, migration, and deprecation rules
 - modularize CLI command registration where that reduces pre-1.0 maintenance risk
-
-#### 0.4 — Export and platform hardening
-
-- add the optional full, rate-limit-aware export and optional compression
 - add BrewForge response-contract and failure-mode coverage
 - add macOS CI and installed-package/keyring smoke tests across supported platforms
 - document the stable installation and upgrade path
@@ -70,7 +73,7 @@ deprecation and migration path.
   fixes
 - run real read-only BrewForge and three-platform installation smokes with sanitized evidence
 - verify wheel, source distribution, checksums, tag provenance, and rendered public documentation
-- keep live Shelly actuation explicitly experimental
+- keep live Shelly actuation explicitly experimental unless mechanical evidence is independently reviewed
 
 #### 1.0.0 — Stable core
 
@@ -80,7 +83,7 @@ deprecation and migration path.
 
 ### Explicitly not required for 1.0
 
-- Brewfather comparison reports
+- complete BrewForge account export or Brewfather comparison reports
 - attenuation, fermentation-rate, and configurable outlier analytics
 - shareable PNG/SVG fermentation briefs
 - split-batch comparison while BrewForge's own implementation remains under evaluation
@@ -101,14 +104,11 @@ deprecation and migration path.
 - [x] validated, paginated JSON collection snapshot
 - [x] automated tests, linting, and type checking
 
-## Milestone 1 — Protect and inspect
+## Milestone 1 — Supporting read-only BrewForge tools
 
-- [x] snapshot v2 manifest, strict offline schema validation, collection counts, scope declaration, and SHA-256 integrity check
+- [x] snapshot v3 manifest, strict offline schema validation, collection counts, scope declaration, and SHA-256 integrity check
 - [ ] optional, rate-limit-aware full export of brew details, notes, and readings
 - [ ] optional compression
-- [x] offline inventory audit for expiry, negative quantities, missing units, and conservative duplicates
-- [x] machine-readable inventory audit output
-- [ ] additional inventory plausibility rules
 - [x] read-only Markdown fermentation brief with data-quality metrics
 - [x] standalone HTML fermentation charts
 - [ ] conservative Brewfather/BrewForge comparison report

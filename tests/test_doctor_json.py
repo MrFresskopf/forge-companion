@@ -17,19 +17,15 @@ runner = CliRunner()
 
 _ENDPOINTS = [
     "brews",
-    "inventory/fermentables",
-    "inventory/hops",
-    "inventory/yeasts",
-    "inventory/miscs",
     "profiles/equipment",
     "profiles/styles",
 ]
 
 
-def _doctor_v1_errors(document: object) -> list[object]:
+def _doctor_v2_errors(document: object) -> list[object]:
     schema = json.loads(
         files("forge_companion")
-        .joinpath("schemas/doctor-v1.schema.json")
+        .joinpath("schemas/doctor-v2.schema.json")
         .read_text(encoding="utf-8")
     )
     Draft202012Validator.check_schema(schema)
@@ -37,13 +33,13 @@ def _doctor_v1_errors(document: object) -> list[object]:
     return list(validator.iter_errors(document))
 
 
-def _assert_doctor_v1_schema(document: object) -> None:
-    assert _doctor_v1_errors(document) == []
+def _assert_doctor_v2_schema(document: object) -> None:
+    assert _doctor_v2_errors(document) == []
 
 
 def _success_document() -> dict[str, object]:
     return {
-        "schema_version": "forge-companion-doctor-v1",
+        "schema_version": "forge-companion-doctor-v2",
         "status": "ok",
         "checks": [
             {
@@ -58,7 +54,7 @@ def _success_document() -> dict[str, object]:
     }
 
 
-def test_doctor_v1_schema_rejects_contradictory_or_extended_documents() -> None:
+def test_doctor_v2_schema_rejects_contradictory_or_extended_documents() -> None:
     wrong_status = _success_document()
     wrong_status["status"] = "failed"
 
@@ -104,7 +100,7 @@ def test_doctor_v1_schema_rejects_contradictory_or_extended_documents() -> None:
         setup_with_checks,
         unknown_field,
     ):
-        assert _doctor_v1_errors(document)
+        assert _doctor_v2_errors(document)
 
 
 class StubClient:
@@ -145,9 +141,9 @@ def test_doctor_json_reports_stable_success_document(
     assert client.paths == _ENDPOINTS
     assert result.output.count("\n") == 1
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document == {
-        "schema_version": "forge-companion-doctor-v1",
+        "schema_version": "forge-companion-doctor-v2",
         "status": "ok",
         "checks": [
             {
@@ -165,7 +161,7 @@ def test_doctor_json_reports_stable_success_document(
 def test_doctor_json_reports_all_checks_and_failed_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = StubClient(failed_path="inventory/hops")
+    client = StubClient(failed_path="profiles/equipment")
     _use_client(monkeypatch, client)
 
     result = runner.invoke(app, ["doctor", "--json"])
@@ -173,12 +169,12 @@ def test_doctor_json_reports_all_checks_and_failed_exit(
     assert result.exit_code == 1
     assert client.paths == _ENDPOINTS
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
-    assert document["schema_version"] == "forge-companion-doctor-v1"
+    _assert_doctor_v2_schema(document)
+    assert document["schema_version"] == "forge-companion-doctor-v2"
     assert document["status"] == "failed"
     assert document["error"] is None
-    assert document["checks"][2] == {
-        "path": "inventory/hops",
+    assert document["checks"][1] == {
+        "path": "profiles/equipment",
         "status": "failed",
         "http_status": 503,
         "error_code": "http_error",
@@ -196,7 +192,7 @@ def test_doctor_json_schema_accepts_standard_informational_failure(
 
     assert result.exit_code == 1
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document["checks"][0] == {
         "path": "brews",
         "status": "failed",
@@ -233,9 +229,9 @@ def test_doctor_json_uses_fixed_codes_without_exception_details(
     assert result.exit_code == 1
     assert client.paths == _ENDPOINTS
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document["status"] == "failed"
-    assert [check["error_code"] for check in document["checks"]] == [expected_code] * 7
+    assert [check["error_code"] for check in document["checks"]] == [expected_code] * 3
     assert "private" not in result.output
 
 
@@ -264,9 +260,9 @@ def test_doctor_json_classifies_deeply_nested_response_and_continues(
     result = runner.invoke(app, ["doctor", "--json"])
 
     assert result.exit_code == 1
-    assert request_count == 7
+    assert request_count == 3
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert {check["error_code"] for check in document["checks"]} == {"invalid_response"}
     assert "RecursionError" not in result.output
 
@@ -302,9 +298,9 @@ def test_doctor_json_classifies_credential_failures_without_details(
 
     assert result.exit_code == 1
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document == {
-        "schema_version": "forge-companion-doctor-v1",
+        "schema_version": "forge-companion-doctor-v2",
         "status": "error",
         "checks": [],
         "error": {"code": expected_code},
@@ -339,9 +335,9 @@ def test_doctor_json_classifies_client_setup_failures_without_details(
 
     assert result.exit_code == 1
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document == {
-        "schema_version": "forge-companion-doctor-v1",
+        "schema_version": "forge-companion-doctor-v2",
         "status": "error",
         "checks": [],
         "error": {"code": "client_setup_error"},
@@ -385,7 +381,7 @@ def test_doctor_json_classifies_real_client_environment_failures_without_request
     assert result.exit_code == 1
     assert result.output.count("\n") == 1
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document["error"] == {"code": "client_setup_error"}
     assert "private" not in result.output
 
@@ -408,9 +404,9 @@ def test_doctor_json_reports_missing_auth_without_human_prose(
 
     assert result.exit_code == 2
     document = json.loads(result.output)
-    _assert_doctor_v1_schema(document)
+    _assert_doctor_v2_schema(document)
     assert document == {
-        "schema_version": "forge-companion-doctor-v1",
+        "schema_version": "forge-companion-doctor-v2",
         "status": "error",
         "checks": [],
         "error": {"code": "authentication_required"},

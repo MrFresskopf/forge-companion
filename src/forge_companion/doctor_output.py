@@ -13,7 +13,7 @@ DoctorSetupErrorCode = Literal[
     "invalid_stored_credential",
 ]
 
-SCHEMA_VERSION = "forge-companion-doctor-v1"
+SCHEMA_VERSION = "forge-companion-doctor-v2"
 
 
 def build_doctor_document(
@@ -21,7 +21,7 @@ def build_doctor_document(
     *,
     error_code: DoctorSetupErrorCode | None = None,
 ) -> dict[str, object]:
-    """Build one closed v1 result without response bodies or exception text."""
+    """Build one closed v2 result without response bodies or exception text."""
     if error_code is not None:
         return {
             "schema_version": SCHEMA_VERSION,

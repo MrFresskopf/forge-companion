@@ -2,18 +2,17 @@
 
 Forge Companion uses a supported native OS credential store by default. `BREWFORGE_API_TOKEN` remains
 an explicit override for CI, scripts, and temporary sessions. Shelly Cloud uses a separate native
-profile with no environment or plaintext fallback. The inventory audit is the exception: it only
-reads a local snapshot and needs no credential.
+profile with no environment or plaintext fallback.
 
 BrewForge currently documents limits of 100 requests per hour and 1,000 requests per month. Forge
 Companion keeps network use explicit and avoids hidden one-request-per-item behavior.
 
 Run `forge-companion` without arguments for the shortest start page. The primary everyday commands
-are `report`, `snapshot`, and `inventory`; older format-specific commands remain available for scripts.
+are the `hopper` safety workflow and its read-only Shelly diagnostics. BrewForge reports and snapshots
+remain supporting read-only tools.
 
 The [pre-1.0 compatibility policy](COMPATIBILITY.md) records the planned stable CLI, exit-code,
-snapshot, and machine-readable contracts. `doctor --json` and `inventory --json` are implemented with
-the packaged schemas documented below.
+snapshot, and machine-readable contracts. `doctor --json` uses the packaged schema documented below.
 
 ## `auth`
 
@@ -70,16 +69,16 @@ forge-companion doctor
 forge-companion doctor --json
 ```
 
-The command checks brews, inventory, equipment, and style profiles with seven API requests. Each
+The command checks brews, equipment, and style profiles with three API requests. Each
 endpoint reports `OK` or `FAIL` independently.
 
 `--json` emits exactly one compact JSON document on standard output after CLI parsing succeeds. It uses
-the closed `forge-companion-doctor-v1` contract defined by the packaged
-[`doctor-v1.schema.json`](../src/forge_companion/schemas/doctor-v1.schema.json). The document always has
+the closed `forge-companion-doctor-v2` contract defined by the packaged
+[`doctor-v2.schema.json`](../src/forge_companion/schemas/doctor-v2.schema.json). The document always has
 `schema_version`, `status`, `checks`, and `error` fields:
 
-- `status: "ok"` contains seven successful checks and exits `0`.
-- `status: "failed"` contains all seven ordered checks, at least one failed check, and exits `1`.
+- `status: "ok"` contains three successful checks and exits `0`.
+- `status: "failed"` contains all three ordered checks, at least one failed check, and exits `1`.
 - `status: "error"` contains no checks. Missing authentication uses
   `authentication_required` and exits `2`; invalid environment credentials, invalid stored
   credentials, native credential-store failures, and local HTTP-client setup failures use fixed codes
@@ -87,11 +86,11 @@ the closed `forge-companion-doctor-v1` contract defined by the packaged
 
 Each endpoint check contains only its documented path, `ok` or `failed`, an HTTP status or `null`, and
 a fixed error code or `null`. Response bodies, exception text, credentials, and raw API data are never
-included. Setup errors make no API request; completed diagnostics still make exactly seven. Invalid
+included. Setup errors make no API request; completed diagnostics still make exactly three. Invalid
 CLI syntax is rejected by Typer before the command runs and therefore remains a normal human-readable
-usage error rather than a doctor-v1 document.
+usage error rather than a doctor-v2 document.
 
-The v1 schema is closed: unknown fields, endpoint reordering, contradictory status/error combinations,
+The v2 schema is closed: unknown fields, endpoint reordering, contradictory status/error combinations,
 and unsupported error codes are invalid. A future incompatible shape requires a new schema version;
 consumers should select behavior by the exact `schema_version` value.
 
@@ -120,16 +119,15 @@ forge-companion snapshot validate snapshots/my-brewforge-collections.json
 ```
 
 Credentials are never written to the file. Writes are atomic, and validation or network errors stop
-the operation instead of leaving a misleading partial snapshot. New snapshots use the v2 format and
-contain the creation time, Forge Companion version, all seven supported collection names and counts,
+the operation instead of leaving a misleading partial snapshot. New snapshots use the v3 format and
+contain the creation time, Forge Companion version, three supported collection names and counts,
 explicit exclusions, and a SHA-256 digest over canonical UTF-8 JSON excluding only the digest field.
 
 `snapshot validate [FILE]` is offline and defaults to `snapshots/brewforge-collections.json`. It
 strictly rejects duplicate JSON keys, non-JSON numeric values,
 unknown fields, unsupported formats, inconsistent counts, missing collections, malformed records,
 and checksum changes. Successful output contains only manifest metadata and counts, never collection
-records or the input path. The inventory audit applies the same validation to v2 files while retaining
-read support for strict legacy v1 snapshots.
+records or the input path. Older snapshot formats are rejected instead of being reinterpreted.
 
 The SHA-256 digest detects changes; it is not a digital signature, proof that BrewForge produced the
 data, access control, or encryption. Keep snapshots private and protect them like any other account
@@ -138,31 +136,6 @@ export.
 > [!WARNING]
 > This is not yet a complete or restorable account backup. Version 0.2 does not fetch per-brew
 > details, notes, fermentation readings, or data unavailable through the documented API.
-
-## `inventory`
-
-Audit a local Forge Companion snapshot without contacting BrewForge:
-
-```bash
-forge-companion inventory
-forge-companion inventory snapshots/my-brewforge-collections.json --as-of 2026-07-17
-forge-companion inventory --as-of 2026-07-17 --json
-```
-
-Without a path it reuses `snapshots/brewforge-collections.json`, the output of the default `snapshot`
-command. The previous `inventory-audit` spelling remains available for compatible scripts.
-
-Current checks cover expired inventory, negative quantities, missing yeast or miscellaneous-item
-units, and conservative possible duplicates. Findings are advisory; Forge Companion never merges or
-changes inventory. v2 input must pass schema and SHA-256 validation before any finding is calculated;
-legacy v1 snapshots remain accepted but have no embedded integrity proof.
-
-`--json` emits exactly one compact JSON document after CLI parsing succeeds, using the packaged
-[`inventory-audit-v1.schema.json`](../src/forge_companion/schemas/inventory-audit-v1.schema.json).
-The command remains offline and always reports `request_count: 0`. Successful audits exit `0`, including
-when advisory findings exist. Missing, invalid, or unreadable snapshots emit fixed structured errors and
-exit `1`; malformed `--as-of` emits `invalid-as-of` and exits `2` before snapshot access. Finding names,
-IDs, and messages are private inventory data, so JSON output should be protected like its source snapshot.
 
 ## Advanced report and export commands
 
@@ -403,7 +376,6 @@ Internet.
 Use the narrowest scopes needed for your task:
 
 - `brews:read`
-- `inventory:read`
 - `equipment:read`
 - `styles:read`
 

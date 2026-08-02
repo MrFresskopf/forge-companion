@@ -21,10 +21,6 @@ class EndpointCheck:
 
 _ENDPOINTS = (
     "brews",
-    "inventory/fermentables",
-    "inventory/hops",
-    "inventory/yeasts",
-    "inventory/miscs",
     "profiles/equipment",
     "profiles/styles",
 )

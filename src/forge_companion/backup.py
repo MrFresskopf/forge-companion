@@ -16,10 +16,6 @@ from forge_companion.client import ReadClient
 
 _RESOURCES = {
     "brews": ("brews", True),
-    "inventory_fermentables": ("inventory/fermentables", True),
-    "inventory_hops": ("inventory/hops", True),
-    "inventory_yeasts": ("inventory/yeasts", True),
-    "inventory_miscs": ("inventory/miscs", True),
     "profiles_equipment": ("profiles/equipment", False),
     "profiles_styles": ("profiles/styles", False),
 }
@@ -29,7 +25,7 @@ _EXCLUDED = [
     "brew_readings",
     "undocumented_resources",
 ]
-_FORMAT = "forge-companion-collection-snapshot-v2"
+_FORMAT = "forge-companion-collection-snapshot-v3"
 _CANONICALIZATION = "json-sort-keys-compact-utf8-without-digest"
 
 
@@ -49,14 +45,6 @@ class SnapshotValidationError(ValueError):
     """Report an invalid or unverifiable local collection snapshot."""
 
 
-class SnapshotReadError(SnapshotValidationError):
-    """Report a snapshot that could not be read from local storage."""
-
-
-class SnapshotNotFoundError(SnapshotReadError):
-    """Report a snapshot that was absent when the read was attempted."""
-
-
 def _snapshot_digest(payload: dict[str, Any]) -> str:
     unsigned = deepcopy(payload)
     unsigned["manifest"]["integrity"].pop("digest", None)
@@ -71,7 +59,7 @@ def _snapshot_digest(payload: dict[str, Any]) -> str:
 
 
 def validate_backup(payload: dict[str, Any]) -> SnapshotSummary:
-    """Validate a v2 collection snapshot and return data-free metadata."""
+    """Validate a v3 collection snapshot and return data-free metadata."""
     if payload.get("format") != _FORMAT:
         raise SnapshotValidationError("Snapshot has an unsupported format.")
     if set(payload) != {"format", "created_at", "manifest", "resources"}:
@@ -176,62 +164,13 @@ def _load_strict_json_object(source: Path) -> dict[str, Any]:
             parse_constant=_reject_json_constant,
         )
     except FileNotFoundError:
-        raise SnapshotNotFoundError("Snapshot does not exist.") from None
+        raise SnapshotValidationError("Snapshot does not exist.") from None
     except (OSError, UnicodeError):
-        raise SnapshotReadError("Snapshot is not readable strict JSON.") from None
+        raise SnapshotValidationError("Snapshot is not readable strict JSON.") from None
     except (ValueError, RecursionError):
         raise SnapshotValidationError("Snapshot is not readable strict JSON.") from None
     if not isinstance(payload, dict):
         raise SnapshotValidationError("Snapshot schema validation failed.")
-    return payload
-
-
-def _validate_legacy_v1(payload: dict[str, Any]) -> None:
-    if set(payload) != {"format", "created_at", "resources"}:
-        raise SnapshotValidationError("Snapshot schema validation failed.")
-    created_at = payload["created_at"]
-    if not isinstance(created_at, str):
-        raise SnapshotValidationError("Snapshot schema validation failed.")
-    try:
-        timestamp = datetime.fromisoformat(created_at)
-    except ValueError:
-        raise SnapshotValidationError("Snapshot schema validation failed.") from None
-    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
-        raise SnapshotValidationError("Snapshot schema validation failed.")
-    resources = payload.get("resources")
-    if not isinstance(resources, dict) or set(resources) != set(_RESOURCES):
-        raise SnapshotValidationError("Snapshot schema validation failed.")
-    if any(
-        not isinstance(records, list)
-        or any(not isinstance(record, dict) for record in records)
-        for records in resources.values()
-    ):
-        raise SnapshotValidationError("Snapshot schema validation failed.")
-
-
-def validate_snapshot_payload(
-    payload: dict[str, Any],
-    *,
-    allow_legacy_v1: bool = False,
-) -> None:
-    """Validate an in-memory snapshot using the same rules as file loading."""
-    snapshot_format = payload.get("format")
-    if snapshot_format == _FORMAT:
-        validate_backup(payload)
-    elif allow_legacy_v1 and snapshot_format == "forge-companion-collection-snapshot-v1":
-        _validate_legacy_v1(payload)
-    else:
-        raise SnapshotValidationError("Snapshot has an unsupported format.")
-
-
-def load_snapshot_file(
-    source: Path,
-    *,
-    allow_legacy_v1: bool = False,
-) -> dict[str, Any]:
-    """Load a strict v2 snapshot or an explicitly allowed legacy v1 snapshot."""
-    payload = _load_strict_json_object(source)
-    validate_snapshot_payload(payload, allow_legacy_v1=allow_legacy_v1)
     return payload
 
 
