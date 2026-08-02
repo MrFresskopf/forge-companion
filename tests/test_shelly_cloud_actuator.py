@@ -255,7 +255,7 @@ def test_cloud_actuator_never_retries_on_http_error() -> None:
     assert "synthetic-cloud-key" not in str(exc_info.value)
 
 
-def test_cloud_actuator_waits_for_device_timer_before_readback() -> None:
+def test_cloud_actuator_waits_for_timer_and_cloud_margin_before_readback() -> None:
     events: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -275,7 +275,7 @@ def test_cloud_actuator_waits_for_device_timer_before_readback() -> None:
         )
 
     def wait(seconds: float) -> None:
-        assert seconds == 1.0
+        assert seconds == 1.25
         events.append("wait")
 
     actuator = ShellyCloudActuator(
@@ -291,7 +291,7 @@ def test_cloud_actuator_waits_for_device_timer_before_readback() -> None:
     assert events == ["set", "wait", "readback"]
 
 
-def test_cloud_actuator_observes_one_request_per_second_before_readback() -> None:
+def test_cloud_actuator_observes_conservative_request_margin_before_readback() -> None:
     waits: list[float] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -318,7 +318,7 @@ def test_cloud_actuator_observes_one_request_per_second_before_readback() -> Non
 
     actuator.pulse(channel=0, toggle_after_seconds=0.1)
 
-    assert waits == [1.0]
+    assert waits == [1.25]
 
 
 def test_cloud_actuator_sanitizes_readback_transport_error_without_retry() -> None:

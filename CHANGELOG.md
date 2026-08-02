@@ -26,6 +26,12 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Collection snapshots use v3 and include only brews, equipment profiles, and style profiles. Doctor
   diagnostics use the same three read-only BrewForge surfaces.
 
+### Fixed
+
+- Shelly Cloud fire now keeps a conservative 1.25-second interval from preflight to pulse and from
+  pulse to OFF read-back. The real Cloud service rejects requests started at the exact documented
+  one-second boundary with HTTP 429.
+
 ### Removed
 
 - All inventory commands, audits, API collection probes, snapshot resources, JSON contracts, schemas,

@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 _MAX_CLOUD_STATUS_RESPONSE_BYTES = 64 * 1024
+CLOUD_REQUEST_INTERVAL_SECONDS = 1.25
 _SHELLY_CLOUD_SERVER_PATTERN = re.compile(
     r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+shelly\.cloud"
 )
@@ -297,6 +298,6 @@ class ShellyCloudActuator:
             raise ShellyCloudResponseError("Shelly Cloud pulse request failed") from None
         if not accepted:
             return ShellyCloudPulseResult(accepted=False, readback=None)
-        self._sleep(max(1.0, float(toggle_after_seconds)))
+        self._sleep(max(CLOUD_REQUEST_INTERVAL_SECONDS, float(toggle_after_seconds)))
         readback = self._read_status(channel=channel)
         return ShellyCloudPulseResult(accepted=True, readback=readback)
