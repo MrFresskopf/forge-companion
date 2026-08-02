@@ -10,8 +10,8 @@ class StubClient:
 
     def get(self, path: str, params: object = None) -> dict[str, object]:
         self.paths.append(path)
-        if path == "inventory/hops":
-            request = httpx.Request("GET", "https://brewforge.sh/api/v1/inventory/hops")
+        if path == "profiles/equipment":
+            request = httpx.Request("GET", "https://brewforge.sh/api/v1/profiles/equipment")
             response = httpx.Response(500, request=request)
             raise httpx.HTTPStatusError("broken", request=request, response=response)
         return {"data": []}
@@ -24,20 +24,12 @@ def test_doctor_checks_supported_collections_and_reports_failures() -> None:
 
     assert client.paths == [
         "brews",
-        "inventory/fermentables",
-        "inventory/hops",
-        "inventory/yeasts",
-        "inventory/miscs",
         "profiles/equipment",
         "profiles/styles",
     ]
     assert [(check.path, check.ok, check.status) for check in checks] == [
         ("brews", True, 200),
-        ("inventory/fermentables", True, 200),
-        ("inventory/hops", False, 500),
-        ("inventory/yeasts", True, 200),
-        ("inventory/miscs", True, 200),
-        ("profiles/equipment", True, 200),
+        ("profiles/equipment", False, 500),
         ("profiles/styles", True, 200),
     ]
 
@@ -51,7 +43,7 @@ def test_doctor_reports_invalid_payload_and_continues() -> None:
 
         def get(self, path: str, params: object = None) -> dict[str, object]:
             self.paths.append(path)
-            if path == "inventory/miscs":
+            if path == "profiles/equipment":
                 raise ValueError("private invalid JSON detail")
             return {"data": []}
 
@@ -59,11 +51,11 @@ def test_doctor_reports_invalid_payload_and_continues() -> None:
 
     checks = run_doctor(client)
 
-    misc = next(check for check in checks if check.path == "inventory/miscs")
-    assert misc.ok is False
-    assert misc.status is None
-    assert misc.error == "invalid response"
-    assert "private invalid JSON detail" not in (misc.error or "")
+    equipment = next(check for check in checks if check.path == "profiles/equipment")
+    assert equipment.ok is False
+    assert equipment.status is None
+    assert equipment.error == "invalid response"
+    assert "private invalid JSON detail" not in (equipment.error or "")
     assert client.paths[-1] == "profiles/styles"
 
 
@@ -76,7 +68,7 @@ def test_doctor_does_not_echo_token_from_transport_exception() -> None:
 
     checks = run_doctor(BrokenTransportClient())
 
-    assert len(checks) == 7
+    assert len(checks) == 3
     assert {check.error for check in checks} == {"API request failed"}
     assert all(check.status is None and not check.ok for check in checks)
     assert all(token not in (check.error or "") for check in checks)
@@ -93,7 +85,7 @@ def test_doctor_classifies_incoherent_http_status_as_invalid_response(status: in
 
     checks = run_doctor(NonstandardStatusClient())
 
-    assert len(checks) == 7
+    assert len(checks) == 3
     assert all(check.status is None for check in checks)
     assert {check.error for check in checks} == {"invalid response"}
     assert {check.error_code for check in checks} == {"invalid_response"}

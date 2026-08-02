@@ -1,9 +1,8 @@
 """Command-line interface for Forge Companion."""
 
-import json
 import sys
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import monotonic
 from time import sleep as sleep_seconds
@@ -20,11 +19,8 @@ from forge_companion import (
     shelly_cloud_credentials,
 )
 from forge_companion.backup import (
-    SnapshotNotFoundError,
-    SnapshotReadError,
     SnapshotValidationError,
     create_backup,
-    load_snapshot_file,
     validate_backup_file,
     write_backup,
 )
@@ -53,12 +49,6 @@ from forge_companion.hopper import (
     write_hopper_plan,
     write_new_hopper_plan,
 )
-from forge_companion.inventory_audit import audit_inventory
-from forge_companion.inventory_output import (
-    build_inventory_error_document,
-    build_inventory_success_document,
-    render_inventory_json,
-)
 from forge_companion.shelly import ShellyReadOnlyClient, ShellyResponseError
 from forge_companion.shelly_cloud import ShellyCloudReadOnlyClient, ShellyCloudResponseError
 from forge_companion.spunding_advisor import AdvisorConfig, advise_spunding_payload
@@ -67,8 +57,8 @@ from forge_companion.terminal_text import safe_terminal_text
 
 app = typer.Typer(
     help=(
-        "Unofficial BrewForge companion with read-only diagnostics, reports, "
-        "and guarded experimental automation."
+        "Safe Shelly control and guarded brewery automation with optional "
+        "read-only BrewForge reports."
     ),
     no_args_is_help=False,
     invoke_without_command=True,
@@ -78,18 +68,18 @@ auth_app = typer.Typer(
     no_args_is_help=False,
     invoke_without_command=True,
 )
-app.add_typer(auth_app, name="auth", rich_help_panel="Start here")
 snapshot_app = typer.Typer(
     help="Run without a subcommand to create; use snapshot validate to verify offline.",
     invoke_without_command=True,
 )
-app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Protect and inspect")
 hopper_app = typer.Typer(
     help="Prepare, rehearse, and fire guarded remote-hopper plans.",
     no_args_is_help=False,
     invoke_without_command=True,
 )
-app.add_typer(hopper_app, name="hopper", rich_help_panel="Safety experiments")
+app.add_typer(hopper_app, name="hopper", rich_help_panel="Start here")
+app.add_typer(auth_app, name="auth", rich_help_panel="Supporting BrewForge")
+app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Supporting BrewForge")
 cloud_auth_app = typer.Typer(
     help="Manage Shelly Cloud authentication without displaying credentials.",
     no_args_is_help=False,
@@ -111,16 +101,14 @@ def main(
         typer.Option("--version", help="Show the version and exit.", is_eager=True),
     ] = False,
 ) -> None:
-    """Run read-only BrewForge companion commands."""
+    """Run safe Shelly control and read-only brewing companion commands."""
     if version:
         typer.echo(f"Forge Companion {__version__}")
         raise typer.Exit()
     if context.invoked_subcommand is None:
         typer.echo("Forge Companion\n")
-        typer.echo("First use:")
-        typer.echo("  forge-companion auth login\n")
-        typer.echo("Then create a visual fermentation report:")
-        typer.echo("  forge-companion report")
+        typer.echo("Start with safe Shelly planning and read-only status checks:")
+        typer.echo("  forge-companion hopper --help")
         typer.echo("\nMore tools: forge-companion --help")
 
 
@@ -701,7 +689,7 @@ def _doctor_credential_error_code(
     return "credential_store_error"
 
 
-@app.command(rich_help_panel="Start here")
+@app.command(rich_help_panel="Supporting BrewForge")
 def doctor(
     json_output: Annotated[
         bool,
@@ -789,155 +777,6 @@ def snapshot_validate_command(
     typer.echo(f"Records: {summary.record_count}")
     typer.echo("SHA-256 integrity: verified.")
     typer.echo("Excluded: brew details, brew notes, brew readings, undocumented resources.")
-
-
-@app.command("inventory-audit", hidden=True)
-def inventory_audit_command(
-    snapshot: Annotated[
-        Path,
-        typer.Argument(help="Collection snapshot JSON file."),
-    ] = Path("snapshots/brewforge-collections.json"),
-    as_of: Annotated[
-        str | None,
-        typer.Option("--as-of", help="Audit date in YYYY-MM-DD format."),
-    ] = None,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", help="Emit the versioned inventory JSON contract."),
-    ] = False,
-) -> None:
-    """Audit inventory data from a local collection snapshot."""
-    try:
-        if as_of is None:
-            audit_date = date.today()
-        else:
-            year, month, day = as_of[:4], as_of[5:7], as_of[8:10]
-            if (
-                len(as_of) != 10
-                or as_of[4] != "-"
-                or as_of[7] != "-"
-                or not (year.isascii() and month.isascii() and day.isascii())
-                or not (year.isdecimal() and month.isdecimal() and day.isdecimal())
-            ):
-                raise ValueError
-            audit_date = date.fromisoformat(as_of)
-    except ValueError:
-        if json_output:
-            document = build_inventory_error_document(
-                "invalid-as-of",
-                "Use YYYY-MM-DD.",
-                as_of=None,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=2) from None
-        typer.echo("Inventory audit failed: --as-of must use YYYY-MM-DD.", err=True)
-        raise typer.Exit(code=1) from None
-    try:
-        payload = load_snapshot_file(snapshot, allow_legacy_v1=True)
-        resources = payload.get("resources")
-        if not isinstance(resources, dict):
-            raise TypeError("snapshot resources is not an object")
-        findings = audit_inventory(resources, as_of=audit_date)
-    except SnapshotNotFoundError:
-        if json_output:
-            document = build_inventory_error_document(
-                "snapshot-not-found",
-                "Snapshot not found.",
-                as_of=audit_date,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=1) from None
-        if snapshot == Path("snapshots/brewforge-collections.json"):
-            typer.echo("Inventory audit failed: no standard snapshot found.", err=True)
-            typer.echo("Run `forge-companion snapshot` first.", err=True)
-        else:
-            typer.echo(
-                "Inventory audit failed: Snapshot is not readable strict JSON.", err=True
-            )
-        raise typer.Exit(code=1) from None
-    except SnapshotReadError as error:
-        if json_output:
-            document = build_inventory_error_document(
-                "snapshot-read-failed",
-                "Snapshot could not be read.",
-                as_of=audit_date,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=1) from None
-        typer.echo(f"Inventory audit failed: {error}", err=True)
-        raise typer.Exit(code=1) from None
-    except SnapshotValidationError as error:
-        if json_output:
-            document = build_inventory_error_document(
-                "snapshot-invalid",
-                "Snapshot is invalid.",
-                as_of=audit_date,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=1) from None
-        typer.echo(f"Inventory audit failed: {error}", err=True)
-        raise typer.Exit(code=1) from None
-    except OSError as error:
-        if json_output:
-            document = build_inventory_error_document(
-                "snapshot-read-failed",
-                "Snapshot could not be read.",
-                as_of=audit_date,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=1) from None
-        typer.echo(f"Inventory audit failed: {error}", err=True)
-        raise typer.Exit(code=1) from None
-    except (json.JSONDecodeError, TypeError, ValueError) as error:
-        if json_output:
-            document = build_inventory_error_document(
-                "snapshot-invalid",
-                "Snapshot is invalid.",
-                as_of=audit_date,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=1) from None
-        typer.echo(f"Inventory audit failed: {error}", err=True)
-        raise typer.Exit(code=1) from None
-
-    if json_output:
-        try:
-            document = build_inventory_success_document(payload, findings, as_of=audit_date)
-        except (TypeError, ValueError):
-            document = build_inventory_error_document(
-                "snapshot-invalid",
-                "Snapshot is invalid.",
-                as_of=audit_date,
-            )
-            typer.echo(render_inventory_json(document))
-            raise typer.Exit(code=1) from None
-        typer.echo(render_inventory_json(document))
-        return
-
-    typer.echo(f"{len(findings)} finding(s)")
-    for finding in findings:
-        typer.echo(
-            f"{finding.severity.value.upper()} {finding.category} {finding.name}: {finding.message}"
-        )
-
-
-@app.command("inventory", rich_help_panel="Protect and inspect")
-def inventory_command(
-    snapshot: Annotated[
-        Path,
-        typer.Argument(help="Collection snapshot JSON file."),
-    ] = Path("snapshots/brewforge-collections.json"),
-    as_of: Annotated[
-        str | None,
-        typer.Option("--as-of", help="Audit date in YYYY-MM-DD format."),
-    ] = None,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", help="Emit the versioned inventory JSON contract."),
-    ] = False,
-) -> None:
-    """Check inventory using the standard local snapshot by default."""
-    inventory_audit_command(snapshot=snapshot, as_of=as_of, json_output=json_output)
 
 
 @app.command("fermentation-brief", hidden=True)
@@ -1263,7 +1102,7 @@ def fermentation_html_command(
     )
 
 
-@app.command("report", rich_help_panel="Reports and exports")
+@app.command("report", rich_help_panel="Supporting BrewForge")
 def report_command(
     brew_id: Annotated[
         str | None,

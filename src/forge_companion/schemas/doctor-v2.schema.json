@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFresskopf/forge-companion/schemas/doctor-v1",
-  "title": "Forge Companion doctor v1 result",
+  "$id": "https://github.com/MrFresskopf/forge-companion/schemas/doctor-v2",
+  "title": "Forge Companion doctor v2 result",
   "type": "object",
   "required": [
     "schema_version",
@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "forge-companion-doctor-v1"
+      "const": "forge-companion-doctor-v2"
     },
     "status": {
       "enum": [
@@ -216,8 +216,8 @@
     },
     "checks": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 3,
+      "maxItems": 3,
       "prefixItems": [
         {
           "allOf": [
@@ -233,62 +233,7 @@
             }
           ]
         },
-        {
-          "allOf": [
-            {
-              "$ref": "#/$defs/check"
-            },
-            {
-              "properties": {
-                "path": {
-                  "const": "inventory/fermentables"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "allOf": [
-            {
-              "$ref": "#/$defs/check"
-            },
-            {
-              "properties": {
-                "path": {
-                  "const": "inventory/hops"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "allOf": [
-            {
-              "$ref": "#/$defs/check"
-            },
-            {
-              "properties": {
-                "path": {
-                  "const": "inventory/yeasts"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "allOf": [
-            {
-              "$ref": "#/$defs/check"
-            },
-            {
-              "properties": {
-                "path": {
-                  "const": "inventory/miscs"
-                }
-              }
-            }
-          ]
-        },
+
         {
           "allOf": [
             {

@@ -1,14 +1,15 @@
 # Contributing
 
-Forge Companion is deliberately small, read-only, and fail-closed. Contributions are welcome when
-they keep those properties intact.
+Forge Companion is deliberately small and fail-closed. Shelly control uses narrow, explicit safety
+boundaries; BrewForge access remains read-only. Contributions are welcome when they keep those
+properties intact.
 
 ## Before you start
 
 Open an issue before building a large feature or anything that overlaps BrewForge's roadmap. Small
 bug fixes, documentation improvements, and focused tests can go straight to a pull request.
 
-Never include real API tokens, private brew names, comments, telemetry, inventory, or account data in
+Never include real API tokens, private brew names, comments, telemetry, device details, or account data in
 issues, fixtures, screenshots, or commits.
 
 ## Development setup
@@ -35,9 +36,9 @@ uv run forge-companion --help
 4. Preserve concise errors without tracebacks or secret values.
 5. Update the README, command guide, or roadmap when behavior changes.
 
-Write operations are outside the current default scope. A proposal involving writes or hardware must
-start with a separate design covering opt-in controls, dry runs, idempotency, timeouts, read-back
-verification, and a fail-closed path.
+Generic write operations remain outside the default scope. A proposal involving hardware must start
+with a separate design covering opt-in controls, offline rehearsal, durable state, timeouts, read-back,
+no ambiguous retries, and a fail-closed path.
 
 ## Check your work
 

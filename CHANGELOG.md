@@ -8,10 +8,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `doctor --json` with a closed, packaged `forge-companion-doctor-v1` JSON Schema, fixed endpoint order,
+- `doctor --json` with a closed, packaged `forge-companion-doctor-v2` JSON Schema, fixed endpoint order,
   correlated outcomes, stable setup and endpoint error codes, and documented exit semantics.
-- `inventory --json` with an additive, packaged `forge-companion-inventory-audit-v1` JSON Schema,
-  allowlisted findings, fixed command errors, offline `request_count: 0`, and structured duplicate IDs.
 - A pre-1.0 compatibility policy defines the planned stable CLI, snapshot, exit-code, and machine-output
   contracts.
 
@@ -20,11 +18,15 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Doctor diagnostics no longer reflect invalid-response exception details in human output; the JSON
   form emits only allowlisted paths, statuses, HTTP codes, and fixed error codes, including a
   data-minimal classification for local HTTP-client setup failures.
+- Forge Companion now presents safe Shelly control and guarded brewery automation as its primary
+  purpose; BrewForge reports and snapshots remain supporting read-only tools.
+- Collection snapshots use v3 and include only brews, equipment profiles, and style profiles. Doctor
+  diagnostics use the same three read-only BrewForge surfaces.
 
-### Fixed
+### Removed
 
-- Legacy v1 inventory snapshots now require the complete historical schema before audit findings are
-  calculated, preventing malformed or partial collections from producing a misleading successful audit.
+- All inventory commands, audits, API collection probes, snapshot resources, JSON contracts, schemas,
+  implementation modules, and dedicated tests.
 
 ## [0.2.1] — 2026-07-28
 
