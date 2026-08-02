@@ -321,18 +321,19 @@ forge-companion hopper fire automation/hopper-plan.json
 `fire` validates the plan and requires exact interactive `FIRE` confirmation on an attached terminal;
 piped or redirected input is rejected. Only after confirmation does it resolve the matching native
 credential and perform a fresh read-only preflight. The device must be online and explicitly report
-electrical `OFF`; otherwise the command stops without a switch request. It then observes the provider's
-one-second request boundary and atomically persists `FIRE_REQUESTED` immediately before the single
-switch attempt. The actuator sends exactly one Cloud v2
+electrical `OFF`; otherwise the command stops without a switch request. It then waits until at least
+1.25 seconds have elapsed since the preflight request started and atomically persists `FIRE_REQUESTED`
+immediately before the single switch attempt. The actuator sends exactly one Cloud v2
 `POST /v2/devices/api/set/switch` for fixed channel 0 with `on: true` and the bounded
 `toggle_after` value. Only HTTP 200 is accepted for the set request; its response body is not read or
 interpreted, and the later size-capped status read-back determines whether the plan can lock. There is
 no automatic retry. The Cloud profile key is not persisted outside the native credential store; it is
 held in memory only as needed and transmitted only to the assigned Shelly Cloud host.
 
-After the device timer should have expired, the actuator waits at least one second to respect the
-provider request-rate boundary and performs one status read-back. Only an online, explicit electrical
-`OFF` result completes `PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED`. A rejected, timed-out, malformed,
+After the device timer should have expired, the actuator waits at least 1.25 seconds from the set request
+before performing one status read-back. The conservative margin avoids the provider rejecting requests
+started at the exact documented one-second boundary. Only an online, explicit electrical `OFF` result
+completes `PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED`. A rejected, timed-out, malformed,
 offline, or still-ON result leaves the durable plan at `FIRE_REQUESTED`; the outcome is ambiguous and
 must not be retried automatically.
 

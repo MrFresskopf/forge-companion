@@ -757,7 +757,7 @@ def test_hopper_fire_requires_explicit_fire_confirmation(
     assert "mechanical hop release" in result.output
 
 
-def test_hopper_fire_confirms_before_fresh_off_preflight(
+def test_hopper_fire_confirms_before_preflight_and_waits_for_cloud_margin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -788,7 +788,7 @@ def test_hopper_fire_confirms_before_fresh_off_preflight(
     monkeypatch.setattr("forge_companion.cli.monotonic", lambda: next(monotonic_values))
 
     def wait_for_rate_boundary(seconds: float) -> None:
-        assert seconds == pytest.approx(0.75)
+        assert seconds == pytest.approx(1.0)
         events.append("rate-wait")
 
     monkeypatch.setattr("forge_companion.cli.sleep_seconds", wait_for_rate_boundary)

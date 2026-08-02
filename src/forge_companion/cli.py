@@ -419,8 +419,8 @@ def hopper_fire_command(
                 raise typer.Exit(code=1)
 
             elapsed = monotonic() - preflight_started
-            if elapsed < 1.0:
-                sleep_seconds(1.0 - elapsed)
+            if elapsed < shelly_cloud.CLOUD_REQUEST_INTERVAL_SECONDS:
+                sleep_seconds(shelly_cloud.CLOUD_REQUEST_INTERVAL_SECONDS - elapsed)
 
             def persist(changed: dict[str, Any]) -> None:
                 nonlocal fire_requested
