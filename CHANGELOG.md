@@ -15,6 +15,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Experimental live Cloud pulses are now limited to 1,000 ms at plan creation, strict re-validation,
+  and the actuator boundary. This matches the current unloaded winch characterization while keeping
+  the separately configured four-second device auto-off as an emergency backstop, not a normal runtime.
 - Doctor diagnostics no longer reflect invalid-response exception details in human output; the JSON
   form emits only allowlisted paths, statuses, HTTP codes, and fixed error codes, including a
   data-minimal classification for local HTTP-client setup failures.

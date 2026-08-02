@@ -292,7 +292,7 @@ into the plan:
 ```bash
 forge-companion hopper plan --cloud \
   --trigger-at 2026-08-01T18:00:00+00:00 \
-  --pulse-ms 1500 \
+  --pulse-ms 1000 \
   --output automation/hopper-plan.json
 forge-companion hopper arm automation/hopper-plan.json
 forge-companion hopper status automation/hopper-plan.json
@@ -336,9 +336,11 @@ provider request-rate boundary and performs one status read-back. Only an online
 offline, or still-ON result leaves the durable plan at `FIRE_REQUESTED`; the outcome is ambiguous and
 must not be retried automatically.
 
-Cloud pulse duration is limited to 1–30,000 ms. This is a software ceiling, not a safe runtime
-recommendation. Use only a measured under-load runtime plus a conservative margin, device-side
-auto-off as an independent backstop, mechanical endpoint protection, and a manual isolation method.
+Cloud pulse duration is limited to 1–1,000 ms at plan creation, strict plan re-validation, and the
+actuator boundary. This is a prototype-specific safety ceiling, not proof that one second is a safe or
+sufficient runtime under load. Use only a measured under-load runtime plus a conservative margin,
+device-side auto-off as an independent backstop, mechanical endpoint protection, and a manual isolation
+method.
 The command does not wait for the trigger, schedule itself, re-arm a used plan, or infer success from a
 transport timeout.
 

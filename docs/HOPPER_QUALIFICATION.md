@@ -18,6 +18,19 @@ Before every supervised trial:
 
 The current software ceiling and any existing device auto-off are not qualified mechanical runtimes.
 
+## Current unloaded prototype evidence
+
+The current winch completed one supervised one-second pulse in each direction without a magnet or
+other load. Each pulse produced about 3 cm of travel, stopped cleanly, and returned electrical telemetry
+to `OFF`; the reverse pulse returned the winch to approximately its starting position. Forge Companion
+therefore caps every live Cloud pulse at 1,000 ms. The prototype Shelly's separately configured
+four-second auto-off corresponds to an estimated 12 cm of unloaded travel and remains an emergency
+backstop only. Forge Companion cannot verify that device configuration through the Cloud fire path.
+
+This evidence does not qualify magnet release, loaded cable behavior, installed geometry, endpoint
+safety, or hop addition. The ten full-assembly trials below remain required once the complete assembly
+is available.
+
 ## Record every trial
 
 Use `yes`, `no`, or `unknown` consistently for boolean columns. Record:

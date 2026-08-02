@@ -266,9 +266,7 @@ class ShellyCloudActuator:
             channel=channel,
         )
 
-    def pulse(
-        self, channel: int = 0, toggle_after_seconds: float = 1.0
-    ) -> ShellyCloudPulseResult:
+    def pulse(self, channel: int = 0, toggle_after_seconds: float = 1.0) -> ShellyCloudPulseResult:
         """Send exactly one channel-0 ON pulse with auto-off. Never retries."""
         if type(channel) is not int or channel != 0:
             raise ValueError("invalid Shelly Cloud channel")
@@ -277,9 +275,9 @@ class ShellyCloudActuator:
             or not isinstance(toggle_after_seconds, (int, float))
             or not isfinite(float(toggle_after_seconds))
             or toggle_after_seconds <= 0
-            or toggle_after_seconds > 30.0
+            or toggle_after_seconds > 1.0
         ):
-            raise ValueError("toggle_after_seconds must be a positive float up to 30.0")
+            raise ValueError("toggle_after_seconds must be a positive float up to 1.0")
         try:
             with self._http.stream(
                 "POST",
