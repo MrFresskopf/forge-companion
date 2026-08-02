@@ -89,9 +89,12 @@ plan, verifies exact native-profile target binding, sends one status request, re
 `OFF`, never constructs an actuator, and never changes the plan. Its result is temporary telemetry and
 neither authorizes a pulse nor replaces the fresh preflight in `hopper fire`.
 
-`hopper fire` requires an armed plan past its trigger and a native credential profile
-matching the plan. The command first requires exact interactive `FIRE` confirmation on an attached
-terminal; piped input is rejected. Only after confirmation does a fresh read-only preflight verify that
+`hopper fire` requires an armed plan past its trigger, a current versioned operator attestation that ten
+successful full-assembly tests were performed, and a native credential profile matching the plan. The
+attestation is stored as non-secret local preference state and is not mechanical, sensor-based, or
+independent verification. The command checks that gate before requiring exact interactive `FIRE`
+confirmation on an attached terminal; piped input is rejected. Only after confirmation does a fresh
+read-only preflight verify that
 the device is online and electrically OFF. It then observes the Cloud API rate boundary and persists
 `FIRE_REQUESTED` atomically before the one switch attempt. The file is flushed before replacement;
 Windows uses a write-through move and POSIX flushes the containing directory before the command
@@ -109,7 +112,8 @@ These controls do not provide provider-side idempotency or mechanical feedback. 
 pulse executed even though its response was lost. Electrical `OFF` cannot prove winch motion, cable
 travel, magnet release, or hop addition. The complete installed mechanism needs repeated under-load
 qualification, a conservative measured pulse, device-side auto-off, mechanical protection, and manual
-isolation. One confirmation authorizes exactly one attempt.
+isolation. The software gate records only the operator's one-time declaration; it does not observe the
+tests or prove their outcome. One `FIRE` confirmation authorizes exactly one attempt.
 `hopper shelly-status` is a separate read-only local-network check. Its client exposes only
 `GET /rpc/Switch.GetStatus`, rejects redirects, ambiguous base URLs, malformed or duplicate-key JSON,
 and responses larger than 64 KiB. Its internally owned HTTP client ignores environment proxy settings
@@ -139,8 +143,8 @@ substitute for this path.
 
 Shelly status is electrical telemetry, not mechanical feedback. `OFF` cannot prove that a winch was
 physically isolated, that a hopper moved, or that an endpoint was reached. A separately measured hard
-timeout, manual isolation, and independent mechanical feedback remain prerequisites for any future
-live hopper action.
+timeout, manual isolation, and direct operator observation remain prerequisites for the current
+supervised live hopper action. Independent sensing remains an optional future hardening measure.
 
 ## Reporting vulnerabilities
 

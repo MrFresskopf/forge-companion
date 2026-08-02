@@ -8,6 +8,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A versioned, persistent `hopper qualification attest/status/revoke` gate records the operator's
+  one-time declaration that ten successful full-assembly tests were performed. Live `hopper fire`
+  fails closed without a current declaration while explicitly making no sensor-verification claim.
 - `doctor --json` with a closed, packaged `forge-companion-doctor-v2` JSON Schema, fixed endpoint order,
   correlated outcomes, stable setup and endpoint error codes, and documented exit semantics.
 - A pre-1.0 compatibility policy defines the planned stable CLI, snapshot, exit-code, and machine-output

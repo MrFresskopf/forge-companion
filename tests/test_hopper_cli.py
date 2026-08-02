@@ -28,6 +28,7 @@ def test_hopper_without_subcommand_shows_available_commands() -> None:
     assert "plan" in result.output
     assert "status" in result.output
     assert "fire" in result.output
+    assert "qualification" in result.output
     assert "Missing command" not in result.output
 
 
@@ -39,6 +40,147 @@ def test_cloud_auth_without_subcommand_shows_available_commands() -> None:
     assert "status" in result.output
     assert "logout" in result.output
     assert "Missing command" not in result.output
+
+
+def test_hopper_qualification_attest_persists_operator_statement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+
+    attested = runner.invoke(
+        app,
+        ["hopper", "qualification", "attest"],
+        input="I CONFIRM 10 SUCCESSFUL TESTS\n",
+    )
+    status = runner.invoke(app, ["hopper", "qualification", "status"])
+
+    assert attested.exit_code == 0
+    assert "10 successful full-assembly tests" in attested.output
+    assert "1,000 ms" in attested.output
+    assert "4-second device auto-off" in attested.output
+    assert "12 cm fault travel" in attested.output
+    assert "No automatic or sensor-based verification was performed." in attested.output
+    assert status.exit_code == 0
+    assert "Remote hopper qualification: OPERATOR ATTESTED" in status.output
+    assert "10 successful full-assembly tests" in status.output
+    assert "No automatic or sensor-based verification was performed." in status.output
+    assert "No device or network was contacted." in status.output
+    assert (tmp_path / "preferences.json").is_file()
+
+
+def test_hopper_qualification_revoke_preserves_other_preferences(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge_companion.preferences import Preferences, load_preferences, save_preferences
+
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    save_preferences(Preferences(temperature_unit="C"))
+    attested = runner.invoke(
+        app,
+        ["hopper", "qualification", "attest"],
+        input="I CONFIRM 10 SUCCESSFUL TESTS\n",
+    )
+
+    revoked = runner.invoke(app, ["hopper", "qualification", "revoke"])
+    status = runner.invoke(app, ["hopper", "qualification", "status"])
+
+    assert attested.exit_code == 0
+    assert revoked.exit_code == 0
+    assert revoked.output == (
+        "Remote hopper qualification attestation revoked.\nNo device or network was contacted.\n"
+    )
+    assert status.exit_code == 1
+    stored = load_preferences()
+    assert stored.temperature_unit == "C"
+    assert stored.hopper_qualification_statement_version is None
+    assert stored.hopper_qualification_attested_at is None
+
+
+def test_hopper_qualification_wrong_phrase_changes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge_companion.preferences import Preferences, save_preferences
+
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    save_preferences(Preferences(temperature_unit="F"))
+    destination = tmp_path / "preferences.json"
+    before = destination.read_bytes()
+
+    result = runner.invoke(
+        app,
+        ["hopper", "qualification", "attest"],
+        input="yes\n",
+    )
+
+    assert result.exit_code == 1
+    assert "cancelled" in result.output
+    assert destination.read_bytes() == before
+
+
+def test_hopper_qualification_attest_requires_interactive_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: False)
+
+    result = runner.invoke(
+        app,
+        ["hopper", "qualification", "attest"],
+        input="I CONFIRM 10 SUCCESSFUL TESTS\n",
+    )
+
+    assert result.exit_code == 1
+    assert "interactive terminal is required" in result.output
+    assert not (tmp_path / "preferences.json").exists()
+
+
+def test_report_remember_preserves_hopper_qualification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge_companion import cli
+    from forge_companion.preferences import (
+        HOPPER_QUALIFICATION_STATEMENT_VERSION,
+        Preferences,
+        load_preferences,
+        save_preferences,
+    )
+
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    original = Preferences(
+        temperature_unit="C",
+        hopper_qualification_statement_version=HOPPER_QUALIFICATION_STATEMENT_VERSION,
+        hopper_qualification_attested_at="2026-08-02T18:00:00+00:00",
+    )
+    save_preferences(original)
+    monkeypatch.setattr(cli, "fermentation_html_command", lambda **_kwargs: None)
+
+    result = runner.invoke(
+        app,
+        [
+            "report",
+            "54d34560-f1af-49f0-9a26-6caca3397f75",
+            "--temperature-unit",
+            "F",
+            "--remember",
+        ],
+    )
+
+    assert result.exit_code == 0
+    stored = load_preferences()
+    assert stored.temperature_unit == "F"
+    assert (
+        stored.hopper_qualification_statement_version
+        == original.hopper_qualification_statement_version
+    )
+    assert stored.hopper_qualification_attested_at == original.hopper_qualification_attested_at
 
 
 def _patch_cloud_preflight_off(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,6 +218,11 @@ def _patch_cloud_preflight_off(monkeypatch: pytest.MonkeyPatch) -> None:
         "resolve_profile",
         lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
     )
+    _patch_current_hopper_qualification(monkeypatch)
+
+
+def _patch_current_hopper_qualification(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("forge_companion.cli._require_current_hopper_qualification", lambda: None)
 
 
 def test_hopper_plan_command_creates_offline_draft(tmp_path: Path) -> None:
@@ -757,6 +904,73 @@ def test_hopper_fire_requires_explicit_fire_confirmation(
     assert "mechanical hop release" in result.output
 
 
+def test_hopper_fire_requires_current_operator_attestation_before_prompt_or_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path / "empty-config"))
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr(
+        "forge_companion.cli.shelly_cloud_credentials.resolve_profile",
+        lambda: (_ for _ in ()).throw(AssertionError("credentials must not be resolved")),
+    )
+
+    result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
+
+    assert result.exit_code == 1
+    assert result.output == (
+        "Hopper fire blocked: full-assembly qualification is not operator-attested.\n"
+        "Run `forge-companion hopper qualification attest`.\n"
+    )
+    assert "Type FIRE" not in result.output
+    assert validate_hopper_plan(load_hopper_plan(destination)).status is HopperStatus.ARMED
+
+
+def test_hopper_fire_fails_closed_when_qualification_state_is_unreadable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge_companion import shelly_cloud_credentials
+
+    config = tmp_path / "config"
+    config.mkdir()
+    (config / "preferences.json").write_text("not-json", encoding="utf-8")
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(config))
+    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+
+    created = datetime(2026, 8, 2, 18, 0, 0, tzinfo=UTC)
+    trigger = datetime(2026, 8, 2, 18, 0, 1, tzinfo=UTC)
+    destination = tmp_path / "armed-cloud.json"
+    payload = create_hopper_plan(
+        trigger_at=trigger,
+        pulse_duration_ms=500,
+        now=created,
+        brew_id=None,
+        server="shelly-1-eu.shelly.cloud",
+        device_id="A1B2C3D4E5F6",
+    )
+    write_hopper_plan(payload, destination)
+    with hopper_plan_lock(destination):
+        write_hopper_plan(
+            arm_hopper_plan(load_hopper_plan(destination), at=created),
+            destination,
+        )
+
+    def forbidden_resolve() -> None:
+        raise AssertionError("qualification failure must happen before credential access")
+
+    monkeypatch.setattr(shelly_cloud_credentials, "resolve_profile", forbidden_resolve)
+
+    result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
+
+    assert result.exit_code == 1
+    assert result.output == "Hopper fire blocked: local qualification status is unavailable.\n"
+    assert "Type FIRE" not in result.output
+    assert validate_hopper_plan(load_hopper_plan(destination)).status is HopperStatus.ARMED
+
+
 def test_hopper_fire_confirms_before_preflight_and_waits_for_cloud_margin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -773,6 +987,10 @@ def test_hopper_fire_confirms_before_preflight_and_waits_for_cloud_margin(
         auth_key="synthetic-secret-key",
     )
     monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr(
+        "forge_companion.cli._require_current_hopper_qualification",
+        lambda: events.append("qualification"),
+    )
     monkeypatch.setattr(
         shelly_cloud_credentials,
         "resolve_profile",
@@ -845,7 +1063,7 @@ def test_hopper_fire_confirms_before_preflight_and_waits_for_cloud_margin(
     result = runner.invoke(app, ["hopper", "fire", str(destination)])
 
     assert result.exit_code == 0
-    assert events == ["confirmation", "preflight", "rate-wait", "pulse"]
+    assert events == ["qualification", "confirmation", "preflight", "rate-wait", "pulse"]
 
 
 def test_hopper_fire_cancellation_never_calls_actuator(
@@ -858,6 +1076,7 @@ def test_hopper_fire_cancellation_never_calls_actuator(
     from forge_companion import shelly_cloud, shelly_cloud_credentials
 
     monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    _patch_current_hopper_qualification(monkeypatch)
     monkeypatch.setattr(
         shelly_cloud_credentials,
         "resolve_profile",
@@ -1001,6 +1220,7 @@ def test_hopper_fire_refuses_preflight_that_is_not_online_and_off(
     monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FakeReadOnlyClient)
     monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
     monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    _patch_current_hopper_qualification(monkeypatch)
 
     result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
 
@@ -1050,6 +1270,7 @@ def test_hopper_fire_preflight_error_never_constructs_actuator(
 
     monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FailingReadOnlyClient)
     monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
+    _patch_current_hopper_qualification(monkeypatch)
 
     result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
 

@@ -286,6 +286,22 @@ forge-companion hopper cloud-auth status
 forge-companion hopper cloud-status --channel 0
 ```
 
+Before the first live attempt, the operator must separately declare that ten successful tests of the
+complete production-load assembly were actually performed:
+
+```bash
+forge-companion hopper qualification attest
+forge-companion hopper qualification status
+```
+
+`attest` requires an attached interactive terminal and the exact phrase
+`I CONFIRM 10 SUCCESSFUL TESTS`. Its statement covers complete release, a sufficient 1,000 ms pulse,
+the configured four-second device auto-off, an accepted 12 cm fault-travel envelope, safe endpoints,
+and immediately available manual isolation. It stores only a versioned statement and timestamp in the
+non-secret local preferences. Forge Companion does not observe the ten tests, keep ten trial records,
+or verify any mechanical result. Use `forge-companion hopper qualification revoke` whenever the magnet,
+cable routing, vessel geometry, winch, load, direction, endpoint, pulse assumption, or auto-off changes.
+
 Then create and arm a plan bound to that stored tenant and device. The authorization key is not copied
 into the plan:
 
@@ -318,8 +334,9 @@ After the trigger time, the live command is:
 forge-companion hopper fire automation/hopper-plan.json
 ```
 
-`fire` validates the plan and requires exact interactive `FIRE` confirmation on an attached terminal;
-piped or redirected input is rejected. Only after confirmation does it resolve the matching native
+`fire` validates the plan and trigger, requires a current version of the local operator attestation,
+and then requires exact interactive `FIRE` confirmation on an attached terminal; piped or redirected
+input is rejected. Only after confirmation does it resolve the matching native
 credential and perform a fresh read-only preflight. The device must be online and explicitly report
 electrical `OFF`; otherwise the command stops without a switch request. It then waits until at least
 1.25 seconds have elapsed since the preflight request started and atomically persists `FIRE_REQUESTED`
@@ -347,9 +364,10 @@ transport timeout.
 
 An electrical `OFF` read-back proves neither winch travel nor magnet release nor actual hop addition.
 Qualify the complete Fermzilla, magnet, cable, and winch assembly repeatedly before relying on remote
-operation. One explicit confirmation authorizes one attempt only. Record full-assembly evidence with
-the [mechanical qualification protocol](HOPPER_QUALIFICATION.md) and its CSV template; the protocol
-does not calculate or certify a safe duration.
+operation. The persisted qualification is only the operator's declaration that ten successful tests
+were performed; it is not software or sensor verification. One explicit `FIRE` confirmation authorizes
+one attempt only. The [mechanical qualification protocol](HOPPER_QUALIFICATION.md) and its optional CSV
+template help structure private evidence but do not calculate or certify a safe duration.
 
 ### Read-only Shelly diagnostics
 

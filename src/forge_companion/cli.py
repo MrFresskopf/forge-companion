@@ -1,7 +1,7 @@
 """Command-line interface for Forge Companion."""
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import monotonic
@@ -86,6 +86,12 @@ cloud_auth_app = typer.Typer(
     invoke_without_command=True,
 )
 hopper_app.add_typer(cloud_auth_app, name="cloud-auth")
+qualification_app = typer.Typer(
+    help="Manage the operator-attested full-assembly qualification gate.",
+    no_args_is_help=False,
+    invoke_without_command=True,
+)
+hopper_app.add_typer(qualification_app, name="qualification")
 
 
 def _is_interactive_terminal() -> bool:
@@ -131,6 +137,107 @@ def cloud_auth_command(context: typer.Context) -> None:
     """Manage Shelly Cloud authentication without displaying credentials."""
     if context.invoked_subcommand is None:
         typer.echo(context.get_help())
+
+
+@qualification_app.callback()
+def qualification_command(context: typer.Context) -> None:
+    """Manage operator attestation without claiming sensor verification."""
+    if context.invoked_subcommand is None:
+        typer.echo(context.get_help())
+
+
+@qualification_app.command("attest")
+def qualification_attest_command() -> None:
+    """Persist the operator's declaration that ten full-assembly tests succeeded."""
+    if not _is_interactive_terminal():
+        typer.echo(
+            "Hopper qualification attestation blocked: an interactive terminal is required.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    typer.echo("Confirm that 10 successful full-assembly tests were actually completed.")
+    typer.echo("This includes complete release with no jam, stall, or unsafe endpoint impact.")
+    typer.echo("You declare that a 1,000 ms pulse was sufficient in all 10 tests.")
+    typer.echo("You declare that the 4-second device auto-off and 12 cm fault travel are safe.")
+    typer.echo("You declare that manual electrical isolation remains immediately available.")
+    typer.echo("Forge Companion cannot verify those mechanical results.")
+    confirmation = typer.prompt("Type I CONFIRM 10 SUCCESSFUL TESTS to attest")
+    if confirmation != "I CONFIRM 10 SUCCESSFUL TESTS":
+        typer.echo("Hopper qualification attestation cancelled; no preference was changed.")
+        raise typer.Exit(code=1)
+    try:
+        stored = preferences.load_preferences()
+        preferences.save_preferences(
+            replace(
+                stored,
+                hopper_qualification_statement_version=(
+                    preferences.HOPPER_QUALIFICATION_STATEMENT_VERSION
+                ),
+                hopper_qualification_attested_at=datetime.now(UTC).isoformat(),
+            )
+        )
+    except (OSError, preferences.PreferencesError):
+        typer.echo("Hopper qualification attestation failed: local preferences are unavailable.")
+        raise typer.Exit(code=1) from None
+    typer.echo("Remote hopper qualification: OPERATOR ATTESTED")
+    typer.echo("The operator declared 10 successful full-assembly tests.")
+    typer.echo("No automatic or sensor-based verification was performed.")
+    typer.echo("No device or network was contacted.")
+
+
+@qualification_app.command("status")
+def qualification_status_command() -> None:
+    """Show the non-sensitive local attestation state without network access."""
+    try:
+        stored = preferences.load_preferences()
+    except (OSError, preferences.PreferencesError):
+        typer.echo("Hopper qualification status failed: local preferences are unavailable.")
+        raise typer.Exit(code=1) from None
+    if not preferences.hopper_qualification_is_current(stored):
+        typer.echo("Remote hopper qualification is not operator-attested.")
+        typer.echo("No device or network was contacted.")
+        raise typer.Exit(code=1)
+    typer.echo("Remote hopper qualification: OPERATOR ATTESTED")
+    typer.echo("The operator declared 10 successful full-assembly tests.")
+    typer.echo("No automatic or sensor-based verification was performed.")
+    typer.echo("No device or network was contacted.")
+
+
+@qualification_app.command("revoke")
+def qualification_revoke_command() -> None:
+    """Remove the local operator attestation without contacting hardware."""
+    try:
+        stored = preferences.load_preferences()
+        preferences.save_preferences(
+            replace(
+                stored,
+                hopper_qualification_statement_version=None,
+                hopper_qualification_attested_at=None,
+            )
+        )
+    except (OSError, preferences.PreferencesError):
+        typer.echo("Hopper qualification revoke failed: local preferences are unavailable.")
+        raise typer.Exit(code=1) from None
+    typer.echo("Remote hopper qualification attestation revoked.")
+    typer.echo("No device or network was contacted.")
+
+
+def _require_current_hopper_qualification() -> None:
+    try:
+        stored = preferences.load_preferences()
+    except (OSError, preferences.PreferencesError):
+        typer.echo(
+            "Hopper fire blocked: local qualification status is unavailable.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    if not preferences.hopper_qualification_is_current(stored):
+        typer.echo(
+            "Hopper fire blocked: full-assembly qualification is not operator-attested.",
+            err=True,
+        )
+        typer.echo("Run `forge-companion hopper qualification attest`.", err=True)
+        raise typer.Exit(code=1)
 
 
 def _authentication_failed(error: credentials.CredentialStoreError) -> None:
@@ -371,7 +478,7 @@ def hopper_check_command(
 def hopper_fire_command(
     source: Annotated[Path, typer.Argument(help="Local armed Cloud one-shot plan file.")],
 ) -> None:
-    """Send one explicitly confirmed Cloud pulse; never retries automatically."""
+    """Send one attested and explicitly confirmed Cloud pulse; never retry automatically."""
     from forge_companion import shelly_cloud
 
     if not _is_interactive_terminal():
@@ -388,6 +495,8 @@ def hopper_fire_command(
                 raise ValueError("plan is not an armed cloud pulse")
             if datetime.now(UTC) < summary.trigger_at:
                 raise ValueError("plan trigger has not been reached")
+
+            _require_current_hopper_qualification()
 
             typer.echo(
                 f"Ready to send one {summary.pulse_duration_ms} ms Cloud pulse on channel 0."
@@ -1192,7 +1301,8 @@ def report_command(
     )
     if remember and explicit_unit is not None:
         try:
-            preferences.save_preferences(preferences.Preferences(temperature_unit=explicit_unit))
+            stored = preferences.load_preferences()
+            preferences.save_preferences(replace(stored, temperature_unit=explicit_unit))
         except (OSError, preferences.PreferencesError):
             typer.echo(
                 "Warning: report was written, but the preference could not be saved.",

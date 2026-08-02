@@ -143,7 +143,8 @@ deprecation and migration path.
 - [x] read-only armed-plan readiness check with exact credential binding and one live OFF preflight
 - [x] electrical OFF read-back verification and local state-history audit trail
 - [x] supervised full-assembly qualification protocol and reusable ten-trial CSV template
-- [ ] mechanical release sensing and repeated full-assembly qualification
+- [x] persistent operator-attestation gate for ten declared successful full-assembly tests
+- [ ] complete the repeated full-assembly qualification and optionally evaluate release sensing
 - [x] explicit experimental warning and mechanical safety requirements
 
 ## Non-goals
