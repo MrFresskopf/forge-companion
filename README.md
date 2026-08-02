@@ -50,6 +50,9 @@ forge-companion hopper --help
 
 Planning, arming, simulation, and local status history are offline. Start with read-only status; never
 use `hopper fire` before the complete mechanism is qualified and a bounded pulse is deliberately armed.
+After ten successful full-assembly tests, record the one-time operator declaration with
+`forge-companion hopper qualification attest`; Forge Companion does not verify the declaration or any
+mechanical result.
 
 ### 3. Configure only the credential you need
 
@@ -83,8 +86,9 @@ forge-companion report --temperature-unit C --remember
 
 In an interactive terminal, `report` shows 25 sanitized brew names at a time and waits for an
 explicit choice. Enter a number to select a brew, `n` or `p` to change pages, or `q` to cancel.
-`--remember` stores only the non-secret
-temperature-unit preference; API tokens remain in the native credential store. The chosen name
+`--remember` stores only the non-secret temperature-unit preference; the hopper qualification command
+separately stores only its non-secret statement version and attestation time. API tokens remain in the
+native credential store. The chosen name
 becomes the report title and one standalone HTML file is written to `reports/`.
 
 For scripts and pipelines, an exact UUID is required; automatic prompting never starts on
@@ -100,6 +104,7 @@ documented collection and token scope.
 | Goal | Command | Network use |
 |---|---|---:|
 | Prepare and rehearse a remote hopper | `forge-companion hopper plan/arm/simulate/status ...` | Offline |
+| Attest, inspect, or revoke hopper qualification | `forge-companion hopper qualification ...` | Offline |
 | Read a local Shelly switch state | `forge-companion hopper shelly-status ...` | 1 local GET request |
 | Read a remote Shelly switch state through the Cloud | `forge-companion hopper cloud-status ...` | 1 POST request (Cloud v2) |
 | Check an armed Cloud one-shot without switching | `forge-companion hopper check PLAN` | 1 status POST (Cloud v2) |
@@ -144,8 +149,9 @@ trust boundary:
 - the spunding advisor simulates a decision and never contacts hardware
 - hopper planning, arming, `hopper status`, and lifecycle rehearsals remain offline
 - `hopper shelly-status`, `hopper cloud-status`, and `hopper check` remain narrow read-only diagnostics
-- experimental `hopper fire` sends one explicitly confirmed, pre-recorded Cloud pulse capped at one
-  second, with device timer, OFF read-back, native-keyring binding, no scheduler, and no automatic retry
+- experimental `hopper fire` requires a current operator attestation, then sends one explicitly
+  confirmed, pre-recorded Cloud pulse capped at one second, with device timer, OFF read-back,
+  native-keyring binding, no scheduler, and no automatic retry
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
 assets. It describes telemetry but does not decide that fermentation is complete.

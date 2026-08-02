@@ -2,7 +2,7 @@
 
 This protocol records supervised tests of the complete installed Fermzilla, magnet, cable, and winch assembly. It does not calculate or certify a safe pulse duration and never authorizes remote firing.
 
-Copy [`templates/hopper-qualification.csv`](templates/hopper-qualification.csv) to a private working location before recording trials. Qualification records may reveal brewery operations and should not be committed unless deliberately sanitized.
+The optional [`templates/hopper-qualification.csv`](templates/hopper-qualification.csv) can be copied to a private working location when detailed trial records are wanted. Qualification records may reveal brewery operations and should not be committed unless deliberately sanitized.
 
 ## Prerequisites
 
@@ -31,9 +31,9 @@ This evidence does not qualify magnet release, loaded cable behavior, installed 
 safety, or hop addition. The ten full-assembly trials below remain required once the complete assembly
 is available.
 
-## Record every trial
+## Optional detailed trial record
 
-Use `yes`, `no`, or `unknown` consistently for boolean columns. Record:
+When using the CSV, use `yes`, `no`, or `unknown` consistently for boolean columns. Record:
 
 - requested pulse and device auto-off durations;
 - required and actual travel under load;
@@ -44,6 +44,14 @@ Use `yes`, `no`, or `unknown` consistently for boolean columns. Record:
 - any noise, cable behavior, delay, or intervention.
 
 Electrical `OFF` is not evidence of travel, magnet release, or hop addition.
+
+## Software attestation gate
+
+Forge Companion does not inspect or store ten individual trial outcomes. After the operator has actually
+completed ten successful full-assembly tests, `hopper qualification attest` asks for one explicit
+declaration and stores its statement version and timestamp in non-secret local preferences. This is an
+operator attestation only, not automatic, sensor-based, or independent verification. Revoke it whenever
+the installed mechanism or any declared safety assumption changes.
 
 ## Minimum evidence before considering remote operation
 
