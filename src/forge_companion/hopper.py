@@ -22,6 +22,7 @@ from forge_companion.file_io import (
 
 _FORMAT = "forge-companion-hopper-plan-v1"
 _CANONICALIZATION = "json-sort-keys-compact-utf8-without-digest"
+_MAX_CLOUD_PULSE_DURATION_MS = 1_000
 
 
 class HopperStatus(StrEnum):
@@ -119,8 +120,8 @@ def create_hopper_plan(
         raise ValueError("pulse duration must be a positive integer of milliseconds")
     if pulse_duration_ms > 60_000:
         raise ValueError("simulated pulse duration must be at most 60000 milliseconds")
-    if server is not None and pulse_duration_ms > 30_000:
-        raise ValueError("cloud pulse duration must be at most 30000 milliseconds")
+    if server is not None and pulse_duration_ms > _MAX_CLOUD_PULSE_DURATION_MS:
+        raise ValueError("cloud pulse duration must be at most 1000 milliseconds")
     canonical_plan_id = str(plan_id or uuid4())
     if server is not None and device_id is not None:
         from forge_companion.shelly_cloud import normalize_cloud_device_id, normalize_cloud_server
@@ -195,9 +196,7 @@ def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
         if not isinstance(raw_plan_id, str) or str(UUID(raw_plan_id)) != raw_plan_id:
             raise HopperPlanValidationError("hopper plan schema validation failed")
         brew_id = payload["brew_id"]
-        if brew_id is not None and (
-            not isinstance(brew_id, str) or str(UUID(brew_id)) != brew_id
-        ):
+        if brew_id is not None and (not isinstance(brew_id, str) or str(UUID(brew_id)) != brew_id):
             raise HopperPlanValidationError("hopper plan schema validation failed")
 
         created_at = _parse_utc_timestamp(payload["created_at"])
@@ -255,7 +254,9 @@ def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
             raise HopperPlanValidationError("hopper plan integrity check failed")
 
         pulse_duration_ms = action["pulse_duration_ms"]
-        maximum_pulse_duration_ms = 30_000 if action_kind == "cloud-pulse" else 60_000
+        maximum_pulse_duration_ms = (
+            _MAX_CLOUD_PULSE_DURATION_MS if action_kind == "cloud-pulse" else 60_000
+        )
         if (
             isinstance(pulse_duration_ms, bool)
             or not isinstance(pulse_duration_ms, int)
@@ -293,9 +294,7 @@ def validate_hopper_plan(payload: dict[str, Any]) -> HopperPlanSummary:
         if len(event_times) >= 5:
             pulse_elapsed = event_times[4] - event_times[3]
             minimum_pulse = timedelta(milliseconds=pulse_duration_ms)
-            if (
-                action_kind == "simulated-pulse" and pulse_elapsed != minimum_pulse
-            ) or (
+            if (action_kind == "simulated-pulse" and pulse_elapsed != minimum_pulse) or (
                 action_kind == "cloud-pulse" and pulse_elapsed < minimum_pulse
             ):
                 raise HopperPlanValidationError("hopper plan state history is invalid")

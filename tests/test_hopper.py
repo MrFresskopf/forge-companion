@@ -267,10 +267,11 @@ def test_validation_rejects_resigned_incorrect_simulated_pulse_timing() -> None:
     with pytest.raises(HopperPlanValidationError, match="state history"):
         validate_hopper_plan(completed)
 
+
 def test_create_cloud_pulse_plan_stores_server_and_device_id_without_key() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         plan_id=PLAN_ID,
         server="shelly-82-eu.shelly.cloud",
@@ -281,7 +282,7 @@ def test_create_cloud_pulse_plan_stores_server_and_device_id_without_key() -> No
     assert summary.status is HopperStatus.DRAFT
     assert payload["action"] == {
         "kind": "cloud-pulse",
-        "pulse_duration_ms": 1500,
+        "pulse_duration_ms": 1000,
         "server": "shelly-82-eu.shelly.cloud",
         "device_id": "5432046e5f58",
     }
@@ -292,7 +293,7 @@ def test_create_cloud_pulse_plan_stores_server_and_device_id_without_key() -> No
 def test_fire_cloud_pulse_plan_transitions_through_complete_cycle() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         plan_id=PLAN_ID,
         server="shelly-82-eu.shelly.cloud",
@@ -350,10 +351,10 @@ def test_fire_cloud_pulse_plan_transitions_through_complete_cycle() -> None:
 
 
 def test_create_cloud_plan_rejects_pulse_longer_than_actuator_limit() -> None:
-    with pytest.raises(ValueError, match="at most 30000"):
+    with pytest.raises(ValueError, match="at most 1000"):
         create_hopper_plan(
             trigger_at=TRIGGER_AT,
-            pulse_duration_ms=30_001,
+            pulse_duration_ms=1_001,
             now=CREATED_AT,
             server="shelly-82-eu.shelly.cloud",
             device_id="5432046E5F58",
@@ -363,7 +364,7 @@ def test_create_cloud_plan_rejects_pulse_longer_than_actuator_limit() -> None:
 def test_fire_persists_fire_requested_before_calling_actuator() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",
@@ -393,7 +394,7 @@ def test_fire_rejects_cloud_profile_that_does_not_match_plan(
 ) -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",
@@ -429,7 +430,7 @@ def test_fire_closes_owned_actuator_when_initial_persistence_fails(
 ) -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",
@@ -482,13 +483,13 @@ def test_fire_closes_owned_actuator_when_initial_persistence_fails(
 def test_validation_rejects_resigned_cloud_pulse_above_actuator_limit() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         plan_id=PLAN_ID,
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",
     )
-    payload["action"]["pulse_duration_ms"] = 60_000
+    payload["action"]["pulse_duration_ms"] = 1_001
     _resign(payload)
 
     with pytest.raises(HopperPlanValidationError, match="pulse duration"):
@@ -513,7 +514,7 @@ def test_validation_rejects_resigned_simulation_with_cloud_fields() -> None:
 def test_validation_rejects_resigned_noncanonical_cloud_target() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         plan_id=PLAN_ID,
         server="shelly-82-eu.shelly.cloud",
@@ -530,7 +531,7 @@ def test_validation_rejects_resigned_noncanonical_cloud_target() -> None:
 def test_fire_final_persistence_failure_leaves_durable_requested_snapshot() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",
@@ -579,7 +580,7 @@ def test_fire_final_persistence_failure_leaves_durable_requested_snapshot() -> N
 def test_simulate_rejects_cloud_one_shot_plan() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=CREATED_AT,
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",

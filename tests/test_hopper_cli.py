@@ -100,9 +100,7 @@ def test_hopper_plan_command_creates_offline_draft(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert result.output == (
-        "Hopper simulation plan written.\n"
-        "Status: DRAFT\n"
-        "No device or network was contacted.\n"
+        "Hopper simulation plan written.\nStatus: DRAFT\nNo device or network was contacted.\n"
     )
     assert "private-hopper-name" not in result.output
     summary = validate_hopper_plan(load_hopper_plan(destination))
@@ -219,9 +217,7 @@ def test_hopper_arm_command_persists_explicit_armed_state(tmp_path: Path) -> Non
 
     assert result.exit_code == 0
     assert result.output == (
-        "Hopper simulation plan armed.\n"
-        "Status: ARMED\n"
-        "No device or network was contacted.\n"
+        "Hopper simulation plan armed.\nStatus: ARMED\nNo device or network was contacted.\n"
     )
     assert validate_hopper_plan(load_hopper_plan(destination)).status is HopperStatus.ARMED
 
@@ -400,7 +396,7 @@ def test_hopper_plan_cloud_uses_stored_profile_without_persisting_key(
             "--trigger-at",
             "2099-01-01T18:00:00+00:00",
             "--pulse-ms",
-            "1500",
+            "1000",
             "--output",
             str(destination),
         ],
@@ -408,9 +404,7 @@ def test_hopper_plan_cloud_uses_stored_profile_without_persisting_key(
 
     assert result.exit_code == 0
     assert result.output == (
-        "Hopper Cloud one-shot plan written.\n"
-        "Status: DRAFT\n"
-        "No device or network was contacted.\n"
+        "Hopper Cloud one-shot plan written.\nStatus: DRAFT\nNo device or network was contacted.\n"
     )
     raw = destination.read_text(encoding="utf-8")
     assert "synthetic-secret-key" not in raw
@@ -428,7 +422,6 @@ def _write_armed_cloud_plan(destination: Path) -> None:
     )
     armed = arm_hopper_plan(payload, at=datetime(2026, 1, 1, 1, 0, tzinfo=UTC))
     write_hopper_plan(armed, destination)
-
 
 
 def test_hopper_check_reports_read_only_cloud_readiness(
@@ -504,8 +497,6 @@ def test_hopper_check_reports_read_only_cloud_readiness(
     assert "private-cloud-plan" not in result.output
 
 
-
-
 def test_hopper_check_rejects_early_plan_before_credentials_or_network(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -546,8 +537,6 @@ def test_hopper_check_rejects_early_plan_before_credentials_or_network(
     assert destination.read_bytes() == before
 
 
-
-
 def test_hopper_check_rejects_profile_mismatch_before_network(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -583,8 +572,6 @@ def test_hopper_check_rejects_profile_mismatch_before_network(
     assert result.output == "Hopper check failed: plan, trigger, or Cloud profile is not ready.\n"
     assert destination.read_bytes() == before
     assert "aaaaaaaaaaaa" not in result.output
-
-
 
 
 @pytest.mark.parametrize(
@@ -653,8 +640,6 @@ def test_hopper_check_requires_online_explicit_off_without_actuator(
     assert destination.read_bytes() == before
 
 
-
-
 @pytest.mark.parametrize("failure_kind", ["transport", "response"])
 def test_hopper_check_sanitizes_cloud_status_failures(
     tmp_path: Path,
@@ -691,9 +676,7 @@ def test_hopper_check_sanitizes_cloud_status_failures(
 
         def get_switch_status(self, channel: int = 0) -> object:
             if failure_kind == "response":
-                raise shelly_cloud.ShellyCloudResponseError(
-                    f"provider reflected {secret}\x1b[31m"
-                )
+                raise shelly_cloud.ShellyCloudResponseError(f"provider reflected {secret}\x1b[31m")
             raise httpx.RequestError(f"provider reflected {secret}\x1b[31m")
 
     class ForbiddenActuator:
@@ -710,7 +693,6 @@ def test_hopper_check_sanitizes_cloud_status_failures(
     assert secret not in result.output
     assert "\x1b" not in result.output
     assert destination.read_bytes() == before
-
 
 
 def test_hopper_fire_requires_explicit_fire_confirmation(
@@ -747,12 +729,12 @@ def test_hopper_fire_requires_explicit_fire_confirmation(
             pass
 
         def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
-                    nonlocal pulse_count
-                    import time
+            nonlocal pulse_count
+            import time
 
-                    pulse_count += 1
-                    time.sleep(toggle_after_seconds)
-                    return shelly_cloud.ShellyCloudPulseResult(
+            pulse_count += 1
+            time.sleep(toggle_after_seconds)
+            return shelly_cloud.ShellyCloudPulseResult(
                 accepted=True,
                 readback=shelly_cloud.ShellyCloudSwitchStatus(
                     device_id="5432046e5f58",
@@ -773,7 +755,6 @@ def test_hopper_fire_requires_explicit_fire_confirmation(
     assert "Type FIRE to send one one-shot pulse" in result.output
     assert "Electrical read-back: OFF" in result.output
     assert "mechanical hop release" in result.output
-
 
 
 def test_hopper_fire_confirms_before_fresh_off_preflight(
@@ -867,7 +848,6 @@ def test_hopper_fire_confirms_before_fresh_off_preflight(
     assert events == ["confirmation", "preflight", "rate-wait", "pulse"]
 
 
-
 def test_hopper_fire_cancellation_never_calls_actuator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -955,7 +935,7 @@ def test_hopper_arm_and_status_label_cloud_plan_without_network(tmp_path: Path) 
     destination = tmp_path / "cloud-plan.json"
     payload = create_hopper_plan(
         trigger_at=datetime(2099, 1, 1, 18, 0, tzinfo=UTC),
-        pulse_duration_ms=1500,
+        pulse_duration_ms=1000,
         now=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046e5f58",
@@ -967,13 +947,11 @@ def test_hopper_arm_and_status_label_cloud_plan_without_network(tmp_path: Path) 
 
     assert armed.exit_code == 0
     assert armed.output == (
-            "Hopper Cloud one-shot plan armed.\n"
-            "Status: ARMED\n"
-            "No device or network was contacted.\n"
-        )
+        "Hopper Cloud one-shot plan armed.\nStatus: ARMED\nNo device or network was contacted.\n"
+    )
     assert status.exit_code == 0
     assert "Hopper Cloud one-shot plan is valid." in status.output
-    assert "Pulse: 1500 ms (Cloud one-shot)" in status.output
+    assert "Pulse: 1000 ms (Cloud one-shot)" in status.output
     assert "No device or network was contacted." in status.output
 
 
@@ -1032,7 +1010,6 @@ def test_hopper_fire_refuses_preflight_that_is_not_online_and_off(
     assert load_hopper_plan(destination)["state"]["status"] == "ARMED"
 
 
-
 def test_hopper_fire_preflight_error_never_constructs_actuator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1079,7 +1056,6 @@ def test_hopper_fire_preflight_error_never_constructs_actuator(
     assert result.exit_code == 1
     assert "failed before a pulse request was recorded" in result.output
     assert load_hopper_plan(destination)["state"]["status"] == "ARMED"
-
 
 
 def test_hopper_fire_refuses_noninteractive_input_before_any_network(

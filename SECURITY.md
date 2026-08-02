@@ -84,7 +84,7 @@ protection and manual override.
 
 Remote-hopper plans support two distinct modes. Simulation plans remain offline. A Cloud one-shot plan
 stores only the normalized tenant and device ID, never the authorization key, and accepts at most a
-30-second pulse. `hopper check` is a separate read-only rehearsal: it validates an armed, reached Cloud
+one-second pulse. `hopper check` is a separate read-only rehearsal: it validates an armed, reached Cloud
 plan, verifies exact native-profile target binding, sends one status request, requires online electrical
 `OFF`, never constructs an actuator, and never changes the plan. Its result is temporary telemetry and
 neither authorizes a pulse nor replaces the fresh preflight in `hopper fire`.

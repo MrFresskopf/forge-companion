@@ -144,8 +144,8 @@ trust boundary:
 - the spunding advisor simulates a decision and never contacts hardware
 - hopper planning, arming, `hopper status`, and lifecycle rehearsals remain offline
 - `hopper shelly-status`, `hopper cloud-status`, and `hopper check` remain narrow read-only diagnostics
-- experimental `hopper fire` sends one explicitly confirmed, pre-recorded Cloud pulse with device
-  timer, OFF read-back, native-keyring binding, no scheduler, and no automatic retry
+- experimental `hopper fire` sends one explicitly confirmed, pre-recorded Cloud pulse capped at one
+  second, with device timer, OFF read-back, native-keyring binding, no scheduler, and no automatic retry
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external
 assets. It describes telemetry but does not decide that fermentation is complete.

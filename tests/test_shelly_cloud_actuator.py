@@ -46,7 +46,7 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
         http=http,
     )
 
-    result = actuator.pulse(channel=0, toggle_after_seconds=1.5)
+    result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     # Verify the set request
     assert seen["method"] == "POST"
@@ -60,7 +60,7 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
         "id": "5432046e5f58",
         "channel": 0,
         "on": True,
-        "toggle_after": 1.5,
+        "toggle_after": 1.0,
     }
     # Verify pulse result
     assert result == ShellyCloudPulseResult(
@@ -98,9 +98,7 @@ def test_cloud_actuator_ignores_http_200_set_response_body() -> None:
                 {
                     "id": "5432046e5f58",
                     "online": 1,
-                    "status": {
-                        "switch:0": {"id": 0, "output": False, "source": "timer"}
-                    },
+                    "status": {"switch:0": {"id": 0, "output": False, "source": "timer"}},
                 }
             ],
         )
@@ -113,7 +111,7 @@ def test_cloud_actuator_ignores_http_200_set_response_body() -> None:
         sleep=lambda seconds: None,
     )
 
-    result = actuator.pulse(channel=0, toggle_after_seconds=1.5)
+    result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert result.accepted is True
     assert result.readback is not None
@@ -126,7 +124,7 @@ def test_cloud_actuator_ignores_http_200_set_response_body() -> None:
 
 @pytest.mark.parametrize(
     "toggle_after",
-    [0, -1.0, True, 31.0, "1.5", float("nan"), float("inf")],
+    [0, -1.0, True, 1.01, 31.0, "1.5", float("nan"), float("inf")],
 )
 def test_cloud_actuator_rejects_invalid_toggle_after(
     toggle_after: object,
@@ -136,9 +134,7 @@ def test_cloud_actuator_rejects_invalid_toggle_after(
         device_id="5432046E5F58",
         auth_key="synthetic-cloud-key",
         http=httpx.Client(
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(200, json={"isok": True})
-            )
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"isok": True}))
         ),
     )
 
@@ -153,9 +149,7 @@ def test_cloud_actuator_rejects_every_channel_except_zero(channel: object) -> No
         device_id="5432046E5F58",
         auth_key="synthetic-cloud-key",
         http=httpx.Client(
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(200, json={"isok": True})
-            )
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"isok": True}))
         ),
     )
 
@@ -165,9 +159,7 @@ def test_cloud_actuator_rejects_every_channel_except_zero(channel: object) -> No
 
 def test_cloud_actuator_returns_not_accepted_when_cloud_rejects() -> None:
     http = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(202, content=b"")
-        )
+        transport=httpx.MockTransport(lambda request: httpx.Response(202, content=b""))
     )
     actuator = ShellyCloudActuator(
         server="shelly-82-eu.shelly.cloud",
@@ -176,16 +168,14 @@ def test_cloud_actuator_returns_not_accepted_when_cloud_rejects() -> None:
         http=http,
     )
 
-    result = actuator.pulse(channel=0, toggle_after_seconds=1.5)
+    result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert result == ShellyCloudPulseResult(accepted=False, readback=None)
 
 
 def test_cloud_actuator_context_leaves_injected_http_open() -> None:
     http = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(200, json={"isok": True})
-        )
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"isok": True}))
     )
     with ShellyCloudActuator(
         server="shelly-82-eu.shelly.cloud",
@@ -202,9 +192,7 @@ def test_cloud_actuator_context_closes_proxy_isolated_internal_http(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     created: dict[str, object] = {}
-    internal_http = httpx.Client(
-        transport=httpx.MockTransport(lambda request: httpx.Response(500))
-    )
+    internal_http = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
 
     def create_http(**kwargs: object) -> httpx.Client:
         created.update(kwargs)
@@ -237,7 +225,7 @@ def test_cloud_actuator_does_not_follow_set_redirect() -> None:
         http=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 
-    result = actuator.pulse(channel=0, toggle_after_seconds=1.5)
+    result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert result == ShellyCloudPulseResult(accepted=False, readback=None)
     assert len(requests) == 1
@@ -261,7 +249,7 @@ def test_cloud_actuator_never_retries_on_http_error() -> None:
     )
 
     with pytest.raises(ShellyCloudResponseError, match="pulse request failed") as exc_info:
-        actuator.pulse(channel=0, toggle_after_seconds=1.5)
+        actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert call_count == 1
     assert "synthetic-cloud-key" not in str(exc_info.value)
@@ -281,15 +269,13 @@ def test_cloud_actuator_waits_for_device_timer_before_readback() -> None:
                 {
                     "id": "5432046e5f58",
                     "online": 1,
-                    "status": {
-                        "switch:0": {"id": 0, "output": False, "source": "timer"}
-                    },
+                    "status": {"switch:0": {"id": 0, "output": False, "source": "timer"}},
                 }
             ],
         )
 
     def wait(seconds: float) -> None:
-        assert seconds == 1.5
+        assert seconds == 1.0
         events.append("wait")
 
     actuator = ShellyCloudActuator(
@@ -300,7 +286,7 @@ def test_cloud_actuator_waits_for_device_timer_before_readback() -> None:
         sleep=wait,
     )
 
-    actuator.pulse(channel=0, toggle_after_seconds=1.5)
+    actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert events == ["set", "wait", "readback"]
 
@@ -317,9 +303,7 @@ def test_cloud_actuator_observes_one_request_per_second_before_readback() -> Non
                 {
                     "id": "5432046e5f58",
                     "online": 1,
-                    "status": {
-                        "switch:0": {"id": 0, "output": False, "source": "timer"}
-                    },
+                    "status": {"switch:0": {"id": 0, "output": False, "source": "timer"}},
                 }
             ],
         )
@@ -356,7 +340,7 @@ def test_cloud_actuator_sanitizes_readback_transport_error_without_retry() -> No
     )
 
     with pytest.raises(ShellyCloudResponseError, match="read-back failed") as exc_info:
-        actuator.pulse(channel=0, toggle_after_seconds=1.5)
+        actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert call_count == 2
     assert "synthetic-cloud-key" not in str(exc_info.value)
