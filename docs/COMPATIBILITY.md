@@ -145,7 +145,8 @@ A valid v3 snapshot has exactly these properties:
 
 - top-level keys are exactly `format`, `created_at`, `manifest`, and `resources`;
 - `format` is exactly `forge-companion-collection-snapshot-v3`;
-- `created_at` is an ISO 8601 timestamp with an explicit UTC offset;
+- `created_at` is an ISO 8601 timestamp normalized to UTC and expressed with `Z` or a zero offset
+  such as `+00:00`; naive timestamps and non-zero offsets are rejected;
 - `manifest.generator` contains exactly `name` and `version`, with the name `forge-companion`;
 - the generator version is informative and is not used as a reader-version gate;
 - `manifest.collections` and `resources` contain exactly `brews`, `profiles_equipment`, and

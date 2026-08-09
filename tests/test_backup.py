@@ -155,6 +155,7 @@ def test_validate_backup_rejects_resigned_unsupported_format() -> None:
         "wrong-algorithm",
         "wrong-canonicalization",
         "naive-created-at",
+        "non-utc-created-at",
         "extra-top-level-field",
     ],
 )
@@ -179,6 +180,8 @@ def test_validate_backup_rejects_resigned_schema_violation(case: str) -> None:
         payload["manifest"]["integrity"]["canonicalization"] = "unspecified"
     elif case == "naive-created-at":
         payload["created_at"] = "2026-07-17T12:30:00"
+    elif case == "non-utc-created-at":
+        payload["created_at"] = "2026-07-17T14:30:00+02:00"
     elif case == "extra-top-level-field":
         payload["unexpected"] = True
     payload["manifest"]["integrity"]["digest"] = backup._snapshot_digest(payload)
