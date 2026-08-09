@@ -87,7 +87,13 @@ else:
         pass
     else:
         raise AssertionError("pywin32 must not be installed on non-Windows platforms")
-    allowed_prefix = None
+    secret_service_prefix = "keyring.backends.SecretService"
+    if backend_module == secret_service_prefix or backend_module.startswith(
+        f"{secret_service_prefix}."
+    ):
+        allowed_prefix = secret_service_prefix
+    else:
+        allowed_prefix = None
 
 if allowed_prefix is not None:
     if not (
@@ -97,6 +103,23 @@ if allowed_prefix is not None:
         raise AssertionError(f"unexpected native keyring backend: {backend_module}")
     credentials._require_native_backend()
     shelly_cloud_credentials._require_native_backend()
+else:
+    checks = (
+        (credentials._require_native_backend, credentials.CredentialStoreError),
+        (
+            shelly_cloud_credentials._require_native_backend,
+            shelly_cloud_credentials.ShellyCloudCredentialError,
+        ),
+    )
+    for check, expected_error in checks:
+        try:
+            check()
+        except expected_error:
+            pass
+        else:
+            raise AssertionError(
+                f"unsupported keyring backend was accepted: {backend_module}"
+            )
 
 print(
     f"installed artifact OK: {forge_companion.__version__}; "

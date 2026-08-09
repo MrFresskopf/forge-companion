@@ -80,3 +80,11 @@ def test_installed_smoke_removes_import_path_overrides() -> None:
     assert cleaned["PYTHONNOUSERSITE"] == "1"
     assert "PYTHONPATH" not in cleaned
     assert "PYTHONHOME" not in cleaned
+
+
+def test_installed_smoke_checks_linux_native_or_fail_closed_keyring_boundary() -> None:
+    program = _installed_smoke_module()._verification_program()
+
+    assert "keyring.backends.SecretService" in program
+    assert "credentials.CredentialStoreError" in program
+    assert "shelly_cloud_credentials.ShellyCloudCredentialError" in program
