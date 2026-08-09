@@ -134,7 +134,7 @@ data, access control, or encryption. Keep snapshots private and protect them lik
 export.
 
 > [!WARNING]
-> This is not yet a complete or restorable account backup. Version 0.2 does not fetch per-brew
+> This is not yet a complete or restorable account backup. Version 0.3 does not fetch per-brew
 > details, notes, fermentation readings, or data unavailable through the documented API.
 
 ## Advanced report and export commands

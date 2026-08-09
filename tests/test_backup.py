@@ -48,7 +48,7 @@ def test_create_backup_collects_every_page_and_supported_resource() -> None:
         "profiles_styles",
     }
     assert result["manifest"] == {
-        "generator": {"name": "forge-companion", "version": "0.2.1"},
+        "generator": {"name": "forge-companion", "version": "0.3.0"},
         "collections": {
             "brews": 2,
             "profiles_equipment": 0,
@@ -92,7 +92,7 @@ def test_validate_backup_returns_data_free_summary_for_generated_snapshot() -> N
 
     assert summary.format == "forge-companion-collection-snapshot-v3"
     assert summary.created_at == "2026-07-17T12:30:00+00:00"
-    assert summary.generator_version == "0.2.1"
+    assert summary.generator_version == "0.3.0"
     assert summary.collection_count == 3
     assert summary.record_count == 2
     assert summary.digest == payload["manifest"]["integrity"]["digest"]

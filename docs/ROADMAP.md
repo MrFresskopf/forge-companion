@@ -28,22 +28,22 @@ deprecation and migration path.
 
 ### 1.0 release gates
 
-- [ ] publish a compatibility and deprecation policy for CLI commands, exit codes, JSON output,
+- [x] publish a compatibility and deprecation policy for CLI commands, exit codes, JSON output,
   configuration, and persisted file formats
 - [x] freeze the supported snapshot schema and document how older snapshot versions are read or
   migrated
 - [ ] complete repeated full-assembly qualification and evaluate independent release sensing
 - [ ] keep live actuation experimental until its mechanical evidence and failure boundaries pass review
 - [ ] retain stable machine-readable output for doctor diagnostics
-- [ ] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
+- [x] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
   the minimum supported Python version
 - [ ] maintain sanitized BrewForge contract tests for pagination, missing or additional fields, rate
   limits, timeouts, and incompatible responses
-- [ ] document a stable end-user installation path from a version tag or package index instead of
+- [x] document a stable end-user installation path from a version tag or package index instead of
   treating `@main` as the primary installation target
 - [ ] publish the 0.x-to-1.0 upgrade guide, support window, security scope, and experimental-feature
   boundary
-- [ ] review the CLI composition root and complete any intended command-module split before the public
+- [x] review the CLI composition root and complete any intended command-module split before the public
   interface freeze; this is a maintainability improvement, not a feature requirement
 - [ ] publish and exercise `1.0.0rc1` before the final release, including an independent security and
   release-artifact review
@@ -64,8 +64,8 @@ deprecation and migration path.
 - [x] define snapshot compatibility, migration, and deprecation rules
 - [x] modularize CLI command registration where that reduces pre-1.0 maintenance risk
 - add BrewForge response-contract and failure-mode coverage
-- add macOS CI and installed-package/keyring smoke tests across supported platforms
-- document the stable installation and upgrade path
+- [x] add macOS CI and installed-package/keyring smoke tests across supported platforms
+- [x] document the stable installation and upgrade path
 
 #### 1.0.0rc1 — Stability candidate
 

@@ -23,10 +23,10 @@ def _installed_smoke_module() -> ModuleType:
     return module
 
 
-def test_release_version_is_0_2_1_and_matches_runtime() -> None:
+def test_release_version_is_0_3_0_and_matches_runtime() -> None:
     project = _project_metadata()
 
-    assert project["version"] == "0.2.1"
+    assert project["version"] == "0.3.0"
     assert __version__ == project["version"]
 
 
