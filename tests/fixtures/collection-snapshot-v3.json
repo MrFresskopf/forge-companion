@@ -1,0 +1,47 @@
+{
+  "format": "forge-companion-collection-snapshot-v3",
+  "created_at": "2026-08-09T12:00:00+00:00",
+  "manifest": {
+    "generator": {
+      "name": "forge-companion",
+      "version": "0.2.1"
+    },
+    "collections": {
+      "brews": 1,
+      "profiles_equipment": 1,
+      "profiles_styles": 1
+    },
+    "excluded": [
+      "brew_details",
+      "brew_notes",
+      "brew_readings",
+      "undocumented_resources"
+    ],
+    "integrity": {
+      "algorithm": "sha256",
+      "canonicalization": "json-sort-keys-compact-utf8-without-digest",
+      "digest": "584708b448dae1ddd5322aa9d024952f1fedc51116ede3ccfe4bf458441ee404"
+    }
+  },
+  "resources": {
+    "brews": [
+      {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "name": "Example Märzen",
+        "status": "completed"
+      }
+    ],
+    "profiles_equipment": [
+      {
+        "id": "example-equipment",
+        "name": "Example 20 L kettle"
+      }
+    ],
+    "profiles_styles": [
+      {
+        "id": "example-style",
+        "name": "Märzen"
+      }
+    ]
+  }
+}

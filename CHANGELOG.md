@@ -28,6 +28,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   purpose; BrewForge reports and snapshots remain supporting read-only tools.
 - Collection snapshots use v3 and include only brews, equipment profiles, and style profiles. Doctor
   diagnostics use the same three read-only BrewForge surfaces.
+- Snapshot v3 now has a synthetic normative fixture and explicit fail-closed compatibility rules. Legacy
+  v1/v2 files are preserved rather than silently truncated or re-signed; a fresh v3 export is the
+  supported transition while no automatic migration command exists.
 
 ### Fixed
 

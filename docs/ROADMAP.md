@@ -30,7 +30,7 @@ deprecation and migration path.
 
 - [ ] publish a compatibility and deprecation policy for CLI commands, exit codes, JSON output,
   configuration, and persisted file formats
-- [ ] freeze the supported snapshot schema and document how older snapshot versions are read or
+- [x] freeze the supported snapshot schema and document how older snapshot versions are read or
   migrated
 - [ ] complete repeated full-assembly qualification and evaluate independent release sensing
 - [ ] keep live actuation experimental until its mechanical evidence and failure boundaries pass review
@@ -61,8 +61,8 @@ deprecation and migration path.
 
 - define stable human-versus-machine output boundaries and exit codes
 - [x] add versioned `doctor --json`
-- define snapshot compatibility, migration, and deprecation rules
-- modularize CLI command registration where that reduces pre-1.0 maintenance risk
+- [x] define snapshot compatibility, migration, and deprecation rules
+- [x] modularize CLI command registration where that reduces pre-1.0 maintenance risk
 - add BrewForge response-contract and failure-mode coverage
 - add macOS CI and installed-package/keyring smoke tests across supported platforms
 - document the stable installation and upgrade path
