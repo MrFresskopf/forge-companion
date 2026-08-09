@@ -40,19 +40,23 @@ and does not count toward the ten full-assembly trials.
 
 The fixture produced the following characterization evidence:
 
-- four separate one-second pulses were required to release the original linked-magnet geometry;
-- one continuous four-second pulse released the load cleanly, but the next nominally identical trial
-  required a second four-second pulse;
-- changing the connection to load the magnets sequentially still required a second four-second pulse;
+- approximately four separate one-second pulses were required to release the original linked-magnet
+  geometry;
+- the run initially described as a four-second success was later clarified to have required two
+  four-second pulses, so it was a failed one-shot rather than a qualifying success;
+- changing the connection to load the magnets sequentially still did not release the load within one
+  four-second pulse;
+- no observed loaded run established a successful, repeatable four-second one-shot;
 - every observed timer completion returned Cloud telemetry to `OFF`, with no reported hard endpoint,
   abnormal noise, cable winding failure, or thermal anomaly;
-- video of one failed one-shot showed little visible magnet motion during the first pulse and an abrupt
+- video of the two-pulse run showed little visible magnet motion during the first pulse and an abrupt
   release late in the second pulse.
 
-These results reject four seconds as a repeatable one-shot duration for this fixture. They do not justify
-increasing the runtime: prolonged drive against a nearly stationary magnetic assembly may indicate high
-breakaway force, winch stall, supply sag, cable or drum slip, or compliance in the linked hooks. Electrical
-`OFF` does not resolve those mechanical uncertainties.
+These results reject four seconds as a repeatable one-shot duration for this fixture. There are zero
+qualifying one-shot successes, and no run belongs in a ten-trial qualification series. The observations
+do not justify increasing the runtime: prolonged drive against a nearly stationary magnetic assembly
+may indicate high breakaway force, winch stall, supply sag, cable or drum slip, or compliance in the
+linked hooks. Electrical `OFF` does not resolve those mechanical uncertainties.
 
 Before another powered trial, the mechanism should produce a deliberate peel rather than drag both
 magnet faces in shear. A non-magnetic ramp may be fixed just beyond the starting position so the first
