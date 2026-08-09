@@ -31,9 +31,44 @@ This evidence does not qualify magnet release, loaded cable behavior, installed 
 safety, or hop addition. The ten full-assembly trials below remain required once the complete assembly
 is available.
 
+## Current loaded dry-fixture evidence
+
+A supervised dry fixture placed an 88 g representative load on two inner sous-vide magnets coupled to
+two outer hook magnets through a plastic wall. A cable winch pulled both outer magnets through linked
+hooks while a Shelly device enforced the selected timer. This was not the installed Fermzilla assembly
+and does not count toward the ten full-assembly trials.
+
+The fixture produced the following characterization evidence:
+
+- four separate one-second pulses were required to release the original linked-magnet geometry;
+- one continuous four-second pulse released the load cleanly, but the next nominally identical trial
+  required a second four-second pulse;
+- changing the connection to load the magnets sequentially still required a second four-second pulse;
+- every observed timer completion returned Cloud telemetry to `OFF`, with no reported hard endpoint,
+  abnormal noise, cable winding failure, or thermal anomaly;
+- video of one failed one-shot showed little visible magnet motion during the first pulse and an abrupt
+  release late in the second pulse.
+
+These results reject four seconds as a repeatable one-shot duration for this fixture. They do not justify
+increasing the runtime: prolonged drive against a nearly stationary magnetic assembly may indicate high
+breakaway force, winch stall, supply sag, cable or drum slip, or compliance in the linked hooks. Electrical
+`OFF` does not resolve those mechanical uncertainties.
+
+Before another powered trial, the mechanism should produce a deliberate peel rather than drag both
+magnet faces in shear. A non-magnetic ramp may be fixed just beyond the starting position so the first
+few millimetres of travel lift one magnet edge away from the wall. Staggered ramps or unequal,
+non-elastic links should release the magnets sequentially. Verify the revised geometry repeatedly by
+hand with power isolated before requesting one new supervised pulse. Measure the peak peel force over
+at least five hand pulls, confirm adequate winch-force margin, verify motor voltage and current under a
+brief controlled load without intentional stall, and install a protected mechanical stop. Changing this
+geometry starts a new qualification series.
+
 ## Optional detailed trial record
 
-When using the CSV, use `yes`, `no`, or `unknown` consistently for boolean columns. Record:
+When using the CSV, use `yes`, `no`, or `unknown` consistently for boolean columns. Each row
+represents one reset fixture and exactly one selected pulse. If that pulse does not complete the release,
+record the row as failed; a later retry is a separate diagnostic intervention and never turns the row into
+a success. Record:
 
 - requested pulse and device auto-off durations;
 - required and actual travel under load;
