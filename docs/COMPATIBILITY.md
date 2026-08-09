@@ -130,21 +130,72 @@ other setup errors exit 1. Response text, raw API data, and exception text are e
 
 ## Snapshot compatibility
 
-`forge-companion-collection-snapshot-v3` is strict persisted input. It contains only brews, equipment
-profiles, and style profiles:
+`forge-companion-collection-snapshot-v3` is the only collection snapshot format written and accepted
+by the current CLI. The validator is deliberately closed and fail-closed: an unknown, older, newer,
+or structurally extended format is rejected before its records are used.
 
-- its field set, canonicalization algorithm, and digest calculation do not change in place;
-- 1.x readers continue to validate valid v3 snapshots;
-- a structurally incompatible writer uses a new format identifier;
-- a new writer format ships with documented migration or overlapping read support before it becomes the
-  default;
-- unsupported, ambiguous, or integrity-invalid snapshots fail closed without displaying their custom
-  path or records.
+The normative synthetic example is
+[`tests/fixtures/collection-snapshot-v3.json`](../tests/fixtures/collection-snapshot-v3.json). It
+contains no live account data. Its fixed summary and canonical digest are exercised by the test suite.
+The implementation in `forge_companion.backup.validate_backup` remains the executable validator.
 
-Canonical v3 integrity uses a deep copy of the complete payload, removes only
-`manifest.integrity.digest`, serializes UTF-8 JSON with Unicode preserved, object keys sorted,
-`,` and `:` separators without extra whitespace, and non-finite numbers rejected, then stores the
-lowercase SHA-256 hex digest. A normative fixture must be published before the 1.0 freeze.
+### Frozen v3 envelope
+
+A valid v3 snapshot has exactly these properties:
+
+- top-level keys are exactly `format`, `created_at`, `manifest`, and `resources`;
+- `format` is exactly `forge-companion-collection-snapshot-v3`;
+- `created_at` is an ISO 8601 timestamp normalized to UTC and expressed with `Z` or a zero offset
+  such as `+00:00`; naive timestamps and non-zero offsets are rejected;
+- `manifest.generator` contains exactly `name` and `version`, with the name `forge-companion`;
+- the generator version is informative and is not used as a reader-version gate;
+- `manifest.collections` and `resources` contain exactly `brews`, `profiles_equipment`, and
+  `profiles_styles`, and each declared count equals the corresponding array length;
+- each collection item is a JSON object. Its BrewForge fields are opaque payload data rather than a
+  promise that every upstream record field will remain unchanged;
+- `manifest.excluded` is exactly `brew_details`, `brew_notes`, `brew_readings`, and
+  `undocumented_resources` in that order;
+- `manifest.integrity` uses SHA-256 and
+  `json-sort-keys-compact-utf8-without-digest`; and
+- the lowercase hexadecimal digest covers the complete snapshot after removing only the digest field,
+  encoded as compact UTF-8 JSON with sorted object keys and non-finite numbers forbidden.
+
+Whitespace and object-key order in the stored JSON are not contractual because canonicalization removes
+those differences. Collection array order and all record values are contractual because they affect the
+digest. Duplicate object keys, non-finite numbers, count mismatches, additional envelope fields, and a
+wrong digest are rejected.
+
+Changing the envelope keys, resource set, exclusions, integrity algorithm, canonicalization, timestamp
+rule, or interpretation of collection records requires a new snapshot format identifier such as v4. A
+new writer may continue to emit v3 only while it preserves all rules above. Maintained readers must keep
+accepting valid v3 snapshots unless a documented security issue requires a coordinated exception.
+
+### Historical formats and migration policy
+
+| Format | Historical contents | Current CLI | Safe transition |
+| --- | --- | --- | --- |
+| v1 | Seven collections, including four inventory collections; no manifest or integrity digest | Rejected | Preserve the original as unverified historical data. Create a fresh v3 snapshot from BrewForge. |
+| v2 | Seven collections, including four inventory collections; manifest, counts, exclusions, and SHA-256 digest | Rejected | Preserve and, if needed, validate with the matching historical Forge Companion release in an isolated environment. Create a fresh v3 snapshot from BrewForge. |
+| v3 | Brews, equipment profiles, and style profiles with the frozen envelope above | Accepted | No migration required; `snapshot validate` is offline and read-only. |
+| Unknown or future | Not defined by this release | Rejected | Upgrade only to software that explicitly documents and validates that format. |
+
+There is currently no `snapshot migrate` command. Renaming v1/v2 to v3, deleting inventory keys, or
+recomputing a digest does **not** establish provenance and is not a supported migration. Forge Companion
+must never silently reinterpret, overwrite, truncate, or re-sign an older snapshot.
+
+A future migration implementation must:
+
+1. identify and validate the source with a dedicated version-specific reader before transformation;
+2. declare every dropped, renamed, synthesized, or semantically changed field and collection;
+3. write a separate destination without overwriting the source;
+4. produce a new target-format digest only after the transformation succeeds;
+5. validate the destination with the target-format reader; and
+6. report source format, target format, losses, and destination without exposing record contents.
+
+When BrewForge is still available, creating a fresh v3 snapshot is preferred to local conversion because
+it re-reads the supported current resources rather than laundering an obsolete envelope. When BrewForge
+is unavailable, retain the historical file unchanged; manual extraction is recovery work, not a v3
+migration and not proof of snapshot integrity.
 
 The SHA-256 digest detects changes. It is not authentication, proof of BrewForge origin, encryption, or
 access control. Full-export additions must identify exclusions and rate-limit behavior explicitly.

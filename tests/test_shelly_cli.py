@@ -2,7 +2,8 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-import forge_companion.cli as cli_module
+import forge_companion.cli_hopper as cli_module
+from forge_companion import credentials
 from forge_companion.cli import app
 from forge_companion.shelly import ShellyReadOnlyClient, ShellySwitchStatus
 
@@ -39,7 +40,7 @@ def test_hopper_shelly_status_reads_without_resolving_token_or_sending_command(
         raise AssertionError("BrewForge token resolution must not run")
 
     monkeypatch.setattr(cli_module, "ShellyReadOnlyClient", FakeShellyReadOnlyClient)
-    monkeypatch.setattr(cli_module.credentials, "resolve_token", fail_if_token_is_resolved)
+    monkeypatch.setattr(credentials, "resolve_token", fail_if_token_is_resolved)
 
     result = runner.invoke(
         app,

@@ -1,7 +1,7 @@
 import pytest
 from typer.testing import CliRunner
 
-import forge_companion.cli as cli_module
+import forge_companion.cli_hopper as cli_module
 from forge_companion.cli import app
 from forge_companion.shelly_cloud import ShellyCloudSwitchStatus
 from forge_companion.shelly_cloud_credentials import ResolvedCloudProfile, ShellyCloudProfile

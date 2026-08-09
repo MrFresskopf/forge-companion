@@ -9,6 +9,9 @@ import pytest
 import forge_companion.backup as backup
 from forge_companion.backup import create_backup, write_backup
 
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+_V3_CONTRACT_FIXTURE = _REPOSITORY_ROOT / "tests" / "fixtures" / "collection-snapshot-v3.json"
+
 
 class StubClient:
     def __init__(self) -> None:
@@ -95,6 +98,19 @@ def test_validate_backup_returns_data_free_summary_for_generated_snapshot() -> N
     assert summary.digest == payload["manifest"]["integrity"]["digest"]
 
 
+def test_v3_contract_fixture_has_frozen_summary_and_digest() -> None:
+    summary = backup.validate_backup_file(_V3_CONTRACT_FIXTURE)
+
+    assert summary == backup.SnapshotSummary(
+        format="forge-companion-collection-snapshot-v3",
+        created_at="2026-08-09T12:00:00+00:00",
+        generator_version="0.2.1",
+        collection_count=3,
+        record_count=3,
+        digest="584708b448dae1ddd5322aa9d024952f1fedc51116ede3ccfe4bf458441ee404",
+    )
+
+
 def test_create_backup_rejects_naive_creation_time() -> None:
     with pytest.raises(ValueError, match="timezone-aware"):
         create_backup(StubClient(), now=datetime(2026, 7, 17, 12, 30))
@@ -139,6 +155,7 @@ def test_validate_backup_rejects_resigned_unsupported_format() -> None:
         "wrong-algorithm",
         "wrong-canonicalization",
         "naive-created-at",
+        "non-utc-created-at",
         "extra-top-level-field",
     ],
 )
@@ -163,6 +180,8 @@ def test_validate_backup_rejects_resigned_schema_violation(case: str) -> None:
         payload["manifest"]["integrity"]["canonicalization"] = "unspecified"
     elif case == "naive-created-at":
         payload["created_at"] = "2026-07-17T12:30:00"
+    elif case == "non-utc-created-at":
+        payload["created_at"] = "2026-07-17T14:30:00+02:00"
     elif case == "extra-top-level-field":
         payload["unexpected"] = True
     payload["manifest"]["integrity"]["digest"] = backup._snapshot_digest(payload)
