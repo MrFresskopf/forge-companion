@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from typer.main import get_command
 from typer.testing import CliRunner
 
-import forge_companion.cli as cli
+import forge_companion.cli_brewforge as cli
 from forge_companion import credentials
 from forge_companion.cli import app
 from forge_companion.client import BrewForgeClient

@@ -47,7 +47,7 @@ def test_hopper_qualification_attest_persists_operator_statement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
 
     attested = runner.invoke(
         app,
@@ -77,7 +77,7 @@ def test_hopper_qualification_revoke_preserves_other_preferences(
     from forge_companion.preferences import Preferences, load_preferences, save_preferences
 
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     save_preferences(Preferences(temperature_unit="C"))
     attested = runner.invoke(
         app,
@@ -107,7 +107,7 @@ def test_hopper_qualification_wrong_phrase_changes_nothing(
     from forge_companion.preferences import Preferences, save_preferences
 
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     save_preferences(Preferences(temperature_unit="F"))
     destination = tmp_path / "preferences.json"
     before = destination.read_bytes()
@@ -128,7 +128,7 @@ def test_hopper_qualification_attest_requires_interactive_terminal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: False)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: False)
 
     result = runner.invoke(
         app,
@@ -145,7 +145,7 @@ def test_report_remember_preserves_hopper_qualification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from forge_companion import cli
+    from forge_companion import cli_reports
     from forge_companion.preferences import (
         HOPPER_QUALIFICATION_STATEMENT_VERSION,
         Preferences,
@@ -160,7 +160,7 @@ def test_report_remember_preserves_hopper_qualification(
         hopper_qualification_attested_at="2026-08-02T18:00:00+00:00",
     )
     save_preferences(original)
-    monkeypatch.setattr(cli, "fermentation_html_command", lambda **_kwargs: None)
+    monkeypatch.setattr(cli_reports, "fermentation_html_command", lambda **_kwargs: None)
 
     result = runner.invoke(
         app,
@@ -206,8 +206,8 @@ def _patch_cloud_preflight_off(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
     monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FakeReadOnlyClient)
-    monkeypatch.setattr("forge_companion.cli.sleep_seconds", lambda seconds: None)
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper.sleep_seconds", lambda seconds: None)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     profile = shelly_cloud_credentials.ShellyCloudProfile(
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046e5f58",
@@ -222,7 +222,9 @@ def _patch_cloud_preflight_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _patch_current_hopper_qualification(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("forge_companion.cli._require_current_hopper_qualification", lambda: None)
+    monkeypatch.setattr(
+        "forge_companion.cli_hopper._require_current_hopper_qualification", lambda: None
+    )
 
 
 def test_hopper_plan_command_creates_offline_draft(tmp_path: Path) -> None:
@@ -911,9 +913,9 @@ def test_hopper_fire_requires_current_operator_attestation_before_prompt_or_netw
     destination = tmp_path / "cloud-plan.json"
     _write_armed_cloud_plan(destination)
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path / "empty-config"))
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     monkeypatch.setattr(
-        "forge_companion.cli.shelly_cloud_credentials.resolve_profile",
+        "forge_companion.cli_hopper.shelly_cloud_credentials.resolve_profile",
         lambda: (_ for _ in ()).throw(AssertionError("credentials must not be resolved")),
     )
 
@@ -938,7 +940,7 @@ def test_hopper_fire_fails_closed_when_qualification_state_is_unreadable(
     config.mkdir()
     (config / "preferences.json").write_text("not-json", encoding="utf-8")
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(config))
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
 
     created = datetime(2026, 8, 2, 18, 0, 0, tzinfo=UTC)
     trigger = datetime(2026, 8, 2, 18, 0, 1, tzinfo=UTC)
@@ -986,9 +988,9 @@ def test_hopper_fire_confirms_before_preflight_and_waits_for_cloud_margin(
         device_id="5432046e5f58",
         auth_key="synthetic-secret-key",
     )
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     monkeypatch.setattr(
-        "forge_companion.cli._require_current_hopper_qualification",
+        "forge_companion.cli_hopper._require_current_hopper_qualification",
         lambda: events.append("qualification"),
     )
     monkeypatch.setattr(
@@ -1001,15 +1003,15 @@ def test_hopper_fire_confirms_before_preflight_and_waits_for_cloud_margin(
         events.append("confirmation")
         return "FIRE"
 
-    monkeypatch.setattr("forge_companion.cli.typer.prompt", confirm)
+    monkeypatch.setattr("forge_companion.cli_hopper.typer.prompt", confirm)
     monotonic_values = iter([10.0, 10.25])
-    monkeypatch.setattr("forge_companion.cli.monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr("forge_companion.cli_hopper.monotonic", lambda: next(monotonic_values))
 
     def wait_for_rate_boundary(seconds: float) -> None:
         assert seconds == pytest.approx(1.0)
         events.append("rate-wait")
 
-    monkeypatch.setattr("forge_companion.cli.sleep_seconds", wait_for_rate_boundary)
+    monkeypatch.setattr("forge_companion.cli_hopper.sleep_seconds", wait_for_rate_boundary)
 
     class FakeReadOnlyClient:
         def __init__(self, **kwargs: object) -> None:
@@ -1075,7 +1077,7 @@ def test_hopper_fire_cancellation_never_calls_actuator(
 
     from forge_companion import shelly_cloud, shelly_cloud_credentials
 
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     _patch_current_hopper_qualification(monkeypatch)
     monkeypatch.setattr(
         shelly_cloud_credentials,
@@ -1219,7 +1221,7 @@ def test_hopper_fire_refuses_preflight_that_is_not_online_and_off(
 
     monkeypatch.setattr(shelly_cloud, "ShellyCloudReadOnlyClient", FakeReadOnlyClient)
     monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", ForbiddenActuator)
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     _patch_current_hopper_qualification(monkeypatch)
 
     result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
@@ -1244,7 +1246,7 @@ def test_hopper_fire_preflight_error_never_constructs_actuator(
         device_id="5432046e5f58",
         auth_key="synthetic-secret-key",
     )
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: True)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: True)
     monkeypatch.setattr(
         shelly_cloud_credentials,
         "resolve_profile",
@@ -1288,7 +1290,7 @@ def test_hopper_fire_refuses_noninteractive_input_before_any_network(
 
     from forge_companion import shelly_cloud, shelly_cloud_credentials
 
-    monkeypatch.setattr("forge_companion.cli._is_interactive_terminal", lambda: False)
+    monkeypatch.setattr("forge_companion.cli_hopper._is_interactive_terminal", lambda: False)
     monkeypatch.setattr(
         shelly_cloud_credentials,
         "resolve_profile",

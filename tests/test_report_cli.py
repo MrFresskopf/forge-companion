@@ -2,7 +2,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import forge_companion.cli as cli
+import forge_companion.cli_common as cli_common
+import forge_companion.cli_reports as cli
 from forge_companion.cli import app
 
 runner = CliRunner()
@@ -17,15 +18,15 @@ class _TTYStub:
 
 
 def test_report_auto_selection_requires_interactive_input_and_output(monkeypatch) -> None:
-    monkeypatch.setattr(cli.sys, "stdin", _TTYStub(True))
-    monkeypatch.setattr(cli.sys, "stdout", _TTYStub(False))
+    monkeypatch.setattr(cli_common.sys, "stdin", _TTYStub(True))
+    monkeypatch.setattr(cli_common.sys, "stdout", _TTYStub(False))
 
     assert cli._is_interactive_terminal() is False
 
 
 def test_report_auto_selection_rejects_noninteractive_input(monkeypatch) -> None:
-    monkeypatch.setattr(cli.sys, "stdin", _TTYStub(False))
-    monkeypatch.setattr(cli.sys, "stdout", _TTYStub(True))
+    monkeypatch.setattr(cli_common.sys, "stdin", _TTYStub(False))
+    monkeypatch.setattr(cli_common.sys, "stdout", _TTYStub(True))
 
     assert cli._is_interactive_terminal() is False
 

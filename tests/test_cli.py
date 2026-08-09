@@ -7,7 +7,8 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 import forge_companion.backup as backup
-import forge_companion.cli as cli
+import forge_companion.cli_brewforge as brewforge_cli
+import forge_companion.cli_reports as reports_cli
 from forge_companion import __version__
 from forge_companion.cli import app
 
@@ -59,9 +60,9 @@ def test_doctor_requires_token_without_printing_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        cli.credentials,
+        brewforge_cli.credentials,
         "resolve_token",
-        lambda: cli.credentials.ResolvedToken(token=None, source="missing"),
+        lambda: brewforge_cli.credentials.ResolvedToken(token=None, source="missing"),
     )
 
     result = runner.invoke(app, ["doctor"], env={"BREWFORGE_API_TOKEN": ""})
@@ -83,7 +84,7 @@ def test_backup_command_writes_file_and_reports_destination(
         def get(self, path: str, params: object = None) -> dict[str, object]:
             return {"data": [], "pagination": {"hasMore": False, "total": 0}}
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(brewforge_cli, "BrewForgeClient", StubClient)
     destination = tmp_path / "brewforge.json"
 
     result = runner.invoke(
@@ -181,7 +182,7 @@ def test_backup_command_reports_api_error_without_traceback(
         def get(self, path: str, params: object = None) -> dict[str, object]:
             raise ValueError("unexpected response")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    monkeypatch.setattr(brewforge_cli, "BrewForgeClient", BrokenClient)
     destination = tmp_path / "must-not-exist.json"
 
     result = runner.invoke(
@@ -209,7 +210,7 @@ def test_snapshot_does_not_echo_token_from_transport_exception(
         def get(self, path: str, params: object = None) -> dict[str, object]:
             raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    monkeypatch.setattr(brewforge_cli, "BrewForgeClient", BrokenClient)
     destination = tmp_path / "must-not-exist.json"
 
     result = runner.invoke(
@@ -253,7 +254,7 @@ def test_fermentation_brief_uses_exactly_two_gets_and_writes_report(
                 }
             raise AssertionError(f"unexpected GET: {path}")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", StubClient)
     destination = tmp_path / "brief.md"
 
     result = runner.invoke(
@@ -308,7 +309,7 @@ def test_fermentation_brief_selects_brew_without_detail_request(
                 }
             raise AssertionError(f"unexpected GET: {path}")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", StubClient)
     destination = tmp_path / "selected-brief.md"
 
     result = runner.invoke(
@@ -346,7 +347,7 @@ def test_fermentation_brief_does_not_echo_token_from_transport_exception(
         def get(self, path: str, params: object = None) -> dict[str, object]:
             raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", BrokenClient)
     destination = tmp_path / "must-not-exist.md"
 
     result = runner.invoke(
@@ -388,7 +389,7 @@ def test_spunding_advisor_uses_one_readings_get(monkeypatch: object) -> None:
                 ]
             }
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", StubClient)
 
     result = runner.invoke(
         app,
@@ -436,7 +437,7 @@ def test_spunding_advisor_selects_brew_before_readings(monkeypatch: object) -> N
                 }
             raise AssertionError(f"unexpected GET: {path}")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", StubClient)
 
     result = runner.invoke(
         app,
@@ -468,7 +469,7 @@ def test_spunding_advisor_renders_no_decision_for_malformed_envelope(
             calls.append(path)
             return {"unexpected": []}
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", StubClient)
 
     result = runner.invoke(
         app,
@@ -493,7 +494,7 @@ def test_spunding_advisor_reports_api_error_without_traceback(monkeypatch: objec
         def get(self, path: str, params: object = None) -> dict[str, object]:
             raise ValueError("unexpected response")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", BrokenClient)
 
     result = runner.invoke(
         app,
@@ -520,7 +521,7 @@ def test_spunding_advisor_does_not_echo_token_from_transport_exception(
         def get(self, path: str, params: object = None) -> dict[str, object]:
             raise httpx.RequestError(f"transport reflected {token}\x1b[31m")
 
-    monkeypatch.setattr(cli, "BrewForgeClient", BrokenClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", BrokenClient)
 
     result = runner.invoke(
         app,
@@ -556,7 +557,7 @@ def test_spunding_advisor_renders_no_decision_for_timestamp_overflow(
                 ]
             }
 
-    monkeypatch.setattr(cli, "BrewForgeClient", StubClient)
+    monkeypatch.setattr(reports_cli, "BrewForgeClient", StubClient)
 
     result = runner.invoke(
         app,

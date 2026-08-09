@@ -4,7 +4,7 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-import forge_companion.cli as cli
+import forge_companion.cli_reports as cli
 from forge_companion.cli import app
 
 runner = CliRunner()
