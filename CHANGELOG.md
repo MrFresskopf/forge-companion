@@ -6,6 +6,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-09
+
 ### Added
 
 - A versioned, persistent `hopper qualification attest/status/revoke` gate records the operator's
@@ -26,6 +28,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   data-minimal classification for local HTTP-client setup failures.
 - Forge Companion now presents safe Shelly control and guarded brewery automation as its primary
   purpose; BrewForge reports and snapshots remain supporting read-only tools.
+- CLI command registration is split into focused BrewForge, report, hopper, and shared modules while the
+  public entry point and documented command surface remain unchanged.
+- CI now includes macOS and isolated installed-wheel smokes across supported platforms, checking native
+  keyring recognition or fail-closed behavior without reading or writing credentials.
 - Collection snapshots use v3 and include only brews, equipment profiles, and style profiles. Doctor
   diagnostics use the same three read-only BrewForge surfaces.
 - Snapshot v3 now has a synthetic normative fixture and explicit fail-closed compatibility rules. Legacy
@@ -34,6 +40,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The Linux-only transitive `cryptography` dependency is locked to 50.0.0, resolving
+  GHSA-g6cj-pr64-35w5 / CVE-2026-69247.
 - Shelly Cloud fire now keeps a conservative 1.25-second interval from preflight to pulse and from
   pulse to OFF read-back. The real Cloud service rejects requests started at the exact documented
   one-second boundary with HTTP 429.
@@ -135,7 +143,8 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.1
 [0.2.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.0
 [0.1.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.1.1

@@ -38,7 +38,7 @@ If a token is exposed, revoke it in BrewForge immediately and create a replaceme
 
 ## Current access model
 
-Version 0.2 does not create, change, or delete BrewForge data. The BrewForge HTTP client exposes only
+Version 0.3 does not create, change, or delete BrewForge data. The BrewForge HTTP client exposes only
 GET requests. Shelly integration is a separate trust boundary: read-only local and Cloud status
 adapters remain narrow, while the experimental `hopper fire` command can send one explicitly
 confirmed Cloud pulse for a previously armed plan. Collection snapshots are local JSON files and may
