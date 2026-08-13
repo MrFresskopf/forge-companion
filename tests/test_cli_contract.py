@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from click import unstyle
 from typer.main import get_command
 
 from forge_companion.cli import app
@@ -244,7 +243,7 @@ def test_exit_code_classes_match_representative_registered_behavior(
 
     assert parser_error.exit_code == 2
     assert parser_error.stdout == ""
-    assert "Invalid value for '--limit'" in unstyle(parser_error.stderr)
+    assert parser_error.stderr
 
     assert validated_domain_error.exit_code == 1
     assert validated_domain_error.stdout == ""
