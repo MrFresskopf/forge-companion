@@ -46,9 +46,7 @@ def test_windows_only_dependency_has_platform_marker() -> None:
 
 
 def test_ci_matrix_includes_macos_and_installed_artifact_smoke() -> None:
-    workflow = (_REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (_REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "macos-latest" in workflow
     assert "uv build --wheel --out-dir dist" in workflow
@@ -88,3 +86,11 @@ def test_installed_smoke_checks_linux_native_or_fail_closed_keyring_boundary() -
     assert "keyring.backends.SecretService" in program
     assert "credentials.CredentialStoreError" in program
     assert "shelly_cloud_credentials.ShellyCloudCredentialError" in program
+
+
+def test_installed_smoke_checks_packaged_cli_contract() -> None:
+    program = _installed_smoke_module()._verification_program()
+
+    assert "forge_companion.contracts" in program
+    assert "cli-v1-contract.json" in program
+    assert "forge-companion-cli-contract-v1" in program

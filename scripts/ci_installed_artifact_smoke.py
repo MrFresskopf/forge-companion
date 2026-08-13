@@ -49,8 +49,10 @@ def _run(command: list[str], *, cwd: Path, environment: Mapping[str, str]) -> No
 
 
 def _verification_program() -> str:
-    return r'''
+    return r"""
 import importlib.metadata as metadata
+import importlib.resources as resources
+import json
 import os
 import platform
 from pathlib import Path
@@ -65,6 +67,15 @@ if venv_root not in module_path.parents:
     raise AssertionError(f"package imported outside smoke venv: {module_path}")
 if metadata.version("forge-companion") != forge_companion.__version__:
     raise AssertionError("installed metadata and runtime version differ")
+
+contract_text = (
+    resources.files("forge_companion.contracts")
+    .joinpath("cli-v1-contract.json")
+    .read_text(encoding="utf-8")
+)
+contract = json.loads(contract_text)
+if contract.get("schema_version") != "forge-companion-cli-contract-v1":
+    raise AssertionError("installed CLI contract is missing or incompatible")
 
 system = platform.system()
 backend = keyring.get_keyring()
@@ -125,7 +136,7 @@ print(
     f"installed artifact OK: {forge_companion.__version__}; "
     f"backend={backend_module}; module={module_path}"
 )
-'''
+"""
 
 
 def main() -> int:

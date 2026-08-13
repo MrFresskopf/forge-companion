@@ -34,14 +34,14 @@ deprecation and migration path.
   migrated
 - [ ] complete repeated full-assembly qualification and evaluate independent release sensing
 - [ ] keep live actuation experimental until its mechanical evidence and failure boundaries pass review
-- [ ] retain stable machine-readable output for doctor diagnostics
+- [x] retain stable machine-readable output for doctor diagnostics
 - [x] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
   the minimum supported Python version
 - [x] maintain sanitized BrewForge contract tests for pagination, missing or additional fields, rate
   limits, timeouts, and incompatible responses
 - [x] document a stable end-user installation path from a version tag or package index instead of
   treating `@main` as the primary installation target
-- [ ] publish the 0.x-to-1.0 upgrade guide, support window, security scope, and experimental-feature
+- [x] publish the 0.x-to-1.0 upgrade guide, support window, security scope, and experimental-feature
   boundary
 - [x] review the CLI composition root and complete any intended command-module split before the public
   interface freeze; this is a maintainability improvement, not a feature requirement

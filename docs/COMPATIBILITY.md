@@ -6,6 +6,14 @@
 > The policy becomes binding for the stable scope when 1.0 is released; until then, incompatible changes
 > remain possible when they are documented in the changelog.
 
+The executable
+[`cli-v1-contract.json`](../src/forge_companion/contracts/cli-v1-contract.json) records the current
+1.0 freeze candidate: command paths, hidden status, arguments, options, defaults, basic parameter ranges,
+and stable, mixed, or experimental classification. Framework-owned help and shell-completion options
+are intentionally excluded because their spelling and presentation follow the supported Typer version.
+Tests compare the manifest with the registered CLI. The [0.x-to-1.0 upgrade guide](UPGRADE-1.0.md)
+defines migration, support, security, rollback, and the experimental live-actuation boundary.
+
 Forge Companion follows semantic versioning for its documented, non-experimental public surface. The
 1.0 goal is a stable safety core for Shelly planning and diagnostics, with supporting read-only
 BrewForge reports, not completion of every roadmap capability.
@@ -43,7 +51,7 @@ silently reinterpret an existing file under the same format identifier.
 
 ### Stable command candidates
 
-The following documented command families are candidates for the 1.0 stable tier:
+The following documented command families are included in the 1.0 stable freeze candidate:
 
 - `auth login`, `auth status`, and `auth logout`
 - `doctor`
@@ -79,8 +87,8 @@ From 1.0 onward:
 | Code | Meaning |
 | ---: | --- |
 | `0` | The command completed according to its contract. Simulation statuses such as `WAIT` are successful command results. |
-| `1` | The invocation was understood, but an operational, integrity, validation, API, filesystem, credential-store, or domain failure prevented successful completion. `doctor` also uses 1 when one or more endpoint checks fail. |
-| `2` | The invocation or required local precondition is invalid, including CLI parser errors, malformed local option values, and missing BrewForge authentication for a command that requires it. |
+| `1` | The invocation was understood, but an operational, integrity, application-level validation, API, filesystem, credential-store, or domain failure prevented successful completion. This includes values parsed successfully by the CLI but rejected by command validation. `doctor` also uses 1 when one or more endpoint checks fail. |
+| `2` | The CLI parser rejected syntax, a required option, or a parser-enforced value constraint; or a command explicitly defines a missing setup prerequisite in this class. Current non-parser cases are missing BrewForge authentication for commands that require it and a missing Shelly Cloud profile for `hopper cloud-status`. Experimental live-actuation commands may instead classify missing Cloud setup as an application/domain failure (`1`). |
 
 Additional nonzero codes require documentation before use. Scripts must not infer finer failure causes
 from human-readable text; machine-readable error codes are the stable discriminator.

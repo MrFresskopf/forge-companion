@@ -1,0 +1,871 @@
+{
+  "schema_version": "forge-companion-cli-contract-v1",
+  "description": "Executable freeze candidate for the documented Forge Companion 1.0 CLI surface.",
+  "framework_parameters_excluded": [
+    "--help",
+    "--install-completion",
+    "--show-completion"
+  ],
+  "exit_codes": {
+    "0": "success",
+    "1": "operational_failure",
+    "2": "parser_or_setup_precondition"
+  },
+  "commands": {
+    "<root>": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "version",
+          "kind": "option",
+          "spellings": [
+            "--version"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "auth": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "auth login": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "auth logout": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "auth status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "brews": {
+      "kind": "command",
+      "hidden": true,
+      "parameters": [
+        {
+          "name": "page",
+          "kind": "option",
+          "spellings": [
+            "--page"
+          ],
+          "required": false,
+          "default": 1,
+          "type": {
+            "kind": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "limit",
+          "kind": "option",
+          "spellings": [
+            "--limit"
+          ],
+          "required": false,
+          "default": 100,
+          "type": {
+            "kind": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "doctor": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "json_output",
+          "kind": "option",
+          "spellings": [
+            "--json"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "fermentation-brief": {
+      "kind": "command",
+      "hidden": true,
+      "parameters": [
+        {
+          "name": "brew_id",
+          "kind": "argument",
+          "spellings": [
+            "brew_id"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "spellings": [
+            "--output",
+            "-o"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        },
+        {
+          "name": "temperature_unit",
+          "kind": "option",
+          "spellings": [
+            "--temperature-unit"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "select",
+          "kind": "option",
+          "spellings": [
+            "--select"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "page",
+          "kind": "option",
+          "spellings": [
+            "--page"
+          ],
+          "required": false,
+          "default": 1,
+          "type": {
+            "kind": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "limit",
+          "kind": "option",
+          "spellings": [
+            "--limit"
+          ],
+          "required": false,
+          "default": 100,
+          "type": {
+            "kind": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "fermentation-csv": {
+      "kind": "command",
+      "hidden": true,
+      "parameters": [
+        {
+          "name": "brew_id",
+          "kind": "argument",
+          "spellings": [
+            "brew_id"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "spellings": [
+            "--output",
+            "-o"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        },
+        {
+          "name": "select",
+          "kind": "option",
+          "spellings": [
+            "--select"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "page",
+          "kind": "option",
+          "spellings": [
+            "--page"
+          ],
+          "required": false,
+          "default": 1,
+          "type": {
+            "kind": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "limit",
+          "kind": "option",
+          "spellings": [
+            "--limit"
+          ],
+          "required": false,
+          "default": 100,
+          "type": {
+            "kind": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "fermentation-html": {
+      "kind": "command",
+      "hidden": true,
+      "parameters": [
+        {
+          "name": "brew_id",
+          "kind": "argument",
+          "spellings": [
+            "brew_id"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "spellings": [
+            "--output",
+            "-o"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        },
+        {
+          "name": "title",
+          "kind": "option",
+          "spellings": [
+            "--title"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "temperature_unit",
+          "kind": "option",
+          "spellings": [
+            "--temperature-unit"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "select",
+          "kind": "option",
+          "spellings": [
+            "--select"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "page",
+          "kind": "option",
+          "spellings": [
+            "--page"
+          ],
+          "required": false,
+          "default": 1,
+          "type": {
+            "kind": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "limit",
+          "kind": "option",
+          "spellings": [
+            "--limit"
+          ],
+          "required": false,
+          "default": 100,
+          "type": {
+            "kind": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "hopper": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "mixed",
+      "modes": {
+        "stable": "simulated-pulse workflow and read-only diagnostics",
+        "experimental": "Cloud-pulse lifecycle, qualification, readiness, and fire"
+      }
+    },
+    "hopper arm": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "source",
+          "kind": "argument",
+          "spellings": [
+            "source"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        }
+      ],
+      "stability": "mixed",
+      "modes": {
+        "stable": "simulated-pulse plan",
+        "experimental": "cloud-pulse plan"
+      }
+    },
+    "hopper check": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "source",
+          "kind": "argument",
+          "spellings": [
+            "source"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        }
+      ],
+      "stability": "experimental"
+    },
+    "hopper cloud-auth": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "hopper cloud-auth login": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "hopper cloud-auth logout": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "hopper cloud-auth status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "stable"
+    },
+    "hopper cloud-status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "channel",
+          "kind": "option",
+          "spellings": [
+            "--channel"
+          ],
+          "required": false,
+          "default": 0,
+          "type": {
+            "kind": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "hopper fire": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "source",
+          "kind": "argument",
+          "spellings": [
+            "source"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        }
+      ],
+      "stability": "experimental"
+    },
+    "hopper plan": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "trigger_at",
+          "kind": "option",
+          "spellings": [
+            "--trigger-at"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "pulse_ms",
+          "kind": "option",
+          "spellings": [
+            "--pulse-ms"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "brew_id",
+          "kind": "option",
+          "spellings": [
+            "--brew-id"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "spellings": [
+            "--output",
+            "-o"
+          ],
+          "required": false,
+          "default": "automation/hopper-plan.json",
+          "type": {
+            "kind": "path"
+          }
+        },
+        {
+          "name": "cloud",
+          "kind": "option",
+          "spellings": [
+            "--cloud"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ],
+      "stability": "mixed",
+      "modes": {
+        "stable": "simulated-pulse without --cloud",
+        "experimental": "cloud-pulse with --cloud"
+      }
+    },
+    "hopper qualification": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "hopper qualification attest": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "hopper qualification revoke": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "hopper qualification status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "hopper shelly-status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "device_url",
+          "kind": "option",
+          "spellings": [
+            "--device-url"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "channel",
+          "kind": "option",
+          "spellings": [
+            "--channel"
+          ],
+          "required": false,
+          "default": "0",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "hopper simulate": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "source",
+          "kind": "argument",
+          "spellings": [
+            "source"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        },
+        {
+          "name": "at",
+          "kind": "option",
+          "spellings": [
+            "--at"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "hopper status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "source",
+          "kind": "argument",
+          "spellings": [
+            "source"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        }
+      ],
+      "stability": "mixed",
+      "modes": {
+        "stable": "simulated-pulse plan",
+        "experimental": "cloud-pulse plan"
+      }
+    },
+    "report": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "brew_id",
+          "kind": "argument",
+          "spellings": [
+            "brew_id"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "spellings": [
+            "--output",
+            "-o"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "path"
+          }
+        },
+        {
+          "name": "title",
+          "kind": "option",
+          "spellings": [
+            "--title"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "temperature_unit",
+          "kind": "option",
+          "spellings": [
+            "--temperature-unit"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "remember",
+          "kind": "option",
+          "spellings": [
+            "--remember"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "snapshot": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "output",
+          "kind": "option",
+          "spellings": [
+            "--output",
+            "-o"
+          ],
+          "required": false,
+          "default": "snapshots/brewforge-collections.json",
+          "type": {
+            "kind": "path"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "snapshot validate": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "source",
+          "kind": "argument",
+          "spellings": [
+            "source"
+          ],
+          "required": false,
+          "default": "snapshots/brewforge-collections.json",
+          "type": {
+            "kind": "path"
+          }
+        }
+      ],
+      "stability": "stable"
+    },
+    "spunding-advisor": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "trigger_sg",
+          "kind": "option",
+          "spellings": [
+            "--trigger-sg"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "number"
+          }
+        },
+        {
+          "name": "brew_id",
+          "kind": "argument",
+          "spellings": [
+            "brew_id"
+          ],
+          "required": false,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "max_age_minutes",
+          "kind": "option",
+          "spellings": [
+            "--max-age-minutes"
+          ],
+          "required": false,
+          "default": 90,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "max_gap_minutes",
+          "kind": "option",
+          "spellings": [
+            "--max-gap-minutes"
+          ],
+          "required": false,
+          "default": 120,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "confirmations",
+          "kind": "option",
+          "spellings": [
+            "--confirmations"
+          ],
+          "required": false,
+          "default": 2,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "select",
+          "kind": "option",
+          "spellings": [
+            "--select"
+          ],
+          "required": false,
+          "default": false,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "page",
+          "kind": "option",
+          "spellings": [
+            "--page"
+          ],
+          "required": false,
+          "default": 1,
+          "type": {
+            "kind": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "limit",
+          "kind": "option",
+          "spellings": [
+            "--limit"
+          ],
+          "required": false,
+          "default": 100,
+          "type": {
+            "kind": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "stability": "stable"
+    }
+  }
+}
