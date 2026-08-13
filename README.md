@@ -135,8 +135,10 @@ documented collection and token scope.
 
 Markdown, CSV, UUID listing, custom snapshot paths, and deterministic legacy command names remain
 available for advanced use and scripts. See the [command guide](docs/COMMANDS.md) for details. The
-[pre-1.0 compatibility policy](docs/COMPATIBILITY.md) defines the planned stable surface and the
-implemented Doctor JSON contract.
+[pre-1.0 compatibility policy](docs/COMPATIBILITY.md), executable
+[CLI freeze candidate](src/forge_companion/contracts/cli-v1-contract.json), and
+[0.x-to-1.0 upgrade guide](docs/UPGRADE-1.0.md) define the planned stable surface, support window,
+experimental boundary, and implemented Doctor JSON contract.
 
 `doctor --json` emits the closed `forge-companion-doctor-v2` machine contract for scripts and future
 adapters. Its packaged [JSON Schema](src/forge_companion/schemas/doctor-v2.schema.json) defines endpoint

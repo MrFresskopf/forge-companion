@@ -6,6 +6,14 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- An executable 1.0 CLI freeze candidate now records command paths, hidden status, arguments, options,
+  defaults, basic ranges, exit-code classes, and stable versus experimental modes, with tests against
+  the registered Typer surface.
+- The 0.x-to-1.0 upgrade guide now documents persisted-data handling, rollback, the 1.x and 0.x support
+  windows, security scope, and the experimental Cloud-actuation boundary.
+
 ### Changed
 
 - BrewForge GET clients now ignore ambient proxy and TLS environment overrides, keeping authenticated
