@@ -41,7 +41,7 @@ class BrewForgeClient:
     ) -> None:
         if not token.strip():
             raise ValueError("BrewForge API token must not be empty")
-        self._http = http or httpx.Client(timeout=20.0)
+        self._http = http or httpx.Client(timeout=20.0, trust_env=False)
         self._base_url = base_url.rstrip("/")
         self._headers = {
             "Authorization": f"Bearer {token}",
@@ -60,7 +60,10 @@ class BrewForgeClient:
             headers=self._headers,
         )
         response.raise_for_status()
-        payload = response.json(parse_int=_safe_json_integer)
+        try:
+            payload = response.json(parse_int=_safe_json_integer)
+        except ValueError:
+            raise ValueError("BrewForge returned invalid JSON") from None
         if not isinstance(payload, dict):
             raise TypeError("BrewForge returned JSON that is not an object")
         return payload

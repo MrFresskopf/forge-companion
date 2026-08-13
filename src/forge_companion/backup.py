@@ -207,7 +207,9 @@ def _collect(client: ReadClient, path: str, require_pagination: bool) -> list[ob
         if not isinstance(has_more, bool):
             raise TypeError(f"BrewForge resource {path!r}: hasMore is not a boolean")
         total = pagination.get("total")
-        if total is not None and (not isinstance(total, int) or isinstance(total, bool)):
+        if total is not None and (
+            not isinstance(total, int) or isinstance(total, bool) or total < 0
+        ):
             raise TypeError(f"BrewForge resource {path!r} returned an invalid total")
         if isinstance(total, int) and len(items) > total:
             raise ValueError(

@@ -353,7 +353,7 @@ def test_doctor_json_classifies_client_setup_failures_without_details(
         {"SSL_CERT_FILE": "Z:/private-missing-forge-companion-ca.pem"},
     ],
 )
-def test_doctor_json_classifies_real_client_environment_failures_without_requests(
+def test_doctor_json_ignores_proxy_and_tls_environment_for_api_client(
     monkeypatch: pytest.MonkeyPatch,
     environment: dict[str, str],
 ) -> None:
@@ -366,23 +366,28 @@ def test_doctor_json_classifies_real_client_environment_failures_without_request
         "resolve_token",
         lambda: credentials.ResolvedToken(token="test-token", source="keyring"),
     )
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"data": []})
 
     original_client = httpx.Client
 
     def guarded_client(*args: object, **kwargs: object) -> httpx.Client:
-        client = original_client(*args, **kwargs)
-        client.close()
-        raise AssertionError("client setup unexpectedly succeeded before any request")
+        assert kwargs["trust_env"] is False
+        return original_client(transport=httpx.MockTransport(handler))
 
     monkeypatch.setattr(httpx, "Client", guarded_client)
 
     result = runner.invoke(app, ["doctor", "--json"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert result.output.count("\n") == 1
     document = json.loads(result.output)
     _assert_doctor_v2_schema(document)
-    assert document["error"] == {"code": "client_setup_error"}
+    assert document["status"] == "ok"
+    assert len(requests) == 3
     assert "private" not in result.output
 
 
