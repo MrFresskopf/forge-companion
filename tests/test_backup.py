@@ -378,3 +378,38 @@ def test_backup_rejects_non_object_collection_record() -> None:
 
     with pytest.raises(TypeError, match="collection record is not an object"):
         create_backup(NonObjectRecordClient())
+
+
+def test_backup_rejects_negative_pagination_total() -> None:
+    class NegativeTotalClient:
+        calls = 0
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            self.calls += 1
+            return {"data": [], "pagination": {"hasMore": False, "total": -1}}
+
+    client = NegativeTotalClient()
+
+    with pytest.raises(TypeError, match="invalid total"):
+        create_backup(client)
+
+    assert client.calls == 1
+
+
+def test_backup_rejects_pagination_beyond_page_safety_cap() -> None:
+    class EndlessClient:
+        calls = 0
+
+        def get(self, path: str, params: object = None) -> dict[str, object]:
+            self.calls += 1
+            return {
+                "data": [{"id": f"item-{self.calls}"}],
+                "pagination": {"hasMore": True},
+            }
+
+    client = EndlessClient()
+
+    with pytest.raises(ValueError, match="exceeded 100 pages"):
+        create_backup(client)
+
+    assert client.calls == 100

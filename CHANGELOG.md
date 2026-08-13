@@ -6,6 +6,14 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- BrewForge GET clients now ignore ambient proxy and TLS environment overrides, keeping authenticated
+  API traffic on the configured HTTPS endpoint unless an HTTP client is explicitly injected.
+- BrewForge response handling now covers additive fields, malformed JSON, non-object responses, timeouts,
+  HTTP 429 without automatic retry, bounded pagination, and non-negative pagination totals with
+  privacy-safe failures.
+
 ## [0.3.0] — 2026-08-09
 
 ### Added

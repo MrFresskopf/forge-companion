@@ -37,7 +37,7 @@ deprecation and migration path.
 - [ ] retain stable machine-readable output for doctor diagnostics
 - [x] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
   the minimum supported Python version
-- [ ] maintain sanitized BrewForge contract tests for pagination, missing or additional fields, rate
+- [x] maintain sanitized BrewForge contract tests for pagination, missing or additional fields, rate
   limits, timeouts, and incompatible responses
 - [x] document a stable end-user installation path from a version tag or package index instead of
   treating `@main` as the primary installation target
@@ -63,7 +63,7 @@ deprecation and migration path.
 - [x] add versioned `doctor --json`
 - [x] define snapshot compatibility, migration, and deprecation rules
 - [x] modularize CLI command registration where that reduces pre-1.0 maintenance risk
-- add BrewForge response-contract and failure-mode coverage
+- [x] add BrewForge response-contract and failure-mode coverage
 - [x] add macOS CI and installed-package/keyring smoke tests across supported platforms
 - [x] document the stable installation and upgrade path
 
