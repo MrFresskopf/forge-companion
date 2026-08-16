@@ -6,11 +6,13 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-16
+
 ### Added
 
 - An executable 1.0 CLI freeze candidate now records command paths, hidden status, arguments, options,
   defaults, basic ranges, exit-code classes, and stable versus experimental modes, with tests against
-  the registered Typer surface.
+  the registered Typer surface and an installed-wheel check for the packaged contract manifest.
 - The 0.x-to-1.0 upgrade guide now documents persisted-data handling, rollback, the 1.x and 0.x support
   windows, security scope, and the experimental Cloud-actuation boundary.
 
@@ -21,7 +23,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hook magnet and local five-second Shelly auto-off. Qualification statement version 2 invalidates the
   earlier one-second assumptions while retaining fail-closed one-shot and no-retry behavior. Bounded
   diagnostics now distinguish provider HTTP rejection, set-request transport uncertainty, failed OFF
-  read-back, and non-OFF telemetry without reflecting response content or credentials.
+  read-back, and non-OFF telemetry without reflecting response content or credentials. A new supervised
+  Cloud one-shot completed `LOCKED` with electrical `OFF`, expected motion, and operator-confirmed full
+  release; an earlier consumed attempt with no observed motion was not retried.
 - BrewForge GET clients now ignore ambient proxy and TLS environment overrides, keeping authenticated
   API traffic on the configured HTTPS endpoint unless an HTTP client is explicitly injected.
 - BrewForge response handling now covers additive fields, malformed JSON, non-object responses, timeouts,
@@ -165,7 +169,8 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.1
 [0.2.0]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.0

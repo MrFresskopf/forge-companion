@@ -32,8 +32,9 @@ deprecation and migration path.
   configuration, and persisted file formats
 - [x] freeze the supported snapshot schema and document how older snapshot versions are read or
   migrated
-- [ ] complete repeated full-assembly qualification and evaluate independent release sensing
-- [ ] keep live actuation experimental until its mechanical evidence and failure boundaries pass review
+- [x] complete repeated full-assembly qualification for the current unchanged mechanism
+- [ ] evaluate independent mechanical release sensing
+- [x] review live-actuation evidence and failure boundaries while keeping the feature experimental
 - [x] retain stable machine-readable output for doctor diagnostics
 - [x] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
   the minimum supported Python version
@@ -50,10 +51,10 @@ deprecation and migration path.
 
 ### Planned stabilization sequence
 
-#### 0.3 — Shelly safety and qualification
+#### 0.3–0.4 — Shelly safety and qualification
 
 - run supervised winch bench characterization and record measured travel, current, and timing
-- repeat full-assembly release trials once the Fermzilla is available
+- [x] repeat full-assembly release trials on the current stronger felt-backed magnet assembly
 - evaluate practical mechanical release sensing without inferring success from relay state
 - preserve explicit confirmation, no-retry, device auto-off, and durable consumed-state guarantees
 
@@ -144,7 +145,8 @@ deprecation and migration path.
 - [x] electrical OFF read-back verification and local state-history audit trail
 - [x] supervised full-assembly qualification protocol and reusable ten-trial CSV template
 - [x] persistent operator-attestation gate for ten declared successful full-assembly tests
-- [ ] complete the repeated full-assembly qualification and optionally evaluate release sensing
+- [x] complete repeated full-assembly qualification for the current unchanged mechanism
+- [ ] evaluate independent mechanical release sensing
 - [x] explicit experimental warning and mechanical safety requirements
 
 ## Non-goals

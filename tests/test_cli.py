@@ -133,7 +133,7 @@ def test_snapshot_validate_reports_safe_offline_summary(tmp_path: Path) -> None:
         "Snapshot is valid.\n"
         "Format: forge-companion-collection-snapshot-v3\n"
         "Created: 2026-07-20T18:00:00+00:00\n"
-        "Generator: Forge Companion 0.3.0\n"
+        "Generator: Forge Companion 0.4.0\n"
         "Collections: 3\n"
         "Records: 0\n"
         "SHA-256 integrity: verified.\n"
