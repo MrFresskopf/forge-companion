@@ -295,9 +295,9 @@ forge-companion hopper qualification status
 ```
 
 `attest` requires an attached interactive terminal and the exact phrase
-`I CONFIRM 10 SUCCESSFUL TESTS`. Its statement covers complete release, a sufficient 1,000 ms pulse,
-the configured four-second device auto-off, an accepted 12 cm fault-travel envelope, safe endpoints,
-and immediately available manual isolation. It stores only a versioned statement and timestamp in the
+`I CONFIRM 10 SUCCESSFUL TESTS`. Its current version covers complete release, a sufficient uninterrupted
+5,000 ms pulse, the verified local five-second device auto-off, safe endpoints, and immediately available
+manual isolation. It stores only a versioned statement and timestamp in the
 non-secret local preferences. Forge Companion does not observe the ten tests, keep ten trial records,
 or verify any mechanical result. Use `forge-companion hopper qualification revoke` whenever the magnet,
 cable routing, vessel geometry, winch, load, direction, endpoint, pulse assumption, or auto-off changes.
@@ -308,7 +308,7 @@ into the plan:
 ```bash
 forge-companion hopper plan --cloud \
   --trigger-at 2026-08-01T18:00:00+00:00 \
-  --pulse-ms 1000 \
+  --pulse-ms 5000 \
   --output automation/hopper-plan.json
 forge-companion hopper arm automation/hopper-plan.json
 forge-companion hopper status automation/hopper-plan.json
@@ -350,13 +350,15 @@ held in memory only as needed and transmitted only to the assigned Shelly Cloud 
 After the device timer should have expired, the actuator waits at least 1.25 seconds from the set request
 before performing one status read-back. The conservative margin avoids the provider rejecting requests
 started at the exact documented one-second boundary. Only an online, explicit electrical `OFF` result
-completes `PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED`. A rejected, timed-out, malformed,
-offline, or still-ON result leaves the durable plan at `FIRE_REQUESTED`; the outcome is ambiguous and
-must not be retried automatically.
+completes `PULSE_ACTIVE -> VERIFIED_OFF -> LOCKED`. Every failure leaves the durable plan at
+`FIRE_REQUESTED` and must not be retried automatically. Diagnostics distinguish a definite non-200
+provider rejection (printing only the HTTP status), an uncertain set-request transport failure, an
+accepted request whose OFF read-back failed, and an accepted request whose read-back was offline or
+still ON. Provider response bodies, URLs, targets, and credentials are never reflected.
 
-Cloud pulse duration is limited to 1–1,000 ms at plan creation, strict plan re-validation, and the
-actuator boundary. This is a prototype-specific safety ceiling, not proof that one second is a safe or
-sufficient runtime under load. Use only a measured under-load runtime plus a conservative margin,
+Cloud pulse duration is limited to 1–5,000 ms at plan creation, strict plan re-validation, and the
+actuator boundary. This is a qualified-prototype ceiling, not proof that five seconds is safe or
+sufficient for another assembly. Use only a measured under-load runtime plus a conservative margin,
 device-side auto-off as an independent backstop, mechanical endpoint protection, and a manual isolation
 method.
 The command does not wait for the trigger, schedule itself, re-arm a used plan, or infer success from a

@@ -7,8 +7,9 @@ import pytest
 from forge_companion import shelly_cloud
 from forge_companion.shelly_cloud import (
     ShellyCloudActuator,
+    ShellyCloudPulseReadbackError,
+    ShellyCloudPulseRequestError,
     ShellyCloudPulseResult,
-    ShellyCloudResponseError,
     ShellyCloudSwitchStatus,
 )
 
@@ -16,6 +17,7 @@ from forge_companion.shelly_cloud import (
 def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
     seen: dict[str, object] = {}
     get_requests: list[httpx.Request] = []
+    sleeps: list[float] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v2/devices/api/set/switch":
@@ -44,9 +46,10 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
         device_id="5432046E5F58",
         auth_key="synthetic-cloud-key",
         http=http,
+        sleep=sleeps.append,
     )
 
-    result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
+    result = actuator.pulse(channel=0, toggle_after_seconds=5.0)
 
     # Verify the set request
     assert seen["method"] == "POST"
@@ -60,7 +63,7 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
         "id": "5432046e5f58",
         "channel": 0,
         "on": True,
-        "toggle_after": 1.0,
+        "toggle_after": 5.0,
     }
     # Verify pulse result
     assert result == ShellyCloudPulseResult(
@@ -72,9 +75,11 @@ def test_cloud_actuator_sends_one_pulse_and_reads_back_the_state() -> None:
             output=False,
             source="timer",
         ),
+        response_status=200,
     )
     # Verify exactly one status read-back was made
     assert len(get_requests) == 1
+    assert sleeps == [5.0]
 
 
 def test_cloud_actuator_ignores_http_200_set_response_body() -> None:
@@ -122,9 +127,41 @@ def test_cloud_actuator_ignores_http_200_set_response_body() -> None:
     ]
 
 
+def test_cloud_actuator_ignores_rejected_set_response_body_and_keeps_only_status() -> None:
+    requests: list[httpx.Request] = []
+
+    class ForbiddenRejectedBody(httpx.SyncByteStream):
+        def __iter__(self) -> Iterator[bytes]:
+            raise AssertionError("rejected set response body must not be read")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            422,
+            headers={"X-Secret": "credential-bearing-response"},
+            stream=ForbiddenRejectedBody(),
+        )
+
+    actuator = ShellyCloudActuator(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+        auth_key="synthetic-cloud-key",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    result = actuator.pulse(channel=0, toggle_after_seconds=5.0)
+
+    assert result == ShellyCloudPulseResult(
+        accepted=False,
+        readback=None,
+        response_status=422,
+    )
+    assert len(requests) == 1
+
+
 @pytest.mark.parametrize(
     "toggle_after",
-    [0, -1.0, True, 1.01, 31.0, "1.5", float("nan"), float("inf")],
+    [0, -1.0, True, 5.01, 31.0, "1.5", float("nan"), float("inf")],
 )
 def test_cloud_actuator_rejects_invalid_toggle_after(
     toggle_after: object,
@@ -170,7 +207,11 @@ def test_cloud_actuator_returns_not_accepted_when_cloud_rejects() -> None:
 
     result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
-    assert result == ShellyCloudPulseResult(accepted=False, readback=None)
+    assert result == ShellyCloudPulseResult(
+        accepted=False,
+        readback=None,
+        response_status=202,
+    )
 
 
 def test_cloud_actuator_context_leaves_injected_http_open() -> None:
@@ -227,7 +268,11 @@ def test_cloud_actuator_does_not_follow_set_redirect() -> None:
 
     result = actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
-    assert result == ShellyCloudPulseResult(accepted=False, readback=None)
+    assert result == ShellyCloudPulseResult(
+        accepted=False,
+        readback=None,
+        response_status=307,
+    )
     assert len(requests) == 1
     assert requests[0].url.host == "shelly-82-eu.shelly.cloud"
 
@@ -248,7 +293,7 @@ def test_cloud_actuator_never_retries_on_http_error() -> None:
         http=http,
     )
 
-    with pytest.raises(ShellyCloudResponseError, match="pulse request failed") as exc_info:
+    with pytest.raises(ShellyCloudPulseRequestError, match="pulse request failed") as exc_info:
         actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert call_count == 1
@@ -339,8 +384,69 @@ def test_cloud_actuator_sanitizes_readback_transport_error_without_retry() -> No
         sleep=lambda seconds: None,
     )
 
-    with pytest.raises(ShellyCloudResponseError, match="read-back failed") as exc_info:
+    with pytest.raises(ShellyCloudPulseReadbackError, match="read-back failed") as exc_info:
         actuator.pulse(channel=0, toggle_after_seconds=1.0)
 
     assert call_count == 2
     assert "synthetic-cloud-key" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Content-Length": "not-an-integer"},
+        {"Content-Length": str(128 * 1024)},
+    ],
+)
+def test_cloud_actuator_classifies_malformed_readback_as_accepted_readback_failure(
+    headers: dict[str, str],
+) -> None:
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if request.url.path.endswith("/set/switch"):
+            return httpx.Response(200, content=b"")
+        return httpx.Response(200, headers=headers, content=b"[]")
+
+    actuator = ShellyCloudActuator(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+        auth_key="synthetic-cloud-key",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        sleep=lambda seconds: None,
+    )
+
+    with pytest.raises(ShellyCloudPulseReadbackError, match="read-back failed"):
+        actuator.pulse(channel=0, toggle_after_seconds=5.0)
+
+    assert call_count == 2
+
+
+def test_cloud_actuator_classifies_oversized_streamed_readback_as_failure() -> None:
+    call_count = 0
+
+    class OversizedReadback(httpx.SyncByteStream):
+        def __iter__(self) -> Iterator[bytes]:
+            yield b"x" * (64 * 1024 + 1)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if request.url.path.endswith("/set/switch"):
+            return httpx.Response(200, content=b"")
+        return httpx.Response(200, stream=OversizedReadback())
+
+    actuator = ShellyCloudActuator(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+        auth_key="synthetic-cloud-key",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        sleep=lambda seconds: None,
+    )
+
+    with pytest.raises(ShellyCloudPulseReadbackError, match="read-back failed"):
+        actuator.pulse(channel=0, toggle_after_seconds=5.0)
+
+    assert call_count == 2

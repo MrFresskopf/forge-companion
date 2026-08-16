@@ -84,7 +84,7 @@ protection and manual override.
 
 Remote-hopper plans support two distinct modes. Simulation plans remain offline. A Cloud one-shot plan
 stores only the normalized tenant and device ID, never the authorization key, and accepts at most a
-one-second pulse. `hopper check` is a separate read-only rehearsal: it validates an armed, reached Cloud
+five-second pulse. `hopper check` is a separate read-only rehearsal: it validates an armed, reached Cloud
 plan, verifies exact native-profile target binding, sends one status request, requires online electrical
 `OFF`, never constructs an actuator, and never changes the plan. Its result is temporary telemetry and
 neither authorizes a pulse nor replaces the fresh preflight in `hopper fire`.
@@ -107,6 +107,12 @@ reads status once. Only online electrical `OFF` completes the plan as `LOCKED`. 
 leaves the plan consumed at `FIRE_REQUESTED`, preventing an ordinary second attempt. A crash can leave
 the exclusive sidecar lock in place; remove only the stale lock after confirming no process remains,
 never modify the plan to make it fireable again.
+
+Live failure diagnostics are deliberately bounded. A definite non-200 set response exposes only its
+HTTP status; set-request transport uncertainty, accepted-request read-back failure, and accepted but
+non-OFF telemetry use separate fixed messages. Response bodies, request URLs, device IDs, tenant hosts,
+plan paths, and credentials are not reflected. Every category remains fail-closed at `FIRE_REQUESTED`
+with no retry.
 
 These controls do not provide provider-side idempotency or mechanical feedback. A timeout may mean the
 pulse executed even though its response was lost. Electrical `OFF` cannot prove winch motion, cable

@@ -59,10 +59,19 @@ class ShellyCloudPulseResult:
 
     accepted: bool
     readback: ShellyCloudSwitchStatus | None
+    response_status: int | None = None
 
 
 class ShellyCloudResponseError(ValueError):
     """Report an invalid cloud response without reflecting its content."""
+
+
+class ShellyCloudPulseRequestError(ShellyCloudResponseError):
+    """Report a set-request transport failure with an uncertain outcome."""
+
+
+class ShellyCloudPulseReadbackError(ShellyCloudResponseError):
+    """Report a read-back failure after the set request was accepted."""
 
 
 def _invalid_cloud_status() -> ShellyCloudResponseError:
@@ -258,14 +267,17 @@ class ShellyCloudActuator:
             ) as response:
                 response.raise_for_status()
                 content = _read_cloud_status_content(response)
-        except httpx.HTTPError:
-            raise ShellyCloudResponseError("Shelly Cloud pulse read-back failed") from None
-        payload = _decode_cloud_status_json(content)
-        return _parse_cloud_switch_status(
-            payload,
-            device_id=self._device_id,
-            channel=channel,
-        )
+        except (httpx.HTTPError, ShellyCloudResponseError):
+            raise ShellyCloudPulseReadbackError("Shelly Cloud pulse read-back failed") from None
+        try:
+            payload = _decode_cloud_status_json(content)
+            return _parse_cloud_switch_status(
+                payload,
+                device_id=self._device_id,
+                channel=channel,
+            )
+        except ShellyCloudResponseError:
+            raise ShellyCloudPulseReadbackError("Shelly Cloud pulse read-back failed") from None
 
     def pulse(self, channel: int = 0, toggle_after_seconds: float = 1.0) -> ShellyCloudPulseResult:
         """Send exactly one channel-0 ON pulse with auto-off. Never retries."""
@@ -276,9 +288,9 @@ class ShellyCloudActuator:
             or not isinstance(toggle_after_seconds, (int, float))
             or not isfinite(float(toggle_after_seconds))
             or toggle_after_seconds <= 0
-            or toggle_after_seconds > 1.0
+            or toggle_after_seconds > 5.0
         ):
-            raise ValueError("toggle_after_seconds must be a positive float up to 1.0")
+            raise ValueError("toggle_after_seconds must be a positive float up to 5.0")
         try:
             with self._http.stream(
                 "POST",
@@ -295,9 +307,17 @@ class ShellyCloudActuator:
             ) as response:
                 accepted = response.status_code == 200
         except httpx.HTTPError:
-            raise ShellyCloudResponseError("Shelly Cloud pulse request failed") from None
+            raise ShellyCloudPulseRequestError("Shelly Cloud pulse request failed") from None
         if not accepted:
-            return ShellyCloudPulseResult(accepted=False, readback=None)
+            return ShellyCloudPulseResult(
+                accepted=False,
+                readback=None,
+                response_status=response.status_code,
+            )
         self._sleep(max(CLOUD_REQUEST_INTERVAL_SECONDS, float(toggle_after_seconds)))
         readback = self._read_status(channel=channel)
-        return ShellyCloudPulseResult(accepted=True, readback=readback)
+        return ShellyCloudPulseResult(
+            accepted=True,
+            readback=readback,
+            response_status=response.status_code,
+        )

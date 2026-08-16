@@ -89,3 +89,13 @@ def test_future_hopper_statement_version_is_not_current(
     save_preferences(future)
 
     assert not hopper_qualification_is_current(load_preferences())
+
+
+def test_one_second_hopper_statement_version_is_not_current() -> None:
+    previous = Preferences(
+        hopper_qualification_statement_version=1,
+        hopper_qualification_attested_at="2026-08-02T18:00:00+00:00",
+    )
+
+    assert HOPPER_QUALIFICATION_STATEMENT_VERSION == 2
+    assert not hopper_qualification_is_current(previous)

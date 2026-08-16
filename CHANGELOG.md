@@ -16,6 +16,12 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The experimental Cloud one-shot ceiling is now 5,000 ms at plan creation, strict re-validation, and
+  the actuator boundary after operator-reported 10/10 full-assembly trials with a stronger felt-backed
+  hook magnet and local five-second Shelly auto-off. Qualification statement version 2 invalidates the
+  earlier one-second assumptions while retaining fail-closed one-shot and no-retry behavior. Bounded
+  diagnostics now distinguish provider HTTP rejection, set-request transport uncertainty, failed OFF
+  read-back, and non-OFF telemetry without reflecting response content or credentials.
 - BrewForge GET clients now ignore ambient proxy and TLS environment overrides, keeping authenticated
   API traffic on the configured HTTPS endpoint unless an HTTP client is explicitly injected.
 - BrewForge response handling now covers additive fields, malformed JSON, non-object responses, timeouts,

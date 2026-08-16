@@ -9,6 +9,8 @@ import pytest
 
 from forge_companion.hopper import (
     HopperPlanValidationError,
+    HopperPulseRejectedError,
+    HopperPulseVerificationError,
     HopperStatus,
     arm_hopper_plan,
     create_hopper_plan,
@@ -271,7 +273,7 @@ def test_validation_rejects_resigned_incorrect_simulated_pulse_timing() -> None:
 def test_create_cloud_pulse_plan_stores_server_and_device_id_without_key() -> None:
     payload = create_hopper_plan(
         trigger_at=TRIGGER_AT,
-        pulse_duration_ms=1000,
+        pulse_duration_ms=5000,
         now=CREATED_AT,
         plan_id=PLAN_ID,
         server="shelly-82-eu.shelly.cloud",
@@ -282,7 +284,7 @@ def test_create_cloud_pulse_plan_stores_server_and_device_id_without_key() -> No
     assert summary.status is HopperStatus.DRAFT
     assert payload["action"] == {
         "kind": "cloud-pulse",
-        "pulse_duration_ms": 1000,
+        "pulse_duration_ms": 5000,
         "server": "shelly-82-eu.shelly.cloud",
         "device_id": "5432046e5f58",
     }
@@ -351,10 +353,10 @@ def test_fire_cloud_pulse_plan_transitions_through_complete_cycle() -> None:
 
 
 def test_create_cloud_plan_rejects_pulse_longer_than_actuator_limit() -> None:
-    with pytest.raises(ValueError, match="at most 1000"):
+    with pytest.raises(ValueError, match="at most 5000"):
         create_hopper_plan(
             trigger_at=TRIGGER_AT,
-            pulse_duration_ms=1_001,
+            pulse_duration_ms=5_001,
             now=CREATED_AT,
             server="shelly-82-eu.shelly.cloud",
             device_id="5432046E5F58",
@@ -387,6 +389,89 @@ def test_fire_persists_fire_requested_before_calling_actuator() -> None:
         )
 
     assert validate_hopper_plan(persisted[-1]).status is HopperStatus.FIRE_REQUESTED
+
+
+def test_fire_classifies_provider_rejection_without_response_body() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=5000,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    from forge_companion.shelly_cloud import ShellyCloudPulseResult
+
+    class RejectedActuator:
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            return ShellyCloudPulseResult(
+                accepted=False,
+                readback=None,
+                response_status=422,
+            )
+
+    persisted: list[dict[str, object]] = []
+    with pytest.raises(HopperPulseRejectedError) as exc_info:
+        fire_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+            actuator=RejectedActuator(),
+            persist=lambda changed: persisted.append(deepcopy(changed)),
+        )
+
+    assert exc_info.value.response_status == 422
+    assert "response" not in str(exc_info.value).lower()
+    assert validate_hopper_plan(persisted[-1]).status is HopperStatus.FIRE_REQUESTED
+
+    class ForbiddenActuator:
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            raise AssertionError("a consumed plan must not invoke the actuator")
+
+    with pytest.raises(ValueError, match="only an armed hopper plan can be fired"):
+        fire_hopper_plan(
+            persisted[-1],
+            at=datetime(2026, 7, 23, 18, 2, tzinfo=UTC),
+            actuator=ForbiddenActuator(),
+            persist=lambda changed: (_ for _ in ()).throw(
+                AssertionError("a consumed plan must not be persisted again")
+            ),
+        )
+
+
+def test_fire_classifies_accepted_pulse_without_verified_off_readback() -> None:
+    payload = create_hopper_plan(
+        trigger_at=TRIGGER_AT,
+        pulse_duration_ms=5000,
+        now=CREATED_AT,
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046E5F58",
+    )
+    armed = arm_hopper_plan(payload, at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC))
+
+    from forge_companion.shelly_cloud import ShellyCloudPulseResult, ShellyCloudSwitchStatus
+
+    class UnverifiedActuator:
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            return ShellyCloudPulseResult(
+                accepted=True,
+                readback=ShellyCloudSwitchStatus(
+                    device_id="5432046e5f58",
+                    channel=0,
+                    online=True,
+                    output=True,
+                    source="cloud",
+                ),
+                response_status=200,
+            )
+
+    with pytest.raises(HopperPulseVerificationError):
+        fire_hopper_plan(
+            armed,
+            at=datetime(2026, 7, 23, 18, 1, tzinfo=UTC),
+            actuator=UnverifiedActuator(),
+            persist=lambda changed: None,
+        )
 
 
 def test_fire_rejects_cloud_profile_that_does_not_match_plan(
@@ -489,7 +574,7 @@ def test_validation_rejects_resigned_cloud_pulse_above_actuator_limit() -> None:
         server="shelly-82-eu.shelly.cloud",
         device_id="5432046E5F58",
     )
-    payload["action"]["pulse_duration_ms"] = 1_001
+    payload["action"]["pulse_duration_ms"] = 5_001
     _resign(payload)
 
     with pytest.raises(HopperPlanValidationError, match="pulse duration"):
