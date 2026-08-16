@@ -167,7 +167,7 @@ trust boundary:
 - hopper planning, arming, `hopper status`, and lifecycle rehearsals remain offline
 - `hopper shelly-status`, `hopper cloud-status`, and `hopper check` remain narrow read-only diagnostics
 - experimental `hopper fire` requires a current operator attestation, then sends one explicitly
-  confirmed, pre-recorded Cloud pulse capped at one second, with device timer, OFF read-back,
+  confirmed, pre-recorded Cloud pulse capped at five seconds, with device timer, OFF read-back,
   native-keyring binding, no scheduler, and no automatic retry
 
 The generated HTML report is one offline file with no JavaScript, remote fonts, tracking, or external

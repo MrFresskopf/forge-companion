@@ -10,7 +10,7 @@ from pathlib import Path
 from forge_companion.file_io import atomic_write_text
 
 _CONFIG_DIRECTORY_ENV = "FORGE_COMPANION_CONFIG_DIR"
-HOPPER_QUALIFICATION_STATEMENT_VERSION = 1
+HOPPER_QUALIFICATION_STATEMENT_VERSION = 2
 
 
 class PreferencesError(ValueError):

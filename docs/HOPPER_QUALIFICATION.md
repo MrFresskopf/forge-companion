@@ -16,22 +16,22 @@ Before every supervised trial:
 - use a deliberately selected short pulse and an independent device-side auto-off;
 - obtain explicit immediate approval before any real hardware command.
 
-The current software ceiling and any existing device auto-off are not qualified mechanical runtimes.
+A software ceiling and device auto-off are not qualified mechanical runtimes without the full-assembly
+evidence required below.
 
-## Current unloaded prototype evidence
+## Historical unloaded prototype evidence
 
 The current winch completed one supervised one-second pulse in each direction without a magnet or
 other load. Each pulse produced about 3 cm of travel, stopped cleanly, and returned electrical telemetry
 to `OFF`; the reverse pulse returned the winch to approximately its starting position. Forge Companion
-therefore caps every live Cloud pulse at 1,000 ms. The prototype Shelly's separately configured
-four-second auto-off corresponds to an estimated 12 cm of unloaded travel and remains an emergency
+0.3 therefore capped every live Cloud pulse at 1,000 ms. The prototype Shelly's separately configured
+four-second auto-off corresponded to an estimated 12 cm of unloaded travel and remained an emergency
 backstop only. Forge Companion cannot verify that device configuration through the Cloud fire path.
 
-This evidence does not qualify magnet release, loaded cable behavior, installed geometry, endpoint
-safety, or hop addition. The ten full-assembly trials below remain required once the complete assembly
-is available.
+This historical evidence did not qualify magnet release, loaded cable behavior, installed geometry,
+endpoint safety, or hop addition. Ten full-assembly trials remained required.
 
-## Current loaded dry-fixture evidence
+## Historical original-magnet dry-fixture evidence
 
 A supervised dry fixture placed an 88 g representative load on two inner sous-vide magnets coupled to
 two outer hook magnets through a plastic wall. A cable winch pulled both outer magnets through linked
@@ -66,6 +66,26 @@ hand with power isolated before requesting one new supervised pulse. Measure the
 at least five hand pulls, confirm adequate winch-force margin, verify motor voltage and current under a
 brief controlled load without intentional stall, and install a protected mechanical stop. Changing this
 geometry starts a new qualification series.
+
+## Current qualified full-assembly evidence
+
+The operator replaced the outer hook magnet with a stronger hook magnet whose contact face is protected
+by felt. In the unchanged complete assembly, the operator reports ten consecutive successful trials with
+one uninterrupted five-second pulse per trial. Each trial pulled downward and fully released the magnet;
+no failure was reported. The five-second auto-off was configured locally in the Shelly app. Forge
+Companion did not observe these trials and has no mechanical sensor or individual trial log.
+
+This evidence qualifies only the tested magnet, felt, load, geometry, cable routing, direction, endpoint,
+and local five-second auto-off. Any change invalidates the version-2 attestation and requires a new
+ten-trial series. Electrical `OFF` remains evidence only of relay state, not mechanical release.
+
+On 2026-08-16, one supervised Forge Companion Cloud one-shot completed as `LOCKED` after exactly one
+5,000 ms request and an electrical `OFF` read-back; the operator directly confirmed the expected motion
+and complete magnet release. An earlier, separately armed one-shot remained durably `FIRE_REQUESTED`
+after an uncertain result and produced no operator-observed motion. That consumed plan was not retried.
+The later successful plan was a new one-shot with a fresh online/OFF preflight and immediate approval.
+Neither result includes mechanical sensor evidence, and the successful electrical read-back alone would
+not establish release without the operator's direct observation.
 
 ## Optional detailed trial record
 

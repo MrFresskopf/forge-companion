@@ -20,6 +20,8 @@ from forge_companion.hopper import (
     HopperPlanBusyError,
     HopperPlanExistsError,
     HopperPlanValidationError,
+    HopperPulseRejectedError,
+    HopperPulseVerificationError,
     arm_hopper_plan,
     create_hopper_plan,
     fire_hopper_plan,
@@ -31,7 +33,12 @@ from forge_companion.hopper import (
     write_new_hopper_plan,
 )
 from forge_companion.shelly import ShellyReadOnlyClient, ShellyResponseError
-from forge_companion.shelly_cloud import ShellyCloudReadOnlyClient, ShellyCloudResponseError
+from forge_companion.shelly_cloud import (
+    ShellyCloudPulseReadbackError,
+    ShellyCloudPulseRequestError,
+    ShellyCloudReadOnlyClient,
+    ShellyCloudResponseError,
+)
 from forge_companion.terminal_text import safe_terminal_text
 
 hopper_app = typer.Typer(
@@ -51,6 +58,7 @@ qualification_app = typer.Typer(
     invoke_without_command=True,
 )
 hopper_app.add_typer(qualification_app, name="qualification")
+
 
 @hopper_app.callback()
 def hopper_command(context: typer.Context) -> None:
@@ -84,8 +92,8 @@ def qualification_attest_command() -> None:
         raise typer.Exit(code=1)
     typer.echo("Confirm that 10 successful full-assembly tests were actually completed.")
     typer.echo("This includes complete release with no jam, stall, or unsafe endpoint impact.")
-    typer.echo("You declare that a 1,000 ms pulse was sufficient in all 10 tests.")
-    typer.echo("You declare that the 4-second device auto-off and 12 cm fault travel are safe.")
+    typer.echo("You declare that a 5,000 ms uninterrupted pulse was sufficient in all 10 tests.")
+    typer.echo("You declare that the local 5-second device auto-off was verified in all 10 tests.")
     typer.echo("You declare that manual electrical isolation remains immediately available.")
     typer.echo("Forge Companion cannot verify those mechanical results.")
     confirmation = typer.prompt("Type I CONFIRM 10 SUCCESSFUL TESTS to attest")
@@ -446,6 +454,35 @@ def hopper_fire_command(
     except shelly_cloud_credentials.ShellyCloudCredentialError:
         typer.echo(
             "Hopper fire failed: credential store access failed; no retry was sent.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    except HopperPulseRejectedError as error:
+        status = str(error.response_status) if error.response_status is not None else "unknown"
+        typer.echo(
+            f"Shelly Cloud rejected the pulse request (HTTP {status}); "
+            "the plan remains FIRE_REQUESTED. Do not retry automatically.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    except ShellyCloudPulseRequestError:
+        typer.echo(
+            "Hopper fire pulse-request transport failed; outcome is uncertain. "
+            "The plan remains FIRE_REQUESTED. Do not retry automatically.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    except ShellyCloudPulseReadbackError:
+        typer.echo(
+            "Shelly Cloud accepted the pulse request, but the OFF read-back failed; "
+            "the plan remains FIRE_REQUESTED. Do not retry automatically.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    except HopperPulseVerificationError:
+        typer.echo(
+            "Shelly Cloud accepted the pulse request, but electrical OFF was not verified; "
+            "the plan remains FIRE_REQUESTED. Do not retry automatically.",
             err=True,
         )
         raise typer.Exit(code=1) from None

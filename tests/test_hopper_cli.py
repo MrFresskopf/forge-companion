@@ -58,9 +58,8 @@ def test_hopper_qualification_attest_persists_operator_statement(
 
     assert attested.exit_code == 0
     assert "10 successful full-assembly tests" in attested.output
-    assert "1,000 ms" in attested.output
-    assert "4-second device auto-off" in attested.output
-    assert "12 cm fault travel" in attested.output
+    assert "5,000 ms uninterrupted pulse" in attested.output
+    assert "local 5-second device auto-off" in attested.output
     assert "No automatic or sensor-based verification was performed." in attested.output
     assert status.exit_code == 0
     assert "Remote hopper qualification: OPERATOR ATTESTED" in status.output
@@ -1139,7 +1138,7 @@ def test_hopper_fire_transport_error_consumes_one_shot_without_retry(
         def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
             nonlocal calls
             calls += 1
-            raise httpx.ConnectError("ambiguous")
+            raise shelly_cloud.ShellyCloudPulseRequestError("sanitized request failure")
 
     monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", FailingActuator)
 
@@ -1147,7 +1146,134 @@ def test_hopper_fire_transport_error_consumes_one_shot_without_retry(
 
     assert result.exit_code == 1
     assert calls == 1
-    assert "outcome is uncertain" in result.output
+    assert "pulse-request transport failed; outcome is uncertain" in result.output
+    assert "Do not retry automatically" in result.output
+    assert validate_hopper_plan(load_hopper_plan(destination)).status is HopperStatus.FIRE_REQUESTED
+
+
+def test_hopper_fire_reports_provider_rejection_status_without_response_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    _patch_cloud_preflight_off(monkeypatch)
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+
+    class RejectedActuator:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "RejectedActuator":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            return shelly_cloud.ShellyCloudPulseResult(
+                accepted=False,
+                readback=None,
+                response_status=422,
+            )
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", RejectedActuator)
+
+    result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
+
+    assert result.exit_code == 1
+    assert "Shelly Cloud rejected the pulse request (HTTP 422)" in result.output
+    assert "response body" not in result.output.lower()
+    assert "synthetic-secret-key" not in result.output
+    assert "Do not retry automatically" in result.output
+    assert validate_hopper_plan(load_hopper_plan(destination)).status is HopperStatus.FIRE_REQUESTED
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected"),
+    [
+        (
+            "readback-transport",
+            "Shelly Cloud accepted the pulse request, but the OFF read-back failed",
+        ),
+        (
+            "not-off",
+            "Shelly Cloud accepted the pulse request, but electrical OFF was not verified",
+        ),
+        (
+            "offline",
+            "Shelly Cloud accepted the pulse request, but electrical OFF was not verified",
+        ),
+    ],
+)
+def test_hopper_fire_distinguishes_accepted_but_unverified_outcomes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
+    expected: str,
+) -> None:
+    destination = tmp_path / "cloud-plan.json"
+    _write_armed_cloud_plan(destination)
+
+    from forge_companion import shelly_cloud, shelly_cloud_credentials
+
+    _patch_cloud_preflight_off(monkeypatch)
+    profile = shelly_cloud_credentials.ShellyCloudProfile(
+        server="shelly-82-eu.shelly.cloud",
+        device_id="5432046e5f58",
+        auth_key="synthetic-secret-key",
+    )
+    monkeypatch.setattr(
+        shelly_cloud_credentials,
+        "resolve_profile",
+        lambda: shelly_cloud_credentials.ResolvedCloudProfile(profile=profile, source="keyring"),
+    )
+
+    class UnverifiedActuator:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "UnverifiedActuator":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def pulse(self, *, channel: int, toggle_after_seconds: float) -> object:
+            if failure_kind == "readback-transport":
+                raise shelly_cloud.ShellyCloudPulseReadbackError("sanitized read-back failure")
+            online = failure_kind != "offline"
+            return shelly_cloud.ShellyCloudPulseResult(
+                accepted=True,
+                readback=shelly_cloud.ShellyCloudSwitchStatus(
+                    device_id="5432046e5f58",
+                    channel=0,
+                    online=online,
+                    output=online,
+                    source="cloud",
+                ),
+                response_status=200,
+            )
+
+    monkeypatch.setattr(shelly_cloud, "ShellyCloudActuator", UnverifiedActuator)
+
+    result = runner.invoke(app, ["hopper", "fire", str(destination)], input="FIRE\n")
+
+    assert result.exit_code == 1
+    assert expected in result.output
+    assert "synthetic-secret-key" not in result.output
     assert "Do not retry automatically" in result.output
     assert validate_hopper_plan(load_hopper_plan(destination)).status is HopperStatus.FIRE_REQUESTED
 

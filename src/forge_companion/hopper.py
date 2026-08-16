@@ -22,7 +22,7 @@ from forge_companion.file_io import (
 
 _FORMAT = "forge-companion-hopper-plan-v1"
 _CANONICALIZATION = "json-sort-keys-compact-utf8-without-digest"
-_MAX_CLOUD_PULSE_DURATION_MS = 1_000
+_MAX_CLOUD_PULSE_DURATION_MS = 5_000
 
 
 class HopperStatus(StrEnum):
@@ -57,6 +57,19 @@ class HopperPlanBusyError(RuntimeError):
 
 class HopperPlanExistsError(RuntimeError):
     """Report that a new hopper plan would overwrite an existing destination."""
+
+
+class HopperPulseRejectedError(RuntimeError):
+    """Report a definite provider HTTP rejection without response content."""
+
+    def __init__(self, response_status: int | None) -> None:
+        self.response_status = response_status
+        status = str(response_status) if response_status is not None else "unknown"
+        super().__init__(f"provider rejected pulse request with HTTP {status}")
+
+
+class HopperPulseVerificationError(RuntimeError):
+    """Report that an accepted pulse did not produce a verified OFF read-back."""
 
 
 @contextmanager
@@ -121,7 +134,7 @@ def create_hopper_plan(
     if pulse_duration_ms > 60_000:
         raise ValueError("simulated pulse duration must be at most 60000 milliseconds")
     if server is not None and pulse_duration_ms > _MAX_CLOUD_PULSE_DURATION_MS:
-        raise ValueError("cloud pulse duration must be at most 1000 milliseconds")
+        raise ValueError("cloud pulse duration must be at most 5000 milliseconds")
     canonical_plan_id = str(plan_id or uuid4())
     if server is not None and device_id is not None:
         from forge_companion.shelly_cloud import normalize_cloud_device_id, normalize_cloud_server
@@ -402,17 +415,20 @@ def fire_hopper_plan(
             channel=0,
             toggle_after_seconds=summary.pulse_duration_ms / 1000.0,
         )
+        if not result.accepted:
+            raise HopperPulseRejectedError(result.response_status)
         if (
-            not result.accepted
-            or result.readback is None
+            result.readback is None
             or not result.readback.online
             or result.readback.output is not False
         ):
-            raise RuntimeError("Shelly Cloud pulse outcome is not verified OFF")
+            raise HopperPulseVerificationError("Shelly Cloud pulse outcome is not verified OFF")
         verified_time = datetime.now(UTC)
         minimum_verified_time = fire_time + timedelta(milliseconds=summary.pulse_duration_ms)
         if verified_time < minimum_verified_time:
-            raise RuntimeError("Shelly Cloud OFF read-back arrived before the pulse timer elapsed")
+            raise HopperPulseVerificationError(
+                "Shelly Cloud OFF read-back arrived before the pulse timer elapsed"
+            )
         changed = _append_status(requested, HopperStatus.PULSE_ACTIVE, fire_time)
         changed = _append_status(changed, HopperStatus.VERIFIED_OFF, verified_time)
         changed = _append_status(changed, HopperStatus.LOCKED, verified_time)
