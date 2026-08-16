@@ -33,13 +33,13 @@ Cloud commands use a separate native-keyring profile; optional BrewForge reports
 With [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.3.0
+uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
 ```
 
 Or with [pipx](https://pipx.pypa.io/):
 
 ```bash
-pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.3.0
+pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
 ```
 
 ### Upgrade from an earlier release
@@ -48,13 +48,13 @@ Choose the target release tag explicitly. Reinstalling from that immutable tag a
 new commits on `main`:
 
 ```bash
-uv tool install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.3.0
+uv tool install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
 ```
 
 Or with pipx:
 
 ```bash
-pipx install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.3.0
+pipx install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
 ```
 
 ### 2. Inspect the guarded hopper workflow
