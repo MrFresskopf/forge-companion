@@ -449,8 +449,16 @@ def test_deep_json_is_a_safe_domain_failure(authentication: bool) -> None:
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         client = RaptClient(username="user", api_secret="secret", http=http)
-        with pytest.raises(RaptResponseError, match="invalid JSON"):
+        # Python versions differ in how deeply the JSON decoder can recurse.
+        # Either decoder rejection or schema rejection must stay a private domain error.
+        with pytest.raises(RaptResponseError) as captured:
             client.list_hydrometers()
+        assert str(captured.value) in {
+            "RAPT authentication returned invalid JSON",
+            "RAPT authentication returned an invalid payload",
+            "RAPT returned invalid JSON",
+            "RAPT returned an invalid collection payload",
+        }
 
 
 def test_injected_client_cannot_override_authentication_or_disable_timeouts() -> None:
