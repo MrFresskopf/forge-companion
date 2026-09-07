@@ -6,6 +6,13 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Experimental `rapt auth login/status/logout`, `rapt devices`, and `rapt telemetry` commands
+  for direct read-only Pill and Temperature Controller access, independent of BrewForge.
+- A separate native RAPT credential profile, in-memory token renewal, and a source-neutral
+  telemetry model with a RAPT adapter. No RAPT control or telemetry-triggered Shelly actuation.
+
 ## [0.4.0] — 2026-08-16
 
 ### Added

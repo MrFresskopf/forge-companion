@@ -866,6 +866,97 @@
         }
       ],
       "stability": "stable"
+    },
+    "rapt": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "rapt auth": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "rapt auth login": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "rapt auth status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "rapt auth logout": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "rapt devices": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "rapt telemetry": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "device_kind",
+          "kind": "argument",
+          "spellings": [
+            "device_kind"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "device_id",
+          "kind": "argument",
+          "spellings": [
+            "device_id"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "start",
+          "kind": "option",
+          "spellings": [
+            "--start"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "end",
+          "kind": "option",
+          "spellings": [
+            "--end"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "stability": "experimental"
     }
   }
 }

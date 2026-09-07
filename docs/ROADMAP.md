@@ -93,6 +93,17 @@ deprecation and migration path.
 - BrewForge restore or any BrewForge write operation
 - promoting `hopper fire` from experimental status without mechanical success sensing
 
+## Direct telemetry sources (unreleased, experimental)
+
+The first additive RAPT API slice provides native credential storage, explicit device selection,
+read-only Pill/controller telemetry, and a source-neutral reading model. It does not change frozen
+BrewForge reports, the spunding advisor, hopper formats, or Shelly safety transitions.
+
+Next steps remain separate: live read-only API validation, a BrewForge adapter to the neutral model,
+source-independent advisory rules, and only then a secured webhook receiver. Webhook reception must
+store observations rather than actuate directly. No Home Assistant or MQTT dependency is required.
+Unattended rules and hardware actions require their own safety review; this is not a 1.0 release gate.
+
 ## Milestone 0 — Foundation (working)
 
 - [x] installable Python package and CLI

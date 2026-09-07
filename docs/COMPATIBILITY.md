@@ -31,6 +31,10 @@ Offline simulated-pulse planning and simulation may enter the stable tier indepe
 actuation. Cloud-pulse plan fields and transitions remain experimental together with the actuator. An
 experimental actuator is not evidence that a pulse reached or released hops mechanically.
 
+The unreleased `rapt` command family, including its separate authentication commands, is entirely
+experimental. It is additive and does not extend the stable authentication scope above. Its internal
+telemetry model is not a versioned export format. See the [command guide](COMMANDS.md#rapt-experimental-unreleased).
+
 ## Semantic versioning
 
 - Patch releases fix defects, improve human wording, and may tighten validation for input already
@@ -88,7 +92,7 @@ From 1.0 onward:
 | ---: | --- |
 | `0` | The command completed according to its contract. Simulation statuses such as `WAIT` are successful command results. |
 | `1` | The invocation was understood, but an operational, integrity, application-level validation, API, filesystem, credential-store, or domain failure prevented successful completion. This includes values parsed successfully by the CLI but rejected by command validation. `doctor` also uses 1 when one or more endpoint checks fail. |
-| `2` | The CLI parser rejected syntax, a required option, or a parser-enforced value constraint; or a command explicitly defines a missing setup prerequisite in this class. Current non-parser cases are missing BrewForge authentication for commands that require it and a missing Shelly Cloud profile for `hopper cloud-status`. Experimental live-actuation commands may instead classify missing Cloud setup as an application/domain failure (`1`). |
+| `2` | The CLI parser rejected syntax, a required option, or a parser-enforced value constraint; or a command explicitly defines a missing setup prerequisite in this class. Current non-parser cases are missing BrewForge authentication for commands that require it and a missing Shelly Cloud profile for `hopper cloud-status`. The experimental `rapt devices` and `rapt telemetry` commands also return `2` for a missing RAPT profile. Experimental live-actuation commands may instead classify missing Cloud setup as an application/domain failure (`1`). |
 
 Additional nonzero codes require documentation before use. Scripts must not infer finer failure causes
 from human-readable text; machine-readable error codes are the stable discriminator.

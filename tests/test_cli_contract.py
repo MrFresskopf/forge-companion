@@ -183,6 +183,13 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "hopper qualification attest",
         "hopper qualification revoke",
         "hopper qualification status",
+        "rapt",
+        "rapt auth",
+        "rapt auth login",
+        "rapt auth logout",
+        "rapt auth status",
+        "rapt devices",
+        "rapt telemetry",
     }
     assert {
         "doctor",

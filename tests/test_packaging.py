@@ -94,3 +94,12 @@ def test_installed_smoke_checks_packaged_cli_contract() -> None:
     assert "forge_companion.contracts" in program
     assert "cli-v1-contract.json" in program
     assert "forge-companion-cli-contract-v1" in program
+
+
+def test_installed_smoke_checks_rapt_surface_and_native_boundary() -> None:
+    program = _installed_smoke_module()._verification_program()
+    assert "rapt_credentials._require_native_backend()" in program
+    assert "rapt_credentials.RaptCredentialError" in program
+    assert '"rapt telemetry"' in program
+    assert '"rapt auth login"' in program
+    assert '"rapt", "telemetry", "--help"' in program

@@ -59,7 +59,7 @@ from pathlib import Path
 
 import forge_companion
 import keyring
-from forge_companion import credentials, shelly_cloud_credentials
+from forge_companion import credentials, rapt_credentials, shelly_cloud_credentials
 
 venv_root = Path(os.environ["FORGE_COMPANION_SMOKE_VENV"]).resolve()
 module_path = Path(forge_companion.__file__).resolve()
@@ -76,6 +76,16 @@ contract_text = (
 contract = json.loads(contract_text)
 if contract.get("schema_version") != "forge-companion-cli-contract-v1":
     raise AssertionError("installed CLI contract is missing or incompatible")
+
+for path in ("rapt auth login", "rapt telemetry", "rapt devices"):
+    if contract["commands"][path]["stability"] != "experimental":
+        raise AssertionError("RAPT surface absent or not experimental")
+from typer.testing import CliRunner
+from forge_companion.cli import app
+for args in (["rapt", "--help"], ["rapt", "telemetry", "--help"]):
+    result = CliRunner().invoke(app, args)
+    if result.exit_code != 0:
+        raise AssertionError("Installed RAPT help failed")
 
 system = platform.system()
 backend = keyring.get_keyring()
@@ -114,9 +124,11 @@ if allowed_prefix is not None:
         raise AssertionError(f"unexpected native keyring backend: {backend_module}")
     credentials._require_native_backend()
     shelly_cloud_credentials._require_native_backend()
+    rapt_credentials._require_native_backend()
 else:
     checks = (
         (credentials._require_native_backend, credentials.CredentialStoreError),
+        (rapt_credentials._require_native_backend, rapt_credentials.RaptCredentialError),
         (
             shelly_cloud_credentials._require_native_backend,
             shelly_cloud_credentials.ShellyCloudCredentialError,
