@@ -36,6 +36,56 @@ stored credential until corrected or unset. `logout` deletes only the native sto
 whether a valid environment override remains active or an invalid value still blocks authentication.
 All three commands are offline.
 
+## `rapt` (experimental, unreleased)
+
+Direct read-only RAPT access is independent of BrewForge and needs neither Home Assistant nor MQTT.
+These commands are in development and are not part of the `v0.4.0` release.
+
+```bash
+forge-companion rapt auth login
+forge-companion rapt auth status
+forge-companion rapt devices
+forge-companion rapt telemetry hydrometer DEVICE_UUID --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z
+forge-companion rapt telemetry temperature-controller DEVICE_UUID --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z
+forge-companion rapt auth logout
+```
+
+Replace `DEVICE_UUID` with the exact canonical lowercase UUID from `rapt devices`. Each query needs
+an explicit timezone-aware start and end, with start before end. Returned timestamps must lie within
+these boundaries (both accepted); the RAPT contract does not guarantee boundary inclusion or completeness.
+Missing controller measurements remain absent, never zero. `gravity_raw` preserves the API number:
+RAPT OpenAPI does not document its unit, so this MVP does not claim verified SG or perform conversion.
+The same applies to the internal `gravity_velocity_raw` field. Output is human-readable, not a
+versioned machine contract. Device names/IDs and measurements are private operational data; review
+output before sharing it. Invalid responses fail instead of producing partial successful output.
+
+`auth login` stores your RAPT account email and a **RAPT API secret**, not your account password.
+Generate that secret in the RAPT Cloud dashboard using the
+[official instructions](https://docs.rapt.io/integrations/api-secrets.md). Secret input is hidden and
+confirmed. The profile is separate from BrewForge and Shelly, uses only a supported native credential
+store, and has no environment or plaintext fallback. Login and status are offline: neither proves
+that RAPT accepts the credentials. `devices` is the first online check. Logout deletes the local
+profile (including malformed stored content), not the remote API secret; revoke it in RAPT separately.
+
+Online commands acquire a bearer token at `https://id.rapt.io/connect/token` with an authentication
+POST and use fixed GET endpoints at `https://api.rapt.io` for device lists or telemetry. Tokens stay
+in memory and are renewed before expiry; a missing lifetime uses RAPT's documented 60 minutes.
+One rejected GET with HTTP 401 can trigger one reauthentication and retry. Other HTTP failures do not
+retry automatically. Responses are limited to 64 KiB for authentication and 4 MiB for API data;
+compressed responses are rejected despite requesting identity encoding. These limits and live-provider
+compatibility have not yet been verified against your RAPT account. No generic API write method, RAPT control, webhook server, polling daemon,
+automation decision, or Shelly action is exposed by this command family.
+
+Exit codes: `0` success (also empty telemetry or an already-absent logout profile); `1` domain,
+validation, credential-store, or network failure, including `auth status` without a profile; `2`
+parser errors or a missing profile for `devices`/`telemetry`. Failures go to stderr, without raw remote
+or credential-store exception details.
+
+RAPT describes its API as unsupported and subject to change. See the
+[official API contract](https://api.rapt.io/swagger/v1/swagger.json). This adapter is not evidence
+that readings are fresh enough for automation. The existing BrewForge spunding advisor and Shelly
+one-shot safety core are unchanged and are not connected to RAPT readings in this slice.
+
 ## `report`
 
 Create the standard self-contained HTML fermentation report:

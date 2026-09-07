@@ -93,6 +93,13 @@ Whitespace-only values are ignored; values containing whitespace are rejected an
 credential use until corrected or unset. Do not put a real token in a config file, issue, screenshot,
 command argument, or commit.
 
+### Optional: direct RAPT telemetry (unreleased, experimental)
+
+The development branch adds direct read-only RAPT Pill and Temperature Controller access without
+BrewForge, Home Assistant, or MQTT. This is not included in the `v0.4.0` installation above.
+See the [RAPT command guide](docs/COMMANDS.md#rapt-experimental-unreleased) for secure setup and
+explicit telemetry windows. No telemetry command evaluates automation rules or switches a device.
+
 ### Optional: create a fermentation report
 
 ```bash
