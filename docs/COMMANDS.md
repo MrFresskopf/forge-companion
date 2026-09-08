@@ -53,6 +53,15 @@ forge-companion rapt auth logout
 Replace `DEVICE_UUID` with the exact canonical lowercase UUID from `rapt devices`. Each query needs
 an explicit timezone-aware start and end, with start before end. Returned timestamps must lie within
 these boundaries (both accepted); the RAPT contract does not guarantee boundary inclusion or completeness.
+Request boundaries support at most six fractional digits; higher precision is rejected before
+credential access, not truncated. Returned RFC3339 timestamps support up to seven fractional digits
+(100 ns); more than seven digits, unknown `-00:00` offsets, and malformed timestamps fail closed.
+The existing UTC `observed_at` datetime is the microsecond floor; the additive
+`observed_at_submicrosecond_ns` field retains the remainder (0, 100, ..., 900 ns; default 0).
+Use both values for comparisons, or `observed_at_exact` for canonical exact UTC text, also used by
+the CLI. Canonical text preserves the instant, not redundant trailing-zero padding: a zero seventh
+digit uses the existing datetime formatting. Ordering uses the full instant then reading ID;
+inclusive window validation also respects the remainder (100 ns after the end is outside).
 Missing controller measurements remain absent, never zero. `gravity_raw` preserves the API number:
 RAPT OpenAPI does not document its unit, so this MVP does not claim verified SG or perform conversion.
 The same applies to the internal `gravity_velocity_raw` field. Output is human-readable, not a

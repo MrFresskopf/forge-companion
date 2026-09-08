@@ -1,5 +1,6 @@
 """Typer commands for read-only RAPT telemetry."""
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
@@ -84,6 +85,9 @@ def rapt_devices_command() -> None:
 
 
 def _utc_datetime(value: str) -> datetime:
+    # Request boundaries use datetime's microsecond resolution, unlike readings.
+    if re.search(r"[.,][0-9]{7}", value):
+        raise ValueError("timestamp boundary exceeds microsecond precision")
     candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
     parsed = datetime.fromisoformat(candidate)
     if parsed.tzinfo is None or parsed.utcoffset() is None:
@@ -92,7 +96,7 @@ def _utc_datetime(value: str) -> datetime:
 
 
 def _reading_line(reading: TelemetryReading) -> str:
-    fields = [reading.observed_at.isoformat()]
+    fields = [reading.observed_at_exact]
     if reading.temperature_c is not None:
         fields.append(f"temperature={reading.temperature_c:.1f} C")
     if reading.gravity_raw is not None:

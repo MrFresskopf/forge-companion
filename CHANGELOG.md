@@ -13,6 +13,14 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A separate native RAPT credential profile, in-memory token renewal, and a source-neutral
   telemetry model with a RAPT adapter. No RAPT control or telemetry-triggered Shelly actuation.
 
+### Fixed
+
+- Accept RAPT Pill's seven-digit RFC3339 timestamps without discarding sub-microsecond precision.
+  Retain a nanosecond remainder and expose canonical exact UTC text; sort and validate inclusive
+  windows using the full instant, and display it in the CLI. Existing shorter timestamps and raw
+  gravity values remain unchanged. Returned fractions beyond seven digits fail closed; CLI request
+  boundaries beyond six digits are rejected rather than silently truncated.
+
 ## [0.4.0] — 2026-08-16
 
 ### Added
