@@ -462,6 +462,91 @@ def test_invalid_device_list_does_not_print_partial_success(monkeypatch):
     assert "private" not in result.output
 
 
+def test_rapt_cli_displays_real_shape_pill_timestamp_exactly(monkeypatch):
+    profile = cli_module.rapt_credentials.RaptProfile(
+        username="test@example.com", api_secret="synthetic"
+    )
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: profile)
+    calls = []
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get_hydrometer_telemetry(self, **kwargs):
+            calls.append(kwargs)
+            # Real field shape/measurements, synthetic identity; no live access.
+            return [
+                {
+                    "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "createdOn": "2026-09-08T18:08:00.7034888+00:00",
+                    "temperature": 4.6875,
+                    "gravity": 1016.3,
+                    "gravityVelocity": -0.00741505,
+                    "battery": 99.9313,
+                    "rssi": -29,
+                }
+            ]
+
+    monkeypatch.setattr(cli_module, "RaptClient", Client)
+    result = runner.invoke(
+        app,
+        [
+            "rapt",
+            "telemetry",
+            "hydrometer",
+            "11111111-1111-1111-1111-111111111111",
+            "--start",
+            "2026-09-08T18:00:00Z",
+            "--end",
+            "2026-09-08T19:00:00Z",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.stderr == ""
+    assert len(calls) == 1
+    assert "Readings: 1\n" in result.stdout
+    assert (
+        "2026-09-08T18:08:00.7034888+00:00 temperature=4.7 C gravity_raw=1016.3000 "
+        "battery=99.9% rssi=-29.0\n"
+    ) in result.stdout
+    assert result.stdout.endswith("No RAPT or Shelly device command was sent.\n")
+
+
+@pytest.mark.parametrize("boundary", ["--start", "--end"])
+@pytest.mark.parametrize("fraction", ["7034888", "70348880", "1" * 100])
+def test_cli_rejects_submicrosecond_boundaries_before_credentials(monkeypatch, boundary, fraction):
+    def forbidden():
+        pytest.fail("Invalid boundary must not access credentials")
+
+    monkeypatch.setattr(cli_module.rapt_credentials, "resolve_profile", forbidden)
+    bounds = {"--start": "2026-09-08T18:00:00Z", "--end": "2026-09-08T19:00:00Z"}
+    bounds[boundary] = f"2026-09-08T18:08:00.{fraction}Z"
+    result = runner.invoke(
+        app,
+        [
+            "rapt",
+            "telemetry",
+            "hydrometer",
+            "11111111-1111-1111-1111-111111111111",
+            "--start",
+            bounds["--start"],
+            "--end",
+            bounds["--end"],
+        ],
+    )
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert "failed:" in result.stderr
+    assert isinstance(result.exception, SystemExit)
+
+
 def test_controller_line_preserves_absent_measurements():
     from forge_companion.telemetry import parse_rapt_telemetry
 

@@ -2,8 +2,8 @@
 
 RAPT readings are uniquely identified by reading ID; equal ``createdOn`` timestamps
 are retained and ordered deterministically by timestamp and reading ID. RFC3339
-fractions are limited to six digits so timestamps are never silently truncated to
-Python's microsecond precision.
+fractions are limited to seven digits; sub-microsecond nanoseconds are retained
+separately from Python's datetime precision.
 """
 
 import re
@@ -30,6 +30,9 @@ class TelemetryReading:
     fields preserve upstream numbers without
     conversion; consumers must not assume verified SG or SG/day units.
     Controller measurements may be absent and must never be replaced by zero.
+    ``observed_at`` is the UTC microsecond floor; ``observed_at_submicrosecond_ns``
+    adds 0..900 ns in 100 ns steps. Compare both for exact time, and use
+    ``observed_at_exact`` for canonical text without redundant fractional padding.
     """
 
     source: str
@@ -44,6 +47,16 @@ class TelemetryReading:
     battery_percent: float | None
     rssi: float | None
     control_temperature_c: float | None = None
+    observed_at_submicrosecond_ns: int = 0
+
+    @property
+    def observed_at_exact(self) -> str:
+        """Canonical UTC timestamp retaining the exact instant (not lexical padding)."""
+        utc = self.observed_at.astimezone(UTC)
+        if self.observed_at_submicrosecond_ns:
+            base = utc.isoformat(timespec="microseconds")
+            return f"{base[:-6]}{self.observed_at_submicrosecond_ns // 100}+00:00"
+        return utc.isoformat()
 
 
 class TelemetryValidationError(ValueError):
@@ -97,7 +110,12 @@ class RaptTelemetrySource:
                 device_id=device_id, start=start, end=end
             )
         readings = parse_rapt_telemetry(payload, kind=self.kind, device_id=device_id)
-        if any(not start <= reading.observed_at <= end for reading in readings):
+        if any(
+            not (start, 0)
+            <= (reading.observed_at, reading.observed_at_submicrosecond_ns)
+            <= (end, 0)
+            for reading in readings
+        ):
             raise TelemetryValidationError("RAPT telemetry lies outside the requested window")
         return readings
 
@@ -132,20 +150,26 @@ def _optional_finite_number(value: object, *, field: str) -> float | None:
     return _finite_number(value, field=field)
 
 
-def _utc_timestamp(value: object) -> datetime:
+def _utc_timestamp(value: object) -> tuple[datetime, int]:
     if not isinstance(value, str) or not re.fullmatch(
         r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}"
-        r"(?:\.[0-9]{1,6})?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])",
+        r"(?:\.[0-9]{1,7})?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])",
         value,
     ):
         raise TelemetryValidationError("RAPT telemetry contains an invalid timestamp")
     if value.endswith("-00:00"):
         raise TelemetryValidationError("RAPT telemetry contains an invalid timestamp")
+    # Extract the seventh digit before datetime parsing; never silently discard it.
+    fraction = re.search(r"\.([0-9]+)", value)
+    remainder_ns = 0
+    if fraction is not None and len(fraction[1]) == 7:
+        remainder_ns = int(fraction[1][-1]) * 100
+        value = value[: fraction.end() - 1] + value[fraction.end() :]
     try:
         parsed = datetime.fromisoformat(value.upper().replace("Z", "+00:00"))
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             raise ValueError
-        return parsed.astimezone(UTC)
+        return parsed.astimezone(UTC), remainder_ns
     except (OSError, OverflowError, ValueError):
         raise TelemetryValidationError("RAPT telemetry contains an invalid timestamp") from None
 
@@ -190,7 +214,7 @@ def parse_rapt_telemetry(
                 item.get("controlDeviceTemperature"), field="control device temperature"
             )
         reading_id = _canonical_uuid(item.get("id"))
-        observed_at = _utc_timestamp(item.get("createdOn"))
+        observed_at, remainder_ns = _utc_timestamp(item.get("createdOn"))
         if reading_id in identifiers:
             raise TelemetryValidationError(
                 "RAPT telemetry contains duplicate or conflicting records"
@@ -203,6 +227,7 @@ def parse_rapt_telemetry(
                 device_id=canonical_device_id,
                 reading_id=reading_id,
                 observed_at=observed_at,
+                observed_at_submicrosecond_ns=remainder_ns,
                 temperature_c=temperature,
                 gravity_raw=gravity,
                 gravity_velocity_raw=gravity_velocity_raw,
@@ -212,4 +237,13 @@ def parse_rapt_telemetry(
                 control_temperature_c=control_temperature,
             )
         )
-    return tuple(sorted(readings, key=lambda reading: (reading.observed_at, reading.reading_id)))
+    return tuple(
+        sorted(
+            readings,
+            key=lambda reading: (
+                reading.observed_at,
+                reading.observed_at_submicrosecond_ns,
+                reading.reading_id,
+            ),
+        )
+    )
