@@ -4,10 +4,17 @@ from io import BytesIO
 import pytest
 
 import forge_companion.vessels as vessel_module
-from forge_companion.vessels import MAX_FILE_BYTES, bind_vessel, load_vessels
+from forge_companion.vessels import (
+    MAX_FILE_BYTES,
+    VesselBusyError,
+    bind_vessel,
+    load_vessels,
+)
 
 PILL = "11111111-1111-4111-8111-111111111111"
 CONTROLLER = "22222222-2222-4222-8222-222222222222"
+OTHER_PILL = "33333333-3333-4333-8333-333333333333"
+OTHER_CONTROLLER = "44444444-4444-4444-8444-444444444444"
 
 
 def binding():
@@ -17,6 +24,71 @@ def binding():
         "temperature_controller": CONTROLLER,
         "gravity_interpretation": "unknown",
     }
+
+
+def other_binding():
+    return {
+        "vessel_id": "other-tank",
+        "hydrometer": OTHER_PILL,
+        "temperature_controller": OTHER_CONTROLLER,
+        "gravity_interpretation": "unknown",
+    }
+
+
+def test_existing_exclusive_lock_rejects_bind_without_changing_files(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(binding())
+    path = tmp_path / "vessels.json"
+    original = path.read_bytes()
+    lock_path = tmp_path / ".vessels.json.lock"
+    lock_content = b"owned by another writer"
+    lock_path.write_bytes(lock_content)
+
+    with pytest.raises(VesselBusyError, match="busy or locked"):
+        bind_vessel(other_binding())
+
+    assert path.read_bytes() == original
+    assert lock_path.read_bytes() == lock_content
+
+
+def test_lock_is_released_after_validation_failure_inside_lock(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(binding())
+    path = tmp_path / "vessels.json"
+    original = path.read_bytes()
+
+    with pytest.raises(ValueError, match="already bound"):
+        bind_vessel(binding())
+
+    assert path.read_bytes() == original
+    assert not (tmp_path / ".vessels.json.lock").exists()
+
+
+def test_lock_is_released_and_config_preserved_when_atomic_write_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(binding())
+    path = tmp_path / "vessels.json"
+    original = path.read_bytes()
+
+    def fail_write(*args, **kwargs):
+        raise OSError("synthetic write failure")
+
+    monkeypatch.setattr(vessel_module, "atomic_write_text", fail_write)
+
+    with pytest.raises(OSError, match="synthetic write failure"):
+        bind_vessel(other_binding())
+
+    assert path.read_bytes() == original
+    assert not (tmp_path / ".vessels.json.lock").exists()
+
+
+def test_lock_is_released_after_successful_bind(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+
+    bind_vessel(binding())
+
+    assert load_vessels() == [binding()]
+    assert not (tmp_path / ".vessels.json.lock").exists()
 
 
 @pytest.mark.parametrize(

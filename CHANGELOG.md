@@ -21,6 +21,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Document safe manual recovery from a vessel binding lock left behind by abrupt process death, and
+  cover exclusive-lock rejection, failure cleanup, successful cleanup, and failed-write preservation
+  with focused regressions.
 - Accept RAPT Pill's seven-digit RFC3339 timestamps without discarding sub-microsecond precision.
   Retain a nanosecond remainder and expose canonical exact UTC text; sort and validate inclusive
   windows using the full instant, and display it in the CLI. Existing shorter timestamps and raw

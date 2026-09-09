@@ -119,6 +119,17 @@ Associations live in the platform configuration directory as non-secret `vessels
 versioned schema rejects unknown fields, duplicate JSON keys, duplicate names/devices, malformed or
 oversized files, and unsupported versions. Changes use an exclusive transition lock and atomic
 replacement. `bind`, `list`, and `show` are offline: they do not load credentials or contact devices.
+
+If the process or computer stops abruptly during `vessel bind`, the lock can remain after the writer
+has gone. On Windows, the default lock path is
+`%APPDATA%\forge-companion\.vessels.json.lock`; when `FORGE_COMPANION_CONFIG_DIR` is set, it is
+`.vessels.json.lock` inside that directory. Close or let any running `forge-companion vessel bind`
+command finish, then use Task Manager to verify that no `forge-companion` or related Python process
+is still performing the bind. Only after confirming there is no writer, remove that one exact
+`.vessels.json.lock` file and retry the command. Never delete `vessels.json`: it contains the saved
+associations. A lock's age alone is not proof that it is stale, so do not automate age-based removal
+or broadly stop processes or delete files.
+
 `telemetry` is online and read-only: it requires an existing binding, an explicit timezone-aware
 start/end window, and the RAPT profile configured by `rapt auth login`. It retrieves the hydrometer
 and controller as separate streams and preserves exact seven-digit (100 ns) timestamps. It does not
