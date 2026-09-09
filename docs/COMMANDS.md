@@ -103,6 +103,8 @@ Create and inspect a local association between exactly one RAPT Pill and one Tem
 forge-companion vessel bind fermenter-1 --hydrometer PILL_UUID --temperature-controller CONTROLLER_UUID
 forge-companion vessel list
 forge-companion vessel show fermenter-1
+forge-companion vessel status fermenter-1
+forge-companion vessel status fermenter-1 --pill-max-age-minutes 120 --controller-max-age-minutes 45
 forge-companion vessel telemetry fermenter-1 --start 2026-09-08T18:00:00Z --end 2026-09-08T19:00:00Z
 ```
 
@@ -136,6 +138,26 @@ and controller as separate streams and preserves exact seven-digit (100 ns) time
 poll, evaluate rules, control hardware, or connect readings to Shelly automation. Output is
 human-readable and may expose private device IDs. Exit `0` means success; domain failures use `1`,
 while missing online credentials and parser errors use `2`.
+
+`status` is a separate actuality check. It captures one timezone-aware UTC time, then retrieves both
+bound streams over the fixed, inclusive recent 48-hour window ending at that instant. It prints each
+device independently with its exact latest timestamp, exact integer-nanosecond `age_ns`, approximate
+human-readable age in minutes, temperature, and `CURRENT`, `STALE`, or `NO_DATA`; it never selects or
+combines temperatures. A missing optional temperature remains
+`NO_DATA`, while a reported temperature carries the same visible freshness status as its device.
+No observations in the recent window are reported as `NO_OBSERVATION_IN_WINDOW` with
+`history=NOT_QUERIED`; the command does not mislabel that bounded result as "never observed." A
+request or validation failure is a command failure, never `NO_DATA`, and neither device is printed
+unless both streams validate.
+
+The provisional warning thresholds are 90 minutes for the Pill and 30 minutes for the controller,
+based on an initial 48-hour observation (Pill median gap 59.79 minutes with one 119.47-minute gap;
+controller median 15.02 minutes and maximum 15.11 minutes). Per-command overrides accept only finite
+values greater than zero and at most 2,880 minutes. Equality is `CURRENT`; any exact 100 ns beyond the
+threshold is `STALE`. These thresholds are warning policy only, are not saved to vessel metadata, and
+grant no actuator permission. The command performs no writes, decisions, polling, Shelly imports, or
+device controls. Output reports each validated policy value canonically as integer-nanosecond
+`threshold_ns`; its parenthesized minutes label is for readability and is explicitly approximate.
 
 ## `report`
 

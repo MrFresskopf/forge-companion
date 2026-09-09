@@ -51,6 +51,12 @@ def _surface() -> dict[str, dict[str, Any]]:
                 *getattr(parameter, "opts", []),
                 *getattr(parameter, "secondary_opts", []),
             ]
+            parameter_type = _parameter_type(parameter)
+            if parameter.name in {
+                "pill_max_age_minutes",
+                "controller_max_age_minutes",
+            }:
+                parameter_type.update({"exclusiveMinimum": 0, "maximum": 2880})
             parameters.append(
                 {
                     "name": parameter.name,
@@ -58,7 +64,7 @@ def _surface() -> dict[str, dict[str, Any]]:
                     "spellings": option_names,
                     "required": parameter.required,
                     "default": _normalized_default(parameter.default),
-                    "type": _parameter_type(parameter),
+                    "type": parameter_type,
                 }
             )
 
@@ -136,6 +142,11 @@ def test_cli_v1_contract_records_parameter_types_and_ranges() -> None:
         "minimum": 0,
         "maximum": 255,
     }
+    assert commands["vessel status"]["parameters"][1]["type"] == {
+        "kind": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 2880,
+    }
 
 
 def test_mixed_commands_define_stable_and_experimental_modes() -> None:
@@ -194,6 +205,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "vessel bind",
         "vessel list",
         "vessel show",
+        "vessel status",
         "vessel telemetry",
     }
     assert {
