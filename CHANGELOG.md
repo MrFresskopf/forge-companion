@@ -12,9 +12,18 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for direct read-only Pill and Temperature Controller access, independent of BrewForge.
 - A separate native RAPT credential profile, in-memory token renewal, and a source-neutral
   telemetry model with a RAPT adapter. No RAPT control or telemetry-triggered Shelly actuation.
+- Experimental offline `vessel bind/list/show` commands plus explicit-window, read-only online
+  `vessel telemetry` for associating and reading one RAPT Pill and one Temperature Controller. The
+  closed, size-bounded local file contains no credentials, rejects ambiguous or duplicate
+  associations, and is updated atomically without contacting a device. Both streams are retrieved
+  before output; raw gravity semantics and exact 100 ns timestamps are retained, with derived SG
+  only for an explicit `sg-times-1000` binding.
 
 ### Fixed
 
+- Document safe manual recovery from a vessel binding lock left behind by abrupt process death, and
+  cover exclusive-lock rejection, failure cleanup, successful cleanup, and failed-write preservation
+  with focused regressions.
 - Accept RAPT Pill's seven-digit RFC3339 timestamps without discarding sub-microsecond precision.
   Retain a nanosecond remainder and expose canonical exact UTC text; sort and validate inclusive
   windows using the full instant, and display it in the CLI. Existing shorter timestamps and raw

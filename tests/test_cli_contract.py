@@ -190,6 +190,11 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "rapt auth status",
         "rapt devices",
         "rapt telemetry",
+        "vessel",
+        "vessel bind",
+        "vessel list",
+        "vessel show",
+        "vessel telemetry",
     }
     assert {
         "doctor",

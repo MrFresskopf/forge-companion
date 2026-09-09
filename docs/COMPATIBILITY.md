@@ -35,6 +35,11 @@ The unreleased `rapt` command family, including its separate authentication comm
 experimental. It is additive and does not extend the stable authentication scope above. Its internal
 telemetry model is not a versioned export format. See the [command guide](COMMANDS.md#rapt-experimental-unreleased).
 
+The unreleased `vessel` command family (offline bindings and read-only online telemetry) and its
+`forge-companion-vessels-v1` local file are also experimental. The file is closed and versioned so
+malformed or future content fails safely, but no forward-compatibility or migration promise applies
+before this feature is promoted.
+
 ## Semantic versioning
 
 - Patch releases fix defects, improve human wording, and may tighten validation for input already

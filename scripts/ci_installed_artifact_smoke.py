@@ -77,12 +77,17 @@ contract = json.loads(contract_text)
 if contract.get("schema_version") != "forge-companion-cli-contract-v1":
     raise AssertionError("installed CLI contract is missing or incompatible")
 
-for path in ("rapt auth login", "rapt telemetry", "rapt devices"):
+for path in ("rapt auth login", "rapt telemetry", "rapt devices", "vessel telemetry"):
     if contract["commands"][path]["stability"] != "experimental":
         raise AssertionError("RAPT surface absent or not experimental")
 from typer.testing import CliRunner
 from forge_companion.cli import app
-for args in (["rapt", "--help"], ["rapt", "telemetry", "--help"]):
+for args in (
+    ["rapt", "--help"],
+    ["rapt", "telemetry", "--help"],
+    ["vessel", "--help"],
+    ["vessel", "telemetry", "--help"],
+):
     result = CliRunner().invoke(app, args)
     if result.exit_code != 0:
         raise AssertionError("Installed RAPT help failed")
