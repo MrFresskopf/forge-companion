@@ -107,6 +107,10 @@ hardware or evaluates automation rules. This experimental metadata is stored sep
 credentials. See the
 [vessel command guide](docs/COMMANDS.md#vessel-experimental-unreleased).
 
+Use `forge-companion vessel status VESSEL_ID` for a bounded, read-only 48-hour freshness check. Its
+provisional warning defaults are 90 minutes for the Pill and 30 minutes for the controller; they are
+not actuator permission and are never written to configuration.
+
 ### Optional: create a fermentation report
 
 ```bash
@@ -141,6 +145,7 @@ documented collection and token scope.
 | Store or inspect BrewForge authentication | `forge-companion auth ...` | Offline |
 | Bind or inspect local vessel/device metadata | `forge-companion vessel bind/list/show ...` | Offline |
 | Read both devices bound to a vessel | `forge-companion vessel telemetry ...` | 2 RAPT telemetry GET requests |
+| Check freshness of both bound devices | `forge-companion vessel status VESSEL_ID` | 2 RAPT telemetry GET requests |
 | Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |
 | Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |

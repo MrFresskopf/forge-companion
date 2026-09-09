@@ -1032,6 +1032,16 @@
       ],
       "stability": "experimental"
     },
+    "vessel status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "pill_max_age_minutes", "kind": "option", "spellings": ["--pill-max-age-minutes"], "required": false, "default": 90.0, "type": {"kind": "number", "exclusiveMinimum": 0, "maximum": 2880}},
+        {"name": "controller_max_age_minutes", "kind": "option", "spellings": ["--controller-max-age-minutes"], "required": false, "default": 30.0, "type": {"kind": "number", "exclusiveMinimum": 0, "maximum": 2880}}
+      ],
+      "stability": "experimental"
+    },
     "vessel telemetry": {
       "kind": "command",
       "hidden": false,
