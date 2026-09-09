@@ -18,6 +18,9 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   associations, and is updated atomically without contacting a device. Both streams are retrieved
   before output; raw gravity semantics and exact 100 ns timestamps are retained, with derived SG
   only for an explicit `sg-times-1000` binding.
+- Experimental offline `vessel context start/show/close` lifecycle with unique retained records,
+  one active context per vessel, explicit switching, captured source-device IDs, strict date-only
+  and SG validation, and no implicit telemetry attribution or credential/device access.
 
 ### Fixed
 

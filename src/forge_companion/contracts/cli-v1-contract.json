@@ -1011,6 +1011,44 @@
       ],
       "stability": "experimental"
     },
+    "vessel context": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "vessel context close": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
+    },
+    "vessel context show": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "show_all", "kind": "option", "spellings": ["--all"], "required": false, "default": false, "type": {"kind": "boolean"}}
+      ],
+      "stability": "experimental"
+    },
+    "vessel context start": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "batch", "kind": "option", "spellings": ["--batch"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "original_gravity_sg", "kind": "option", "spellings": ["--original-gravity-sg"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "expected_final_gravity_sg", "kind": "option", "spellings": ["--expected-final-gravity-sg"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "yeast", "kind": "option", "spellings": ["--yeast"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "start_date", "kind": "option", "spellings": ["--start-date"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "authoritative_temperature_role", "kind": "option", "spellings": ["--authoritative-temperature-role"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "switch", "kind": "option", "spellings": ["--switch"], "required": false, "default": false, "type": {"kind": "boolean"}}
+      ],
+      "stability": "experimental"
+    },
     "vessel list": {
       "kind": "command",
       "hidden": false,

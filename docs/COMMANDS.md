@@ -103,6 +103,11 @@ Create and inspect a local association between exactly one RAPT Pill and one Tem
 forge-companion vessel bind fermenter-1 --hydrometer PILL_UUID --temperature-controller CONTROLLER_UUID
 forge-companion vessel list
 forge-companion vessel show fermenter-1
+forge-companion vessel context start fermenter-1 --batch "Example batch" \
+  --original-gravity-sg 1.077 --expected-final-gravity-sg 1.015 --yeast US-05 \
+  --start-date 2026-08-29 --authoritative-temperature-role hydrometer
+forge-companion vessel context show fermenter-1
+forge-companion vessel context close fermenter-1
 forge-companion vessel telemetry fermenter-1 --start 2026-09-08T18:00:00Z --end 2026-09-08T19:00:00Z
 ```
 
@@ -119,6 +124,30 @@ Associations live in the platform configuration directory as non-secret `vessels
 versioned schema rejects unknown fields, duplicate JSON keys, duplicate names/devices, malformed or
 oversized files, and unsupported versions. Changes use an exclusive transition lock and atomic
 replacement. `bind`, `list`, and `show` are offline: they do not load credentials or contact devices.
+
+`context start` creates a unique active fermentation record in the separate non-secret
+`fermentation-contexts.json`; it requires an existing vessel binding and snapshots both device IDs.
+Batch and yeast text are 1–120 characters, have no surrounding whitespace, control characters, or
+multiline separators,
+and SG is exactly `1.xxx` in the inclusive declared range `1.000`–`1.200`, with OG greater than
+expected FG. The start date is a real calendar date in strict `YYYY-MM-DD` form. It has no timezone
+or exact instant: persisted `start_instant` is null and same-day telemetry attribution is explicitly
+unavailable. No old brew readings are loaded. A second active context is refused unless `--switch`
+explicitly closes and retains the first; `context close` also retains it, and `context show --all`
+reads history. The authoritative temperature role must explicitly be `hydrometer` or
+`controller`. If the vessel binding later changes, output reports `binding_status=changed`
+and continues to show the captured IDs; it does not substitute new sensors. These context commands
+are offline and do not access credentials, APIs, telemetry, automation, or devices.
+
+Vessel and context writes use separate locks. A concurrent vessel rebind can therefore make a newly
+captured, internally consistent context snapshot immediately stale; output reports it as `changed`
+and never substitutes the newer binding automatically.
+
+The context store is limited to 1,024 records and 256 KiB. Its versioned closed schema rejects
+unknown members, duplicate keys or IDs, multiple active records for a vessel, unsupported versions,
+non-finite JSON numbers, excessive recursion, and oversized input. Writes use an exclusive lock and
+atomic replacement. Recovery follows the vessel-lock procedure below, using only the exact
+`.fermentation-contexts.json.lock` file after confirming no context writer is running.
 
 If the process or computer stops abruptly during `vessel bind`, the lock can remain after the writer
 has gone. On Windows, the default lock path is
