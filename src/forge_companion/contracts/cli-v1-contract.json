@@ -957,6 +957,90 @@
         }
       ],
       "stability": "experimental"
+    },
+    "vessel": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "vessel bind": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "vessel_id",
+          "kind": "argument",
+          "spellings": ["vessel_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "hydrometer",
+          "kind": "option",
+          "spellings": ["--hydrometer"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "temperature_controller",
+          "kind": "option",
+          "spellings": ["--temperature-controller"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "gravity_interpretation",
+          "kind": "option",
+          "spellings": ["--gravity-interpretation"],
+          "required": false,
+          "default": "unknown",
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "replace",
+          "kind": "option",
+          "spellings": ["--replace"],
+          "required": false,
+          "default": false,
+          "type": {"kind": "boolean"}
+        }
+      ],
+      "stability": "experimental"
+    },
+    "vessel list": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "vessel show": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "vessel_id",
+          "kind": "argument",
+          "spellings": ["vessel_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        }
+      ],
+      "stability": "experimental"
+    },
+    "vessel telemetry": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "start", "kind": "option", "spellings": ["--start"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "end", "kind": "option", "spellings": ["--end"], "required": true, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
     }
   }
 }

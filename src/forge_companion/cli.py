@@ -15,6 +15,7 @@ from forge_companion.cli_brewforge import (
 from forge_companion.cli_hopper import hopper_app
 from forge_companion.cli_rapt import rapt_app
 from forge_companion.cli_reports import register_root_commands as register_report_commands
+from forge_companion.cli_vessel import vessel_app
 
 app = typer.Typer(
     help=(
@@ -25,6 +26,7 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 app.add_typer(hopper_app, name="hopper", rich_help_panel="Start here")
+app.add_typer(vessel_app, name="vessel", rich_help_panel="Telemetry sources")
 app.add_typer(rapt_app, name="rapt", rich_help_panel="Telemetry sources")
 app.add_typer(auth_app, name="auth", rich_help_panel="Supporting BrewForge")
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Supporting BrewForge")

@@ -103,3 +103,5 @@ def test_installed_smoke_checks_rapt_surface_and_native_boundary() -> None:
     assert '"rapt telemetry"' in program
     assert '"rapt auth login"' in program
     assert '"rapt", "telemetry", "--help"' in program
+    assert '"vessel telemetry"' in program
+    assert '"vessel", "telemetry", "--help"' in program

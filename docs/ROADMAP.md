@@ -99,6 +99,11 @@ The first additive RAPT API slice provides native credential storage, explicit d
 read-only Pill/controller telemetry, and a source-neutral reading model. It does not change frozen
 BrewForge reports, the spunding advisor, hopper formats, or Shelly safety transitions.
 
+The next additive slice provides a versioned offline vessel association between one Pill and one
+Temperature Controller plus explicit-window, read-only retrieval of their separate telemetry
+streams. It preserves raw telemetry semantics and introduces no polling, aggregation, automation
+decision, or device-control path.
+
 Next steps remain separate: live read-only API validation, a BrewForge adapter to the neutral model,
 source-independent advisory rules, and only then a secured webhook receiver. Webhook reception must
 store observations rather than actuate directly. No Home Assistant or MQTT dependency is required.

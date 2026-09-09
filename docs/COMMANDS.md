@@ -95,6 +95,37 @@ RAPT describes its API as unsupported and subject to change. See the
 that readings are fresh enough for automation. The existing BrewForge spunding advisor and Shelly
 one-shot safety core are unchanged and are not connected to RAPT readings in this slice.
 
+## `vessel` (experimental, unreleased)
+
+Create and inspect a local association between exactly one RAPT Pill and one Temperature Controller:
+
+```bash
+forge-companion vessel bind fermenter-1 --hydrometer PILL_UUID --temperature-controller CONTROLLER_UUID
+forge-companion vessel list
+forge-companion vessel show fermenter-1
+forge-companion vessel telemetry fermenter-1 --start 2026-09-08T18:00:00Z --end 2026-09-08T19:00:00Z
+```
+
+Names are lowercase ASCII identifiers of at most 64 characters (`a-z`, `0-9`, `_`, and `-`) and
+must begin with a letter or digit. Device IDs are canonical lowercase UUIDs. A device can belong to
+only one vessel and cannot fill both roles. Existing vessel names are preserved unless `--replace`
+is explicit; replacement still cannot take a device from another vessel. Optional
+`--gravity-interpretation sg-times-1000` records an operator-selected interpretation only; the
+default `unknown` makes no unit claim. Telemetry always retains `gravity_raw`; only the explicit
+`sg-times-1000` interpretation adds `sg=gravity_raw/1000`. `gravity_velocity_raw` has unknown units
+and is never converted.
+
+Associations live in the platform configuration directory as non-secret `vessels.json`. The closed
+versioned schema rejects unknown fields, duplicate JSON keys, duplicate names/devices, malformed or
+oversized files, and unsupported versions. Changes use an exclusive transition lock and atomic
+replacement. `bind`, `list`, and `show` are offline: they do not load credentials or contact devices.
+`telemetry` is online and read-only: it requires an existing binding, an explicit timezone-aware
+start/end window, and the RAPT profile configured by `rapt auth login`. It retrieves the hydrometer
+and controller as separate streams and preserves exact seven-digit (100 ns) timestamps. It does not
+poll, evaluate rules, control hardware, or connect readings to Shelly automation. Output is
+human-readable and may expose private device IDs. Exit `0` means success; domain failures use `1`,
+while missing online credentials and parser errors use `2`.
+
 ## `report`
 
 Create the standard self-contained HTML fermentation report:

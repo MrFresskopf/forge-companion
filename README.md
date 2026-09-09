@@ -100,6 +100,13 @@ BrewForge, Home Assistant, or MQTT. This is not included in the `v0.4.0` install
 See the [RAPT command guide](docs/COMMANDS.md#rapt-experimental-unreleased) for secure setup and
 explicit telemetry windows. No telemetry command evaluates automation rules or switches a device.
 
+Associate one Pill and Temperature Controller under a local vessel name with offline `vessel bind`,
+then inspect it offline with `vessel list` or `vessel show`. The separate `vessel telemetry` command
+performs an explicit-window, read-only online query for both bound devices; it never controls
+hardware or evaluates automation rules. This experimental metadata is stored separately from
+credentials. See the
+[vessel command guide](docs/COMMANDS.md#vessel-experimental-unreleased).
+
 ### Optional: create a fermentation report
 
 ```bash
@@ -132,6 +139,8 @@ documented collection and token scope.
 | Check an armed Cloud one-shot without switching | `forge-companion hopper check PLAN` | 1 status POST (Cloud v2) |
 | Fire an armed Cloud one-shot | `forge-companion hopper fire PLAN` | 1 set POST + 2 status POSTs |
 | Store or inspect BrewForge authentication | `forge-companion auth ...` | Offline |
+| Bind or inspect local vessel/device metadata | `forge-companion vessel bind/list/show ...` | Offline |
+| Read both devices bound to a vessel | `forge-companion vessel telemetry ...` | 2 RAPT telemetry GET requests |
 | Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |
 | Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
