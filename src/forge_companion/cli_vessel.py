@@ -1,6 +1,8 @@
 """Experimental offline vessel associations and read-only online telemetry."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from math import isfinite
 from typing import Annotated
 
 import httpx
@@ -27,6 +29,11 @@ from forge_companion.vessels import VesselBusyError, bind_vessel, load_vessels
 vessel_app = typer.Typer(help="Experimental vessel bindings and read-only telemetry.")
 context_app = typer.Typer(help="Experimental offline fermentation contexts.")
 vessel_app.add_typer(context_app, name="context")
+
+STATUS_WINDOW_HOURS = 48
+DEFAULT_PILL_MAX_AGE_MINUTES = 90.0
+DEFAULT_CONTROLLER_MAX_AGE_MINUTES = 30.0
+MAX_FRESHNESS_MINUTES = 2880.0
 
 
 @vessel_app.callback()
@@ -155,9 +162,7 @@ def context_show(
 ) -> None:
     """Show the active context, or retained history with --all."""
     try:
-        contexts = [
-            item for item in load_fermentation_contexts() if item["vessel_id"] == vessel_id
-        ]
+        contexts = [item for item in load_fermentation_contexts() if item["vessel_id"] == vessel_id]
         if not show_all:
             contexts = [item for item in contexts if item["status"] == "active"]
         if not contexts:
@@ -222,6 +227,141 @@ def _vessel_reading_line(reading: TelemetryReading, *, gravity_interpretation: s
     if reading.rssi is not None:
         fields.append(f"rssi={reading.rssi:.1f}")
     return " ".join(fields)
+
+
+def _utc_now() -> datetime:
+    """Capture the status boundary through one injectable timezone-aware UTC clock."""
+    return datetime.now(UTC)
+
+
+def _validated_max_age(value: float) -> int:
+    """Return an exact integer nanosecond policy threshold."""
+    if not isfinite(value) or value <= 0 or value > MAX_FRESHNESS_MINUTES:
+        raise ValueError("invalid freshness threshold")
+    return int(Decimal(str(value)) * Decimal(60_000_000_000))
+
+
+def _age_ns(reading: TelemetryReading, *, now: datetime) -> int:
+    elapsed = now - reading.observed_at
+    return (
+        (elapsed.days * 86_400 + elapsed.seconds) * 1_000_000_000
+        + elapsed.microseconds * 1_000
+        - reading.observed_at_submicrosecond_ns
+    )
+
+
+def _threshold_minutes_label(threshold_ns: int) -> str:
+    minutes = Decimal(threshold_ns) / Decimal(60_000_000_000)
+    text = format(minutes, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _approximate_age_minutes(age_ns: int) -> str:
+    minutes = Decimal(age_ns) / Decimal(60_000_000_000)
+    return format(minutes, ".6f").rstrip("0").rstrip(".")
+
+
+def _status_line(
+    heading: str,
+    readings: tuple[TelemetryReading, ...],
+    *,
+    now: datetime,
+    maximum_age_ns: int,
+) -> str:
+    if not readings:
+        return (
+            f"{heading} status=NO_DATA latest=NO_OBSERVATION_IN_WINDOW age=NO_DATA "
+            f"temperature=NO_DATA history=NOT_QUERIED "
+            f"reason=no_observations_in_recent_{STATUS_WINDOW_HOURS}h"
+        )
+    latest = readings[-1]
+    age_ns = _age_ns(latest, now=now)
+    # A future reading should already have failed the source's exact window validation.
+    if age_ns < 0:
+        raise TelemetryValidationError("RAPT telemetry lies outside the requested window")
+    status = "CURRENT" if age_ns <= maximum_age_ns else "STALE"
+    temperature = (
+        "temperature=NO_DATA"
+        if latest.temperature_c is None
+        else f"temperature={latest.temperature_c:.1f} C temperature_status={status}"
+    )
+    return (
+        f"{heading} status={status} latest={latest.observed_at_exact} "
+        f"age_ns={age_ns} age_approx={_approximate_age_minutes(age_ns)} minutes {temperature}"
+    )
+
+
+@vessel_app.command("status")
+def vessel_status(
+    vessel_id: str,
+    pill_max_age_minutes: Annotated[
+        float,
+        typer.Option(
+            "--pill-max-age-minutes",
+            help="Provisional Pill warning threshold (0 < minutes <= 2880).",
+        ),
+    ] = DEFAULT_PILL_MAX_AGE_MINUTES,
+    controller_max_age_minutes: Annotated[
+        float,
+        typer.Option(
+            "--controller-max-age-minutes",
+            help="Provisional controller warning threshold (0 < minutes <= 2880).",
+        ),
+    ] = DEFAULT_CONTROLLER_MAX_AGE_MINUTES,
+) -> None:
+    """Check recent bound-device freshness without writing or controlling anything."""
+    try:
+        pill_max_age_ns = _validated_max_age(pill_max_age_minutes)
+        controller_max_age_ns = _validated_max_age(controller_max_age_minutes)
+        bindings = load_vessels()
+        binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
+    except (OSError, StopIteration, TypeError, ValueError):
+        typer.echo("Vessel status failed: binding, local file, or threshold is invalid.", err=True)
+        raise typer.Exit(1) from None
+
+    profile = _profile_for_api()
+    now = _utc_now()
+    if now.tzinfo is None or now.utcoffset() is None:
+        typer.echo("Vessel status failed: clock is invalid.", err=True)
+        raise typer.Exit(1)
+    now = now.astimezone(UTC)
+    start = now - timedelta(hours=STATUS_WINDOW_HOURS)
+    try:
+        hydrometer, controller = _read_vessel_streams(
+            profile=profile, binding=binding, start=start, end=now
+        )
+        lines = (
+            _status_line(
+                "HYDROMETER",
+                hydrometer,
+                now=now,
+                maximum_age_ns=pill_max_age_ns,
+            ),
+            _status_line(
+                "TEMPERATURE_CONTROLLER",
+                controller,
+                now=now,
+                maximum_age_ns=controller_max_age_ns,
+            ),
+        )
+    except (RaptError, TelemetryValidationError, httpx.HTTPError, OSError, TypeError, ValueError):
+        typer.echo("Vessel status failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+
+    typer.echo("Vessel status read-only.")
+    typer.echo(f"Vessel: {binding['vessel_id']}")
+    typer.echo(f"Window: {start.isoformat()} / {now.isoformat()}")
+    typer.echo(
+        "Provisional warning thresholds: "
+        f"Pill threshold_ns={pill_max_age_ns} "
+        f"(~{_threshold_minutes_label(pill_max_age_ns)} minutes); "
+        f"controller threshold_ns={controller_max_age_ns} "
+        f"(~{_threshold_minutes_label(controller_max_age_ns)} minutes)."
+    )
+    for line in lines:
+        typer.echo(line)
+    typer.echo("Freshness is warning policy only; it grants no actuator permission.")
+    typer.echo("No RAPT or Shelly device command was sent.")
 
 
 @vessel_app.command("telemetry")

@@ -21,6 +21,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Experimental offline `vessel context start/show/close` lifecycle with unique retained records,
   one active context per vessel, explicit switching, captured source-device IDs, strict date-only
   and SG validation, and no implicit telemetry attribution or credential/device access.
+- Experimental `vessel status` performs one bounded recent-48-hour, two-stream read with provisional
+  90-minute Pill and 30-minute controller warning thresholds. It preserves exact 100 ns freshness
+  boundaries, reports separate temperatures and `CURRENT`/`STALE`/`NO_DATA` states, emits no partial
+  status on retrieval failure, writes no metadata, and grants no actuator permission.
 
 ### Fixed
 

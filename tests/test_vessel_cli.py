@@ -1,5 +1,5 @@
 import json
-from datetime import UTC
+from datetime import UTC, datetime
 
 import pytest
 from typer.testing import CliRunner
@@ -233,3 +233,151 @@ def test_vessel_telemetry_second_stream_failure_has_no_partial_success(tmp_path,
     assert result.exit_code == 1
     assert result.stdout == ""
     assert "private second-device detail" not in result.output
+
+
+def _reading(kind, observed_at, *, remainder=0, temperature=5.0):
+    return cli_module.TelemetryReading(
+        source="rapt",
+        device_kind=kind,
+        device_id=PILL if kind is cli_module.DeviceKind.HYDROMETER else CONTROLLER,
+        reading_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        observed_at=observed_at,
+        observed_at_submicrosecond_ns=remainder,
+        temperature_c=temperature,
+        gravity_raw=1010.0 if kind is cli_module.DeviceKind.HYDROMETER else None,
+        gravity_velocity_raw=-1.0 if kind is cli_module.DeviceKind.HYDROMETER else None,
+        target_temperature_c=None,
+        battery_percent=None,
+        rssi=None,
+    )
+
+
+def test_vessel_status_uses_one_now_fixed_window_and_independent_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _write_binding(tmp_path)
+    now = datetime(2026, 9, 9, 12, 0, tzinfo=UTC)
+    calls = []
+    monkeypatch.setattr(cli_module, "_utc_now", lambda: now)
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: object())
+
+    def read(**kwargs):
+        calls.append(kwargs)
+        return (
+            (_reading(cli_module.DeviceKind.HYDROMETER, datetime(2026, 9, 9, 10, 30, tzinfo=UTC)),),
+            (
+                _reading(
+                    cli_module.DeviceKind.TEMPERATURE_CONTROLLER,
+                    datetime(2026, 9, 9, 11, 29, 59, tzinfo=UTC),
+                    temperature=4.25,
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(cli_module, "_read_vessel_streams", read)
+    result = runner.invoke(app, ["vessel", "status", "tank"])
+    assert result.exit_code == 0, result.output
+    assert calls[0]["start"] == datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
+    assert calls[0]["end"] is now
+    assert "Pill threshold_ns=5400000000000 (~90 minutes)" in result.stdout
+    assert "controller threshold_ns=1800000000000 (~30 minutes)" in result.stdout
+    assert "HYDROMETER status=CURRENT" in result.stdout
+    assert "age_ns=5400000000000 age_approx=90 minutes" in result.stdout
+    assert "TEMPERATURE_CONTROLLER status=STALE" in result.stdout
+    assert "temperature=4.2 C" in result.stdout
+    assert "No RAPT or Shelly device command was sent." in result.stdout
+
+
+def test_vessel_status_preserves_100ns_boundary_and_missing_temperature(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _write_binding(tmp_path)
+    now = datetime(2026, 9, 9, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(cli_module, "_utc_now", lambda: now)
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: object())
+    at_floor = datetime(2026, 9, 9, 10, 29, 59, 999999, tzinfo=UTC)
+    monkeypatch.setattr(
+        cli_module,
+        "_read_vessel_streams",
+        lambda **kwargs: (
+            (
+                _reading(
+                    cli_module.DeviceKind.HYDROMETER, at_floor, remainder=900, temperature=None
+                ),
+            ),
+            (_reading(cli_module.DeviceKind.TEMPERATURE_CONTROLLER, now, temperature=None),),
+        ),
+    )
+    result = runner.invoke(app, ["vessel", "status", "tank"])
+    assert result.exit_code == 0
+    assert "HYDROMETER status=STALE" in result.stdout
+    assert "2026-09-09T10:29:59.9999999+00:00" in result.stdout
+    assert "age_ns=5400000000100 age_approx=90 minutes" in result.stdout
+    assert "temperature=NO_DATA" in result.stdout
+
+
+def test_vessel_status_renders_exact_fractional_override_threshold(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _write_binding(tmp_path)
+    now = datetime(2026, 9, 9, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(cli_module, "_utc_now", lambda: now)
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: object())
+    monkeypatch.setattr(
+        cli_module,
+        "_read_vessel_streams",
+        lambda **kwargs: (
+            (_reading(cli_module.DeviceKind.HYDROMETER, now),),
+            (_reading(cli_module.DeviceKind.TEMPERATURE_CONTROLLER, now),),
+        ),
+    )
+    result = runner.invoke(
+        app,
+        ["vessel", "status", "tank", "--pill-max-age-minutes", "90.0000001"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Pill threshold_ns=5400000006000 (~90.0000001 minutes)" in result.stdout
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "2880.0001"])
+def test_vessel_status_invalid_thresholds_precede_credentials(tmp_path, monkeypatch, value):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _write_binding(tmp_path)
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: pytest.fail("credentials accessed"))
+    result = runner.invoke(app, ["vessel", "status", "tank", "--pill-max-age-minutes", value])
+    assert result.exit_code == 1
+    assert result.stdout == ""
+
+
+def test_vessel_status_missing_binding_precedes_credentials(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: pytest.fail("credentials accessed"))
+    result = runner.invoke(app, ["vessel", "status", "missing"])
+    assert result.exit_code == 1
+    assert result.stdout == ""
+
+
+def test_vessel_status_no_observations_are_explicit(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _write_binding(tmp_path)
+    monkeypatch.setattr(cli_module, "_utc_now", lambda: datetime(2026, 9, 9, tzinfo=UTC))
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: object())
+    monkeypatch.setattr(cli_module, "_read_vessel_streams", lambda **kwargs: ((), ()))
+    result = runner.invoke(app, ["vessel", "status", "tank"])
+    assert result.exit_code == 0
+    assert result.stdout.count("status=NO_DATA latest=NO_OBSERVATION_IN_WINDOW age=NO_DATA") == 2
+    assert result.stdout.count("history=NOT_QUERIED") == 2
+    assert result.stdout.count("reason=no_observations_in_recent_48h") == 2
+
+
+def test_vessel_status_second_stream_failure_has_no_partial_status(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _write_binding(tmp_path)
+    monkeypatch.setattr(cli_module, "_profile_for_api", lambda: object())
+    monkeypatch.setattr(cli_module, "_utc_now", lambda: datetime(2026, 9, 9, tzinfo=UTC))
+    monkeypatch.setattr(
+        cli_module,
+        "_read_vessel_streams",
+        lambda **kwargs: (_ for _ in ()).throw(RaptResponseError("private")),
+    )
+    result = runner.invoke(app, ["vessel", "status", "tank"])
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert "NO_DATA" not in result.output

@@ -112,6 +112,10 @@ from vessel bindings. Starting requires strict SG values, an ISO calendar date, 
 authoritative temperature-device role. It never imports old brew readings or treats the date as an
 exact telemetry boundary; switching an active context must be explicit and retains the prior record.
 
+Use `forge-companion vessel status VESSEL_ID` for a bounded, read-only 48-hour freshness check. Its
+provisional warning defaults are 90 minutes for the Pill and 30 minutes for the controller; they are
+not actuator permission and are never written to configuration.
+
 ### Optional: create a fermentation report
 
 ```bash
@@ -147,6 +151,7 @@ documented collection and token scope.
 | Bind or inspect local vessel/device metadata | `forge-companion vessel bind/list/show ...` | Offline |
 | Start, inspect, or close vessel fermentation context | `forge-companion vessel context ...` | Offline |
 | Read both devices bound to a vessel | `forge-companion vessel telemetry ...` | 2 RAPT telemetry GET requests |
+| Check freshness of both bound devices | `forge-companion vessel status VESSEL_ID` | 2 RAPT telemetry GET requests |
 | Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |
 | Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |
