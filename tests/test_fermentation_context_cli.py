@@ -96,3 +96,44 @@ def test_changed_binding_is_reported_not_silently_used(tmp_path, monkeypatch):
     assert shown.exit_code == 0
     assert "binding_status=changed" in shown.stdout
     assert PILL in shown.stdout and new_pill not in shown.stdout
+
+
+def test_context_phase_appends_offline_and_show_labels_latest_recorded(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _bind()
+    assert runner.invoke(app, _start_args()).exit_code == 0
+
+    result = runner.invoke(
+        app,
+        [
+            "vessel",
+            "context",
+            "phase",
+            "tank",
+            "--phase",
+            "cold-crash",
+            "--start-date",
+            "2026-09-06",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "No credentials, API, telemetry, or device command" in result.stdout
+    shown = runner.invoke(app, ["vessel", "context", "show", "tank"])
+    assert shown.exit_code == 0
+    assert "latest_recorded_phase=cold-crash" in shown.stdout
+    assert "phase_history=fermentation@2026-08-29,cold-crash@2026-09-06" in shown.stdout
+
+
+def test_context_show_does_not_write_legacy_phase_member(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    _bind()
+    assert runner.invoke(app, _start_args()).exit_code == 0
+    path = tmp_path / "fermentation-contexts.json"
+    original = path.read_bytes()
+
+    shown = runner.invoke(app, ["vessel", "context", "show", "tank"])
+
+    assert shown.exit_code == 0
+    assert "latest_recorded_phase=fermentation" in shown.stdout
+    assert "phase_history=fermentation@2026-08-29" in shown.stdout
+    assert path.read_bytes() == original

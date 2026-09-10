@@ -84,6 +84,7 @@ for path in (
     "vessel telemetry",
     "vessel status",
     "vessel context start",
+    "vessel context phase",
     "vessel context show",
     "vessel context close",
 ):
@@ -98,6 +99,7 @@ for args in (
     ["vessel", "telemetry", "--help"],
     ["vessel", "status", "--help"],
     ["vessel", "context", "start", "--help"],
+    ["vessel", "context", "phase", "--help"],
     ["vessel", "context", "show", "--help"],
     ["vessel", "context", "close", "--help"],
 ):

@@ -106,6 +106,7 @@ forge-companion vessel show fermenter-1
 forge-companion vessel context start fermenter-1 --batch "Example batch" \
   --original-gravity-sg 1.077 --expected-final-gravity-sg 1.015 --yeast US-05 \
   --start-date 2026-08-29 --authoritative-temperature-role hydrometer
+forge-companion vessel context phase fermenter-1 --phase cold-crash --start-date 2026-09-06
 forge-companion vessel context show fermenter-1
 forge-companion vessel context close fermenter-1
 forge-companion vessel status fermenter-1
@@ -150,6 +151,22 @@ unknown members, duplicate keys or IDs, multiple active records for a vessel, un
 non-finite JSON numbers, excessive recursion, and oversized input. Writes use an exclusive lock and
 atomic replacement. Recovery follows the vessel-lock procedure below, using only the exact
 `.fermentation-contexts.json.lock` file after confirming no context writer is running.
+
+`context phase` appends to the active batch only. The allowlist is deliberately limited to
+`fermentation` and `cold-crash`; absence of another phase does not mean packaging/filling is safe.
+The initial fermentation event is derived from the context's existing date and remains date-only.
+Explicit transitions must be later than the preceding date, not in the future, and neither a no-op
+nor a reverse or same-day ambiguous transition. `context show` reports ordered `phase_history` and
+`latest_recorded_phase`; “recorded” is historical metadata, not a claim about the vessel's current
+state. Times and timezone remain unknown, so measurements on a transition date are unassigned.
+Density stability during cold crash cannot prove fermentation is complete, and no trend or SG
+advisor logic is performed.
+
+The experimental v1 store accepts an optional `phase_history` array. Older v1 records without it
+remain valid and are read as having only the derived fermentation event; reads never rewrite them.
+An explicit phase mutation adds the member only to that context. The store remains bounded and
+strictly rejects excessive events, unknown fields or phases, duplicate keys, invalid types/dates,
+and inconsistent ordering.
 
 If the process or computer stops abruptly during `vessel bind`, the lock can remain after the writer
 has gone. On Windows, the default lock path is

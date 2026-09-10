@@ -6,8 +6,11 @@ import pytest
 import forge_companion.fermentation_contexts as context_module
 from forge_companion.fermentation_contexts import (
     MAX_CONTEXT_FILE_BYTES,
+    MAX_PHASE_EVENTS,
     FermentationContextBusyError,
+    append_fermentation_phase,
     close_fermentation_context,
+    context_phase_history,
     load_fermentation_contexts,
     start_fermentation_context,
 )
@@ -248,3 +251,158 @@ def test_lock_cleanup_and_atomic_failure_preserve_file(tmp_path, monkeypatch):
     with pytest.raises(FermentationContextBusyError):
         close_fermentation_context("tank")
     assert lock.read_text(encoding="utf-8") == "other"
+
+
+def test_v1_context_without_phases_has_derived_date_only_fermentation_event(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    created = _start()
+    path = tmp_path / "fermentation-contexts.json"
+    original = path.read_bytes()
+
+    loaded = load_fermentation_contexts()[0]
+
+    assert "phase_history" not in loaded
+    assert context_phase_history(loaded) == [{"phase": "fermentation", "start_date": "2026-08-29"}]
+    assert created["context_id"] == loaded["context_id"]
+    assert path.read_bytes() == original
+
+
+def test_append_phase_preserves_order_and_earlier_history(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    created = _start()
+
+    updated = append_fermentation_phase(
+        vessel_id="tank", phase="cold-crash", start_date="2026-09-06"
+    )
+
+    assert updated["context_id"] == created["context_id"]
+    assert context_phase_history(updated) == [
+        {"phase": "fermentation", "start_date": "2026-08-29"},
+        {"phase": "cold-crash", "start_date": "2026-09-06"},
+    ]
+    assert load_fermentation_contexts() == [updated]
+
+
+@pytest.mark.parametrize(
+    "phase,start_date,message",
+    [
+        ("conditioning", "2026-09-06", "Phase"),
+        ("cold-crash", "2026-08-28", "after"),
+        ("cold-crash", "2026-08-29", "same day"),
+        ("cold-crash", "9999-12-31", "future"),
+    ],
+)
+def test_append_phase_rejects_invalid_enum_order_and_future(
+    tmp_path, monkeypatch, phase, start_date, message
+):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    _start()
+    path = tmp_path / "fermentation-contexts.json"
+    original = path.read_bytes()
+
+    with pytest.raises(ValueError, match=message):
+        append_fermentation_phase(vessel_id="tank", phase=phase, start_date=start_date)
+
+    assert path.read_bytes() == original
+    assert not (tmp_path / ".fermentation-contexts.json.lock").exists()
+
+
+def test_append_rejects_noop_and_requires_active_context(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    _start()
+    with pytest.raises(ValueError, match="no-op"):
+        append_fermentation_phase(vessel_id="tank", phase="fermentation", start_date="2026-09-01")
+    append_fermentation_phase(vessel_id="tank", phase="cold-crash", start_date="2026-09-06")
+    with pytest.raises(ValueError, match="no-op"):
+        append_fermentation_phase(vessel_id="tank", phase="cold-crash", start_date="2026-09-07")
+    with pytest.raises(ValueError, match="Reverse"):
+        append_fermentation_phase(vessel_id="tank", phase="fermentation", start_date="2026-09-08")
+    close_fermentation_context("tank")
+    with pytest.raises(ValueError, match="no active"):
+        append_fermentation_phase(vessel_id="tank", phase="cold-crash", start_date="2026-09-06")
+
+
+def test_phase_history_does_not_bleed_across_close_and_switch(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    first = _start()
+    append_fermentation_phase(vessel_id="tank", phase="cold-crash", start_date="2026-09-06")
+    second = _start(batch_display_name="Second", fermentation_start_date="2026-09-07", switch=True)
+    contexts = load_fermentation_contexts()
+
+    assert contexts[0]["context_id"] == first["context_id"]
+    assert len(context_phase_history(contexts[0])) == 2
+    assert contexts[1]["context_id"] == second["context_id"]
+    assert context_phase_history(contexts[1]) == [
+        {"phase": "fermentation", "start_date": "2026-09-07"}
+    ]
+
+
+@pytest.mark.parametrize(
+    "phase_history",
+    [
+        {},
+        [{"phase": "warm", "start_date": "2026-09-06"}],
+        [{"phase": "cold-crash", "start_date": "bad"}],
+        [{"phase": "cold-crash", "start_date": "2026-09-06", "extra": True}],
+        [1],
+    ],
+)
+def test_malformed_persisted_phase_history_fails_closed(tmp_path, monkeypatch, phase_history):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    _start()
+    path = tmp_path / "fermentation-contexts.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["contexts"][0]["phase_history"] = phase_history
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_fermentation_contexts()
+
+
+def test_persisted_phase_history_rejects_duplicate_key_and_bound(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    _start()
+    path = tmp_path / "fermentation-contexts.json"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        '"status": "active"',
+        '"phase_history": [{"phase":"cold-crash","phase":"cold-crash",'
+        '"start_date":"2026-09-06"}], "status": "active"',
+    )
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="Duplicate"):
+        load_fermentation_contexts()
+
+    payload = json.loads(
+        text.replace('"phase":"cold-crash","phase":"cold-crash",', '"phase":"cold-crash",')
+    )
+    payload["contexts"][0]["phase_history"] = [
+        {"phase": "cold-crash", "start_date": "2026-09-06"}
+    ] * (MAX_PHASE_EVENTS + 1)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="too many"):
+        load_fermentation_contexts()
+
+
+def test_phase_append_atomic_failure_cleans_lock_and_preserves_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
+    bind_vessel(_binding())
+    _start()
+    path = tmp_path / "fermentation-contexts.json"
+    original = path.read_bytes()
+
+    def fail_write(*args, **kwargs):
+        raise OSError("synthetic")
+
+    monkeypatch.setattr(context_module, "atomic_write_text", fail_write)
+    with pytest.raises(OSError):
+        append_fermentation_phase(vessel_id="tank", phase="cold-crash", start_date="2026-09-06")
+    assert path.read_bytes() == original
+    assert not (tmp_path / ".fermentation-contexts.json.lock").exists()
