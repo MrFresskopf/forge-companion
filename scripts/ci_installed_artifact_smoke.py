@@ -83,6 +83,9 @@ for path in (
     "rapt devices",
     "vessel telemetry",
     "vessel status",
+    "vessel context start",
+    "vessel context show",
+    "vessel context close",
 ):
     if contract["commands"][path]["stability"] != "experimental":
         raise AssertionError("RAPT surface absent or not experimental")
@@ -94,6 +97,9 @@ for args in (
     ["vessel", "--help"],
     ["vessel", "telemetry", "--help"],
     ["vessel", "status", "--help"],
+    ["vessel", "context", "start", "--help"],
+    ["vessel", "context", "show", "--help"],
+    ["vessel", "context", "close", "--help"],
 ):
     result = CliRunner().invoke(app, args)
     if result.exit_code != 0:

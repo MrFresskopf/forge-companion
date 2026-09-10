@@ -107,6 +107,11 @@ hardware or evaluates automation rules. This experimental metadata is stored sep
 credentials. See the
 [vessel command guide](docs/COMMANDS.md#vessel-experimental-unreleased).
 
+The experimental `vessel context start/show/close` lifecycle stores offline batch context separately
+from vessel bindings. Starting requires strict SG values, an ISO calendar date, and an explicit
+authoritative temperature-device role. It never imports old brew readings or treats the date as an
+exact telemetry boundary; switching an active context must be explicit and retains the prior record.
+
 Use `forge-companion vessel status VESSEL_ID` for a bounded, read-only 48-hour freshness check. Its
 provisional warning defaults are 90 minutes for the Pill and 30 minutes for the controller; they are
 not actuator permission and are never written to configuration.
@@ -144,6 +149,7 @@ documented collection and token scope.
 | Fire an armed Cloud one-shot | `forge-companion hopper fire PLAN` | 1 set POST + 2 status POSTs |
 | Store or inspect BrewForge authentication | `forge-companion auth ...` | Offline |
 | Bind or inspect local vessel/device metadata | `forge-companion vessel bind/list/show ...` | Offline |
+| Start, inspect, or close vessel fermentation context | `forge-companion vessel context ...` | Offline |
 | Read both devices bound to a vessel | `forge-companion vessel telemetry ...` | 2 RAPT telemetry GET requests |
 | Check freshness of both bound devices | `forge-companion vessel status VESSEL_ID` | 2 RAPT telemetry GET requests |
 | Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |

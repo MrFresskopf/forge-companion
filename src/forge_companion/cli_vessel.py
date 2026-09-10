@@ -10,6 +10,13 @@ import typer
 
 from forge_companion import rapt_credentials
 from forge_companion.cli_rapt import _profile_for_api, _utc_datetime
+from forge_companion.fermentation_contexts import (
+    FermentationContextBusyError,
+    close_fermentation_context,
+    context_binding_status,
+    load_fermentation_contexts,
+    start_fermentation_context,
+)
 from forge_companion.rapt import RaptClient, RaptError
 from forge_companion.telemetry import (
     DeviceKind,
@@ -20,6 +27,8 @@ from forge_companion.telemetry import (
 from forge_companion.vessels import VesselBusyError, bind_vessel, load_vessels
 
 vessel_app = typer.Typer(help="Experimental vessel bindings and read-only telemetry.")
+context_app = typer.Typer(help="Experimental offline fermentation contexts.")
+vessel_app.add_typer(context_app, name="context")
 
 STATUS_WINDOW_HOURS = 48
 DEFAULT_PILL_MAX_AGE_MINUTES = 90.0
@@ -89,6 +98,97 @@ def vessel_show(vessel_id: str) -> None:
             return
     typer.echo("Vessel not found.", err=True)
     raise typer.Exit(1)
+
+
+def _context_line(item: dict[str, object], *, binding_status: str) -> str:
+    sources = item["source_devices"]
+    if not isinstance(sources, dict):
+        raise ValueError("invalid source devices")
+    fields = [
+        f"context_id={item['context_id']}",
+        f"vessel_id={item['vessel_id']}",
+        f"status={item['status']}",
+        f"batch={item['batch_display_name']}",
+        f"original_gravity_sg={item['original_gravity_sg']}",
+        f"expected_final_gravity_sg={item['expected_final_gravity_sg']}",
+        f"yeast={item['yeast']}",
+        f"fermentation_start_date={item['fermentation_start_date']}",
+        "start_instant=unavailable",
+        "same_day_telemetry_attribution=unavailable",
+        f"authoritative_temperature_role={item['authoritative_temperature_role']}",
+        f"hydrometer={sources['hydrometer']}",
+        f"temperature_controller={sources['temperature_controller']}",
+        f"binding_status={binding_status}",
+    ]
+    return " ".join(fields)
+
+
+@context_app.command("start")
+def context_start(
+    vessel_id: str,
+    batch: Annotated[str, typer.Option("--batch")],
+    original_gravity_sg: Annotated[str, typer.Option("--original-gravity-sg")],
+    expected_final_gravity_sg: Annotated[str, typer.Option("--expected-final-gravity-sg")],
+    yeast: Annotated[str, typer.Option("--yeast")],
+    start_date: Annotated[str, typer.Option("--start-date")],
+    authoritative_temperature_role: Annotated[
+        str, typer.Option("--authoritative-temperature-role")
+    ],
+    switch: Annotated[bool, typer.Option("--switch")] = False,
+) -> None:
+    """Start a local context; --switch explicitly closes the prior active context."""
+    try:
+        item = start_fermentation_context(
+            vessel_id=vessel_id,
+            batch_display_name=batch,
+            original_gravity_sg=original_gravity_sg,
+            expected_final_gravity_sg=expected_final_gravity_sg,
+            yeast=yeast,
+            fermentation_start_date=start_date,
+            authoritative_temperature_role=authoritative_temperature_role,
+            switch=switch,
+        )
+    except (FermentationContextBusyError, OSError, TypeError, ValueError):
+        typer.echo("Context start failed: invalid input, conflict, or local file.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"Fermentation context started: {item['context_id']}")
+    typer.echo("No credentials, API, telemetry, or device command was used.")
+
+
+@context_app.command("show")
+def context_show(
+    vessel_id: str,
+    show_all: Annotated[bool, typer.Option("--all")] = False,
+) -> None:
+    """Show the active context, or retained history with --all."""
+    try:
+        contexts = [item for item in load_fermentation_contexts() if item["vessel_id"] == vessel_id]
+        if not show_all:
+            contexts = [item for item in contexts if item["status"] == "active"]
+        if not contexts:
+            raise ValueError("not found")
+        bindings = load_vessels()
+        lines = [
+            _context_line(item, binding_status=context_binding_status(item, bindings))
+            for item in contexts
+        ]
+    except (OSError, TypeError, ValueError):
+        typer.echo("Context lookup failed: not found or local file is invalid.", err=True)
+        raise typer.Exit(1) from None
+    for line in lines:
+        typer.echo(line)
+
+
+@context_app.command("close")
+def context_close(vessel_id: str) -> None:
+    """Explicitly close and retain a vessel's active context."""
+    try:
+        item = close_fermentation_context(vessel_id)
+    except (FermentationContextBusyError, OSError, TypeError, ValueError):
+        typer.echo("Context close failed: no active context or local file is invalid.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"Fermentation context closed and retained: {item['context_id']}")
+    typer.echo("No credentials, API, telemetry, or device command was used.")
 
 
 def _read_vessel_streams(
