@@ -19,6 +19,7 @@ from forge_companion.vessels import load_vessels
 SCHEMA_VERSION = "forge-companion-fermentation-contexts-v1"
 MAX_CONTEXT_FILE_BYTES = 256 * 1024
 MAX_CONTEXTS = 1024
+MAX_PHASE_EVENTS = 64
 MAX_DISPLAY_LENGTH = 120
 SG_MIN = Decimal("1.000")
 SG_MAX = Decimal("1.200")
@@ -39,7 +40,10 @@ _CONTEXT_FIELDS = {
     "source_devices",
     "status",
 }
+_OPTIONAL_CONTEXT_FIELDS = {"phase_history"}
 _SOURCE_FIELDS = {"hydrometer", "temperature_controller"}
+_PHASE_EVENT_FIELDS = {"phase", "start_date"}
+_PHASES = {"fermentation", "cold-crash"}
 _VESSEL_ID = re.compile(r"[a-z0-9](?:[a-z0-9_-]{0,63})\Z")
 _SG = re.compile(r"1\.\d{3}\Z")
 _MULTILINE_CHARACTERS = frozenset("\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029")
@@ -128,8 +132,48 @@ def _calendar_date(value: object) -> str:
     return value
 
 
+def _validate_phase_history(value: object, fermentation_start_date: str) -> list[Context]:
+    if not isinstance(value, list):
+        raise FermentationContextValidationError("Phase history must be a list.")
+    if len(value) > MAX_PHASE_EVENTS:
+        raise FermentationContextValidationError("Phase history contains too many events.")
+    events: list[Context] = []
+    previous_phase = "fermentation"
+    previous_date = date.fromisoformat(fermentation_start_date)
+    for raw_event in value:
+        if not isinstance(raw_event, dict) or set(raw_event) != _PHASE_EVENT_FIELDS:
+            raise FermentationContextValidationError("Phase event has an unsupported shape.")
+        phase = raw_event["phase"]
+        if not isinstance(phase, str) or phase not in _PHASES:
+            raise FermentationContextValidationError("Phase is not supported.")
+        start_date = _calendar_date(raw_event["start_date"])
+        parsed_date = date.fromisoformat(start_date)
+        if parsed_date > date.today():
+            raise FermentationContextValidationError("Phase start date cannot be in the future.")
+        if parsed_date == previous_date:
+            raise FermentationContextValidationError(
+                "Phase transitions on the same day are ambiguous."
+            )
+        if parsed_date < previous_date:
+            raise FermentationContextValidationError(
+                "Phase start date must be after the previous recorded phase."
+            )
+        if phase == previous_phase:
+            raise FermentationContextValidationError("Phase transition is a no-op.")
+        if previous_phase == "cold-crash" and phase == "fermentation":
+            raise FermentationContextValidationError("Reverse phase transition is not supported.")
+        events.append({"phase": phase, "start_date": start_date})
+        previous_phase = phase
+        previous_date = parsed_date
+    return events
+
+
 def _validate_context(value: object) -> Context:
-    if not isinstance(value, dict) or set(value) != _CONTEXT_FIELDS:
+    if (
+        not isinstance(value, dict)
+        or not set(value) >= _CONTEXT_FIELDS
+        or not set(value) <= _CONTEXT_FIELDS | _OPTIONAL_CONTEXT_FIELDS
+    ):
         raise FermentationContextValidationError("Context has an unsupported shape.")
     sources = value["source_devices"]
     if not isinstance(sources, dict) or set(sources) != _SOURCE_FIELDS:
@@ -156,14 +200,15 @@ def _validate_context(value: object) -> Context:
     controller = _uuid(sources["temperature_controller"], "Temperature controller ID")
     if hydrometer == controller:
         raise FermentationContextValidationError("Context source devices must be distinct.")
-    return {
+    fermentation_start_date = _calendar_date(value["fermentation_start_date"])
+    result: Context = {
         "context_id": _uuid(value["context_id"], "Context ID"),
         "vessel_id": _vessel(value["vessel_id"]),
         "batch_display_name": _display(value["batch_display_name"], "Batch display name"),
         "original_gravity_sg": original,
         "expected_final_gravity_sg": expected,
         "yeast": _display(value["yeast"], "Yeast"),
-        "fermentation_start_date": _calendar_date(value["fermentation_start_date"]),
+        "fermentation_start_date": fermentation_start_date,
         "start_instant": None,
         "same_day_telemetry_attribution": "unavailable",
         "authoritative_temperature_role": role,
@@ -173,6 +218,26 @@ def _validate_context(value: object) -> Context:
         },
         "status": status,
     }
+    if "phase_history" in value:
+        result["phase_history"] = _validate_phase_history(
+            value["phase_history"], fermentation_start_date
+        )
+    return result
+
+
+def context_phase_history(context: Context) -> list[Context]:
+    """Return the derived fermentation event followed by explicit transitions."""
+    validated = _validate_context(context)
+    explicit = validated.get("phase_history", [])
+    if not isinstance(explicit, list):
+        raise FermentationContextValidationError("Phase history must be a list.")
+    return [
+        {
+            "phase": "fermentation",
+            "start_date": validated["fermentation_start_date"],
+        },
+        *explicit,
+    ]
 
 
 def _validate_payload(payload: object) -> list[Context]:
@@ -339,6 +404,38 @@ def close_fermentation_context(vessel_id: str) -> Context:
         active["status"] = "closed"
         _write_contexts(contexts)
         return active
+
+
+def append_fermentation_phase(*, vessel_id: str, phase: str, start_date: str) -> Context:
+    """Append an explicit date-only phase transition to one active context."""
+    vessel_id = _vessel(vessel_id)
+    if not isinstance(phase, str) or phase not in _PHASES:
+        raise FermentationContextValidationError("Phase is not supported.")
+    start_date = _calendar_date(start_date)
+    if date.fromisoformat(start_date) > date.today():
+        raise FermentationContextValidationError("Phase start date cannot be in the future.")
+    with _contexts_lock():
+        contexts = load_fermentation_contexts()
+        active = next(
+            (
+                item
+                for item in contexts
+                if item["vessel_id"] == vessel_id and item["status"] == "active"
+            ),
+            None,
+        )
+        if active is None:
+            raise FermentationContextValidationError("Vessel has no active context.")
+        stored_history = active.get("phase_history", [])
+        if not isinstance(stored_history, list):
+            raise FermentationContextValidationError("Phase history must be a list.")
+        explicit = list(stored_history)
+        explicit.append({"phase": phase, "start_date": start_date})
+        candidate = {**active, "phase_history": explicit}
+        candidate = _validate_context(candidate)
+        contexts[contexts.index(active)] = candidate
+        _write_contexts(contexts)
+        return candidate
 
 
 def context_binding_status(context: Context, bindings: list[dict[str, str]]) -> str:

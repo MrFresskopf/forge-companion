@@ -1025,6 +1025,16 @@
       ],
       "stability": "experimental"
     },
+    "vessel context phase": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "phase", "kind": "option", "spellings": ["--phase"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "start_date", "kind": "option", "spellings": ["--start-date"], "required": true, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
+    },
     "vessel context show": {
       "kind": "command",
       "hidden": false,

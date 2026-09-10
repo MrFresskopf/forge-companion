@@ -205,6 +205,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "vessel bind",
         "vessel context",
         "vessel context close",
+        "vessel context phase",
         "vessel context show",
         "vessel context start",
         "vessel list",

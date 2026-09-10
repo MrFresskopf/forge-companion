@@ -12,8 +12,10 @@ from forge_companion import rapt_credentials
 from forge_companion.cli_rapt import _profile_for_api, _utc_datetime
 from forge_companion.fermentation_contexts import (
     FermentationContextBusyError,
+    append_fermentation_phase,
     close_fermentation_context,
     context_binding_status,
+    context_phase_history,
     load_fermentation_contexts,
     start_fermentation_context,
 )
@@ -104,6 +106,9 @@ def _context_line(item: dict[str, object], *, binding_status: str) -> str:
     sources = item["source_devices"]
     if not isinstance(sources, dict):
         raise ValueError("invalid source devices")
+    phases = context_phase_history(item)
+    latest = phases[-1]
+    phase_text = ",".join(f"{event['phase']}@{event['start_date']}" for event in phases)
     fields = [
         f"context_id={item['context_id']}",
         f"vessel_id={item['vessel_id']}",
@@ -119,6 +124,8 @@ def _context_line(item: dict[str, object], *, binding_status: str) -> str:
         f"hydrometer={sources['hydrometer']}",
         f"temperature_controller={sources['temperature_controller']}",
         f"binding_status={binding_status}",
+        f"latest_recorded_phase={latest['phase']}",
+        f"phase_history={phase_text}",
     ]
     return " ".join(fields)
 
@@ -177,6 +184,25 @@ def context_show(
         raise typer.Exit(1) from None
     for line in lines:
         typer.echo(line)
+
+
+@context_app.command("phase")
+def context_phase(
+    vessel_id: str,
+    phase: Annotated[str, typer.Option("--phase")],
+    start_date: Annotated[str, typer.Option("--start-date")],
+) -> None:
+    """Append a recorded date-only phase transition to the active context."""
+    try:
+        item = append_fermentation_phase(vessel_id=vessel_id, phase=phase, start_date=start_date)
+    except (FermentationContextBusyError, OSError, TypeError, ValueError):
+        typer.echo(
+            "Context phase failed: invalid transition, no active context, or local file.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    typer.echo(f"Fermentation phase recorded: {item['context_id']} {phase}@{start_date}")
+    typer.echo("No credentials, API, telemetry, or device command was used.")
 
 
 @context_app.command("close")
