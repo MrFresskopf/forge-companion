@@ -114,6 +114,7 @@ forge-companion vessel status fermenter-1 --pill-max-age-minutes 120 --controlle
 forge-companion vessel telemetry fermenter-1 --start 2026-09-08T18:00:00Z --end 2026-09-08T19:00:00Z
 forge-companion vessel sg-trend fermenter-1 --start 2026-09-01T00:00:00Z \
   --end 2026-09-08T00:00:00Z --phase-timezone Europe/Berlin
+forge-companion vessel overview fermenter-1
 ```
 
 Names are lowercase ASCII identifiers of at most 64 characters (`a-z`, `0-9`, `_`, and `-`) and
@@ -239,6 +240,18 @@ are successful no-usable-observation reports; request or response failure emits 
 direction is descriptive, not regression or evidence that fermentation is complete. Cold-crash
 stability is not evidence of completion, and the command never recommends bottling, switching, or a
 safety action.
+
+`overview` is one read-only summary of a vessel's active context plus its recent device
+observations. It requires an existing active context whose captured snapshot still matches the
+binding, and fails closed before resolving credentials when that context or matching binding is
+unavailable. It retrieves both bound streams through one shared client over the same fixed,
+inclusive recent 48-hour window as `status`, and prints nothing until every stream validates, so a
+request or validation failure emits no partial report. It reuses the same provisional warning
+thresholds, exact 100 ns timestamps, integer-nanosecond ages, and `CURRENT`/`STALE`/`NO_DATA`
+vocabulary without combining temperatures. Unlike `status`, `overview` accepts no threshold flags
+and always applies the default Pill and controller warning thresholds. `latest_recorded_phase` is
+retained historical metadata, not a claim that a phase is currently active; the command makes no
+claim that fermentation is complete or that packaging, filling, or any actuator is safe or ready.
 
 ## `report`
 

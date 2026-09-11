@@ -1065,6 +1065,14 @@
       "parameters": [],
       "stability": "experimental"
     },
+    "vessel overview": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
+    },
     "vessel show": {
       "kind": "command",
       "hidden": false,
