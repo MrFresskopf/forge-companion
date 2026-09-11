@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from math import isfinite
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 import typer
@@ -20,6 +21,7 @@ from forge_companion.fermentation_contexts import (
     start_fermentation_context,
 )
 from forge_companion.rapt import RaptClient, RaptError
+from forge_companion.sg_trend import TrendSegment, build_trend_report
 from forge_companion.telemetry import (
     DeviceKind,
     RaptTelemetrySource,
@@ -36,6 +38,7 @@ STATUS_WINDOW_HOURS = 48
 DEFAULT_PILL_MAX_AGE_MINUTES = 90.0
 DEFAULT_CONTROLLER_MAX_AGE_MINUTES = 30.0
 MAX_FRESHNESS_MINUTES = 2880.0
+MAX_TREND_WINDOW = timedelta(days=7)
 
 
 @vessel_app.callback()
@@ -232,6 +235,19 @@ def _read_vessel_streams(
             client=client, kind=DeviceKind.TEMPERATURE_CONTROLLER
         ).get_readings(device_id=binding["temperature_controller"], start=start, end=end)
     return hydrometer, controller
+
+
+def _read_hydrometer(
+    *,
+    profile: rapt_credentials.RaptProfile,
+    device_id: str,
+    start: datetime,
+    end: datetime,
+) -> tuple[TelemetryReading, ...]:
+    with RaptClient(username=profile.username, api_secret=profile.api_secret) as client:
+        return RaptTelemetrySource(client=client, kind=DeviceKind.HYDROMETER).get_readings(
+            device_id=device_id, start=start, end=end
+        )
 
 
 def _vessel_reading_line(reading: TelemetryReading, *, gravity_interpretation: str) -> str:
@@ -438,4 +454,122 @@ def vessel_telemetry(
                     gravity_interpretation=binding["gravity_interpretation"],
                 )
             )
+    typer.echo("No RAPT or Shelly device command was sent.")
+
+
+def _decimal_label(value: Decimal | None) -> str:
+    return "NO_DATA" if value is None else format(value, "f")
+
+
+def _trend_segment_line(segment: TrendSegment) -> str:
+    return " ".join(
+        (
+            f"phase={segment.phase}",
+            f"segment={segment.sequence}",
+            f"observations={segment.observations}",
+            f"missing_sg={segment.missing_sg}",
+            f"first_at={segment.first_at or 'NO_DATA'}",
+            f"latest_at={segment.latest_at or 'NO_DATA'}",
+            f"first_sg={_decimal_label(segment.first_sg)}",
+            f"latest_sg={_decimal_label(segment.latest_sg)}",
+            f"delta_sg={_decimal_label(segment.delta_sg)}",
+            "observed_duration_ns="
+            f"{segment.duration_ns if segment.duration_ns is not None else 'NO_DATA'}",
+            f"observed_rate_sg_per_day={_decimal_label(segment.rate_sg_per_day)}",
+            f"max_gap_ns={segment.max_gap_ns if segment.max_gap_ns is not None else 'NO_DATA'}",
+            f"gap_status={segment.gap_status}",
+            f"coverage_at_query_end={segment.coverage_status}",
+            f"sg_status={segment.sg_status}",
+            f"endpoint_trend={segment.endpoint_trend}",
+        )
+    )
+
+
+@vessel_app.command("sg-trend")
+def vessel_sg_trend(
+    vessel_id: str,
+    start: Annotated[str, typer.Option("--start", help="Timezone-aware inclusive start.")],
+    end: Annotated[
+        str, typer.Option("--end", help="Timezone-aware inclusive end (maximum 7 days).")
+    ],
+    phase_timezone: Annotated[
+        str,
+        typer.Option(
+            "--phase-timezone",
+            help="Required IANA zone used only to identify ambiguous date-only boundary days.",
+        ),
+    ],
+) -> None:
+    """Describe endpoint SG trends by recorded phase; never infer completion or readiness."""
+    try:
+        start_at = _utc_datetime(start)
+        end_at = _utc_datetime(end)
+        if start_at >= end_at or end_at - start_at > MAX_TREND_WINDOW:
+            raise ValueError("invalid trend interval")
+        timezone = ZoneInfo(phase_timezone)
+        bindings = load_vessels()
+        binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
+        contexts = [
+            item
+            for item in load_fermentation_contexts()
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        ]
+        if len(contexts) != 1 or binding["gravity_interpretation"] != "sg-times-1000":
+            raise ValueError("trend precondition failed")
+        context = contexts[0]
+        if context_binding_status(context, bindings) != "current":
+            raise ValueError("context binding drift")
+        sources = context["source_devices"]
+        if not isinstance(sources, dict) or sources.get("hydrometer") != binding["hydrometer"]:
+            raise ValueError("invalid context source")
+        phases = context_phase_history(context)
+    except (OSError, StopIteration, TypeError, ValueError, ZoneInfoNotFoundError):
+        typer.echo(
+            "Vessel SG trend failed: interval, IANA phase timezone, active context, "
+            "current snapshotted binding, or SG interpretation is invalid.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+
+    profile = _profile_for_api()
+    try:
+        readings = _read_hydrometer(
+            profile=profile,
+            device_id=binding["hydrometer"],
+            start=start_at,
+            end=end_at,
+        )
+        report = build_trend_report(
+            readings,
+            phase_history=phases,
+            phase_timezone=timezone,
+            query_end=end_at,
+        )
+    except (RaptError, TelemetryValidationError, httpx.HTTPError, OSError, TypeError, ValueError):
+        typer.echo("Vessel SG trend failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+
+    typer.echo("Vessel SG trend read-only (experimental).")
+    typer.echo(f"Vessel: {binding['vessel_id']}")
+    typer.echo(f"Window: {start_at.isoformat()} / {end_at.isoformat()} (maximum 7 days)")
+    typer.echo(
+        f"Phase timezone: {phase_timezone} "
+        "(date interpretation only; no phase start clock is known)"
+    )
+    typer.echo(
+        f"excluded_boundary_observations={report.excluded_boundary_observations} "
+        f"unattributed_before_start={report.unattributed_before_start}"
+    )
+    if not report.segments:
+        typer.echo("No usable phase-attributed observations in the requested window.")
+    for segment in report.segments:
+        typer.echo(_trend_segment_line(segment))
+    typer.echo(
+        "Quality policy: gaps and query-end coverage over 90 minutes make endpoint trend NO_TREND; "
+        "coverage is historical-window coverage, not live freshness."
+    )
+    typer.echo(
+        "No fermentation-complete, bottling, switching, or safety conclusion is made; "
+        "cold-crash stability is not evidence that fermentation is complete."
+    )
     typer.echo("No RAPT or Shelly device command was sent.")

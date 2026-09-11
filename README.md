@@ -118,6 +118,12 @@ Use `forge-companion vessel status VESSEL_ID` for a bounded, read-only 48-hour f
 provisional warning defaults are 90 minutes for the Pill and 30 minutes for the controller; they are
 not actuator permission and are never written to configuration.
 
+`forge-companion vessel sg-trend VESSEL_ID --start TIME --end TIME --phase-timezone IANA_ZONE`
+is a focused experimental report over at most seven days. It requires the active context's
+snapshotted binding to remain current and explicitly interpreted as `sg-times-1000`, reads only the
+bound Pill, excludes date-only phase boundary days, and keeps fermentation and cold-crash separate.
+It never concludes that fermentation is complete or that bottling, switching, or an action is safe.
+
 ### Optional: create a fermentation report
 
 ```bash
@@ -154,6 +160,7 @@ documented collection and token scope.
 | Start, append phase history, inspect, or close fermentation context | `forge-companion vessel context ...` | Offline |
 | Read both devices bound to a vessel | `forge-companion vessel telemetry ...` | 2 RAPT telemetry GET requests |
 | Check freshness of both bound devices | `forge-companion vessel status VESSEL_ID` | 2 RAPT telemetry GET requests |
+| Describe SG endpoints by recorded phase | `forge-companion vessel sg-trend ...` | 1 RAPT Pill telemetry GET request |
 | Create the standard visual report | `forge-companion report` | 2 GET requests + explicit page changes |
 | Create a scripted report | `forge-companion report BREW_ID` | 1 GET request |
 | Save supported collections locally | `forge-companion snapshot` | Paginated GET requests |

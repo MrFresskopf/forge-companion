@@ -15,6 +15,7 @@ dependencies = [
   "keyring>=25,<27",
   "pywin32>=312; platform_system == 'Windows'",
   "typer>=0.12,<1",
+  "tzdata>=2026.1; platform_system == 'Windows'",
 ]
 
 [project.urls]

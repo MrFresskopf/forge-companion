@@ -28,6 +28,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   90-minute Pill and 30-minute controller warning thresholds. It preserves exact 100 ns freshness
   boundaries, reports separate temperatures and `CURRENT`/`STALE`/`NO_DATA` states, emits no partial
   status on retrieval failure, writes no metadata, and grants no actuator permission.
+- Experimental `vessel sg-trend` provides a maximum-seven-day, hydrometer-only descriptive SG report
+  for a current active context and unchanged snapshotted `sg-times-1000` binding. It excludes ambiguous
+  local calendar boundary days using a required IANA timezone, preserves exact 100 ns durations and
+  gaps, keeps phase segments separate, and makes no completion, bottling, switching, or safety claim.
 
 ### Fixed
 

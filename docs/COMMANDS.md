@@ -112,6 +112,8 @@ forge-companion vessel context close fermenter-1
 forge-companion vessel status fermenter-1
 forge-companion vessel status fermenter-1 --pill-max-age-minutes 120 --controller-max-age-minutes 45
 forge-companion vessel telemetry fermenter-1 --start 2026-09-08T18:00:00Z --end 2026-09-08T19:00:00Z
+forge-companion vessel sg-trend fermenter-1 --start 2026-09-01T00:00:00Z \
+  --end 2026-09-08T00:00:00Z --phase-timezone Europe/Berlin
 ```
 
 Names are lowercase ASCII identifiers of at most 64 characters (`a-z`, `0-9`, `_`, and `-`) and
@@ -204,6 +206,39 @@ threshold is `STALE`. These thresholds are warning policy only, are not saved to
 grant no actuator permission. The command performs no writes, decisions, polling, Shelly imports, or
 device controls. Output reports each validated policy value canonically as integer-nanosecond
 `threshold_ns`; its parenthesized minutes label is for readability and is explicitly approximate.
+
+`sg-trend` is an independent, read-only Pill query, not an advisor. Both interval endpoints must be
+timezone-aware, the interval must be no more than seven days, and `--phase-timezone` must name an IANA
+zone. Inputs, one active context, an unchanged snapshotted device binding, and the current explicit
+`sg-times-1000` interpretation are checked before credentials or network access. The timezone is used
+only to map observations to local calendar dates; it does not invent a clock time for a date-only
+context or transition.
+
+Every context-start or phase-transition local calendar day is ambiguous and excluded, with the count
+reported. A reading is assigned only when its local date is strictly after a recorded start and before
+the next transition; earlier readings are counted as unattributed. Fermentation and cold-crash runs
+are separate segments and are never combined across transitions. SG is calculated from each raw
+gravity value with decimal arithmetic; upstream `gravityVelocity` is ignored.
+
+Each segment reports actual first/latest SG, endpoint delta, exact observed duration and actual-duration
+rate when two distinct timestamps exist and no SG conflicts occur, missing-SG count, maximum exact gap,
+gap status, and latest coverage relative to the requested end. The fixed experimental quality policy is
+90 minutes: a larger gap or end-relative age, a missing SG value, fewer than three distinct exact SG
+timestamps (including the final 100 ns digit), or zero duration gives `NO_TREND`. Duplicate measurements
+at the same instant do not count as additional timestamps toward this minimum.
+
+Conflicting SG values at the same exact 100 ns timestamp anywhere in a segment set `sg_status` to
+`CONFLICTING_SG_AT_TIMESTAMP` and give `NO_TREND`, suppressing both delta and rate. Only ambiguous
+first/latest SG values are suppressed; unambiguous endpoints remain reported, even when a conflict
+occurs elsewhere in the segment.
+
+Coverage is measured against the requested query end for every segment, including earlier phases.
+An earlier phase segment can therefore be `STALE` simply because that phase ended earlier, not because
+of sensor failure. This is historical query coverage, not live freshness. Empty or boundary-only results
+are successful no-usable-observation reports; request or response failure emits no partial report. Endpoint
+direction is descriptive, not regression or evidence that fermentation is complete. Cold-crash
+stability is not evidence of completion, and the command never recommends bottling, switching, or a
+safety action.
 
 ## `report`
 

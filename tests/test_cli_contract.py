@@ -210,6 +210,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "vessel context start",
         "vessel list",
         "vessel show",
+        "vessel sg-trend",
         "vessel status",
         "vessel telemetry",
     }
