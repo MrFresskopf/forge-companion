@@ -303,6 +303,13 @@ def _approximate_age_minutes(age_ns: int) -> str:
     return format(minutes, ".6f").rstrip("0").rstrip(".")
 
 
+def _freshness_status(age_ns: int, maximum_age_ns: int) -> str:
+    # Sources reject observations beyond the captured exact window.
+    if age_ns < 0:
+        raise TelemetryValidationError("RAPT telemetry lies outside the requested window")
+    return "CURRENT" if age_ns <= maximum_age_ns else "STALE"
+
+
 def _status_line(
     heading: str,
     readings: tuple[TelemetryReading, ...],
@@ -318,10 +325,7 @@ def _status_line(
         )
     latest = readings[-1]
     age_ns = _age_ns(latest, now=now)
-    # A future reading should already have failed the source's exact window validation.
-    if age_ns < 0:
-        raise TelemetryValidationError("RAPT telemetry lies outside the requested window")
-    status = "CURRENT" if age_ns <= maximum_age_ns else "STALE"
+    status = _freshness_status(age_ns, maximum_age_ns)
     temperature = (
         "temperature=NO_DATA"
         if latest.temperature_c is None
@@ -404,6 +408,86 @@ def vessel_status(
         typer.echo(line)
     typer.echo("Freshness is warning policy only; it grants no actuator permission.")
     typer.echo("No RAPT or Shelly device command was sent.")
+
+
+@vessel_app.command("overview")
+def vessel_overview(vessel_id: str) -> None:
+    """Experimental read-only active context and recent device observations."""
+    try:
+        bindings = load_vessels()
+        item = next(
+            item for item in load_fermentation_contexts()
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        )
+        if context_binding_status(item, bindings) != "current":
+            raise ValueError("context binding is not current")
+    except (OSError, StopIteration, TypeError, ValueError):
+        typer.echo(
+            "Vessel overview failed: active context or matching binding unavailable.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+
+    binding = next(binding for binding in bindings if binding["vessel_id"] == vessel_id)
+    profile = _profile_for_api()
+    try:
+        now = _utc_now()
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("invalid clock")
+        now = now.astimezone(UTC)
+        start = now - timedelta(hours=STATUS_WINDOW_HOURS)
+        hydrometer, controller = _read_vessel_streams(
+            profile=profile, binding=binding, start=start, end=now
+        )
+        latest_phase = context_phase_history(item)[-1]
+        role = item["authoritative_temperature_role"]
+        authoritative = hydrometer if role == "hydrometer" else controller
+        temperature = authoritative[-1].temperature_c if authoritative else None
+        gravity = hydrometer[-1].gravity_raw if hydrometer else None
+        gravity_line = "PILL gravity_raw=NO_DATA sg=NO_DATA"
+        if gravity is not None:
+            if binding["gravity_interpretation"] == "sg-times-1000":
+                sg = f"{gravity / 1000:.4f}"
+            else:
+                sg = "UNINTERPRETED"
+            gravity_line = f"PILL gravity_raw={gravity:.4f} sg={sg}"
+        pill_threshold = _validated_max_age(DEFAULT_PILL_MAX_AGE_MINUTES)
+        controller_threshold = _validated_max_age(DEFAULT_CONTROLLER_MAX_AGE_MINUTES)
+        temperature_status = "NO_DATA"
+        if temperature is not None:
+            temperature_status = _freshness_status(
+                _age_ns(authoritative[-1], now=now),
+                pill_threshold if role == "hydrometer" else controller_threshold,
+            )
+        lines = [
+            "Vessel overview read-only.",
+            f"Vessel: {vessel_id}",
+            f"context_id={item['context_id']} batch={item['batch_display_name']} "
+            f"yeast={item['yeast']}",
+            f"original_gravity_sg={item['original_gravity_sg']} "
+            f"expected_final_gravity_sg={item['expected_final_gravity_sg']}",
+            f"latest_recorded_phase={latest_phase['phase']} "
+            f"latest_recorded_phase_date={latest_phase['start_date']}",
+            f"Window: {start.isoformat()} / {now.isoformat()}",
+            "Provisional warning thresholds: "
+            f"Pill threshold_ns={pill_threshold} "
+            f"(~{_threshold_minutes_label(pill_threshold)} minutes); "
+            f"controller threshold_ns={controller_threshold} "
+            f"(~{_threshold_minutes_label(controller_threshold)} minutes).",
+            _status_line("HYDROMETER", hydrometer, now=now, maximum_age_ns=pill_threshold),
+            _status_line("TEMPERATURE_CONTROLLER", controller, now=now,
+                         maximum_age_ns=controller_threshold),
+            f"gravity_interpretation={binding['gravity_interpretation']} {gravity_line}",
+            f"authoritative_temperature_role={role} authoritative_temperature="
+            + ("NO_DATA" if temperature is None else f"{temperature:.1f} C")
+            + f" authoritative_temperature_status={temperature_status}",
+            "Freshness is warning policy only; it grants no actuator permission.",
+            "No RAPT or Shelly device command was sent.",
+        ]
+    except (RaptError, TelemetryValidationError, httpx.HTTPError, OSError, TypeError, ValueError):
+        typer.echo("Vessel overview failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo("\n".join(lines))
 
 
 @vessel_app.command("telemetry")
