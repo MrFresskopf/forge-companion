@@ -221,12 +221,21 @@ are separate segments and are never combined across transitions. SG is calculate
 gravity value with decimal arithmetic; upstream `gravityVelocity` is ignored.
 
 Each segment reports actual first/latest SG, endpoint delta, exact observed duration and actual-duration
-rate when two distinct timestamps exist, missing-SG count, maximum exact gap, gap status, and latest
-coverage relative to the requested end. The fixed experimental quality policy is 90 minutes: a larger
-gap or end-relative age, a missing SG value, fewer than three measurements, fewer than two distinct
-timestamps, or zero duration gives
-`NO_TREND`. This is historical query coverage, not live freshness. Empty or boundary-only results are
-successful no-usable-observation reports; request or response failure emits no partial report. Endpoint
+rate when two distinct timestamps exist and no SG conflicts occur, missing-SG count, maximum exact gap,
+gap status, and latest coverage relative to the requested end. The fixed experimental quality policy is
+90 minutes: a larger gap or end-relative age, a missing SG value, fewer than three distinct exact SG
+timestamps (including the final 100 ns digit), or zero duration gives `NO_TREND`. Duplicate measurements
+at the same instant do not count as additional timestamps toward this minimum.
+
+Conflicting SG values at the same exact 100 ns timestamp anywhere in a segment set `sg_status` to
+`CONFLICTING_SG_AT_TIMESTAMP` and give `NO_TREND`, suppressing both delta and rate. Only ambiguous
+first/latest SG values are suppressed; unambiguous endpoints remain reported, even when a conflict
+occurs elsewhere in the segment.
+
+Coverage is measured against the requested query end for every segment, including earlier phases.
+An earlier phase segment can therefore be `STALE` simply because that phase ended earlier, not because
+of sensor failure. This is historical query coverage, not live freshness. Empty or boundary-only results
+are successful no-usable-observation reports; request or response failure emits no partial report. Endpoint
 direction is descriptive, not regression or evidence that fermentation is complete. Cold-crash
 stability is not evidence of completion, and the command never recommends bottling, switching, or a
 safety action.
