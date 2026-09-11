@@ -1090,6 +1090,17 @@
       ],
       "stability": "experimental"
     },
+    "vessel sg-trend": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "start", "kind": "option", "spellings": ["--start"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "end", "kind": "option", "spellings": ["--end"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "phase_timezone", "kind": "option", "spellings": ["--phase-timezone"], "required": true, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
+    },
     "vessel telemetry": {
       "kind": "command",
       "hidden": false,

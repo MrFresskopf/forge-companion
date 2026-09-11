@@ -43,6 +43,8 @@ def test_windows_only_dependency_has_platform_marker() -> None:
     assert isinstance(dependencies, list)
     assert "pywin32>=312; platform_system == 'Windows'" in dependencies
     assert "pywin32>=312" not in dependencies
+    assert "tzdata>=2026.1; platform_system == 'Windows'" in dependencies
+    assert "tzdata>=2026.1" not in dependencies
 
 
 def test_ci_matrix_includes_macos_and_installed_artifact_smoke() -> None:
@@ -107,7 +109,15 @@ def test_installed_smoke_checks_rapt_surface_and_native_boundary() -> None:
     assert '"vessel", "telemetry", "--help"' in program
     assert '"vessel status"' in program
     assert '"vessel", "status", "--help"' in program
+    assert '"vessel sg-trend"' in program
+    assert '"vessel", "sg-trend", "--help"' in program
     assert '"vessel context start"' in program
     assert '"vessel", "context", "start", "--help"' in program
     assert '"vessel context phase"' in program
     assert '"vessel", "context", "phase", "--help"' in program
+
+
+def test_installed_smoke_checks_named_phase_timezone_lookup() -> None:
+    program = _installed_smoke_module()._verification_program()
+
+    assert 'ZoneInfo("Europe/Berlin")' in program

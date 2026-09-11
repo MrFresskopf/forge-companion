@@ -196,8 +196,8 @@ def parse_rapt_telemetry(
         temperature = number(item.get("temperature"), field="temperature")
         rssi = number(item.get("rssi"), field="RSSI")
         if kind is DeviceKind.HYDROMETER:
-            gravity = _finite_number(item.get("gravity"), field="gravity")
-            gravity_velocity_raw = _finite_number(
+            gravity = _optional_finite_number(item.get("gravity"), field="gravity")
+            gravity_velocity_raw = _optional_finite_number(
                 item.get("gravityVelocity"), field="gravity velocity"
             )
             battery = _finite_number(item.get("battery"), field="battery")

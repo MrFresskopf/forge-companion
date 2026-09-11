@@ -56,6 +56,7 @@ import json
 import os
 import platform
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import forge_companion
 import keyring
@@ -83,6 +84,7 @@ for path in (
     "rapt devices",
     "vessel telemetry",
     "vessel status",
+    "vessel sg-trend",
     "vessel context start",
     "vessel context phase",
     "vessel context show",
@@ -98,6 +100,7 @@ for args in (
     ["vessel", "--help"],
     ["vessel", "telemetry", "--help"],
     ["vessel", "status", "--help"],
+    ["vessel", "sg-trend", "--help"],
     ["vessel", "context", "start", "--help"],
     ["vessel", "context", "phase", "--help"],
     ["vessel", "context", "show", "--help"],
@@ -105,7 +108,11 @@ for args in (
 ):
     result = CliRunner().invoke(app, args)
     if result.exit_code != 0:
-        raise AssertionError("Installed RAPT help failed")
+        raise AssertionError("installed CLI help failed")
+
+phase_timezone = ZoneInfo("Europe/Berlin")
+if phase_timezone.key != "Europe/Berlin":
+    raise AssertionError("installed timezone data lookup failed")
 
 system = platform.system()
 backend = keyring.get_keyring()
