@@ -3,9 +3,102 @@
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 
 from forge_companion.fermentation import ParseResult, analyze_readings, parse_readings
+from forge_companion.sg_trend import exact_ns
+from forge_companion.telemetry import DeviceKind, TelemetryReading
+
+
+def advise_telemetry_sg(
+    readings: tuple[TelemetryReading, ...],
+    *,
+    gravity_unit: str | None,
+    now_ns: int,
+    trigger_sg: Decimal,
+    max_age_ns: int,
+    max_gap_ns: int,
+    confirmations: int,
+) -> "AdvisorStatus":
+    """Evaluate neutral readings; never permission to actuate or a safety claim.
+
+    All policy is required: ``now_ns`` is an integer UTC Unix epoch offset;
+    positive age/gap limits are integer nanoseconds (inclusive), and confirmations
+    is 2..5. Invalid policy raises ValueError. ``gravity_unit="sg"`` explicitly
+    declares gravity_raw to be SG; missing/other interpretations fail closed.
+    This does not verify upstream units or convert raw RAPT gravity.
+
+    Malformed or mixed-stream tuples, missing/implausible SG, conflicting SG at
+    an exact instant, and reading IDs reused at different instants give NO_DECISION.
+    Equal SG observations at one instant count once, regardless of reading ID.
+    Other measurement fields are irrelevant to this SG-only evaluation.
+    All input is validated, then the latest distinct confirmations are selected.
+    Only the latest age and gaps within that selection are gated, as in the legacy
+    advisor. WAIT means at least one selected SG exceeds the Decimal threshold;
+    CONDITION_MET means all are at or below it, not fermentation completion.
+    """
+    if (
+        not isinstance(trigger_sg, Decimal)
+        or not trigger_sg.is_finite()
+        or not Decimal("0.9") <= trigger_sg <= Decimal("1.2")
+    ):
+        raise ValueError("trigger SG must be a finite Decimal between 0.9000 and 1.2000")
+    if any(type(value) is not int for value in (now_ns, max_age_ns, max_gap_ns, confirmations)):
+        raise ValueError("time, limits and confirmations must be integers, not booleans")
+    if max_age_ns <= 0 or max_gap_ns <= 0 or not 2 <= confirmations <= 5:
+        raise ValueError("age and gap must be positive; confirmations must be between 2 and 5")
+    if gravity_unit != "sg" or not isinstance(readings, tuple) or not readings:
+        return AdvisorStatus.NO_DECISION
+    values: dict[int, Decimal] = {}
+    identifiers: dict[str, int] = {}
+    stream: tuple[str, DeviceKind, str] | None = None
+    for item in readings:
+        if not isinstance(item, TelemetryReading):
+            return AdvisorStatus.NO_DECISION
+        if (
+            any(
+                not isinstance(value, str) or not value.strip()
+                for value in (item.source, item.device_id, item.reading_id)
+            )
+            or not isinstance(item.device_kind, DeviceKind)
+            or not isinstance(item.observed_at, datetime)
+            or type(item.observed_at_submicrosecond_ns) is not int
+            or item.observed_at_submicrosecond_ns not in range(0, 1000, 100)
+            or isinstance(item.gravity_raw, bool)
+            or not isinstance(item.gravity_raw, (int, float))
+        ):
+            return AdvisorStatus.NO_DECISION
+        try:
+            if item.observed_at.utcoffset() is None:
+                return AdvisorStatus.NO_DECISION
+            instant = exact_ns(item)
+        except (ValueError, OverflowError):
+            return AdvisorStatus.NO_DECISION
+        try:
+            sg = Decimal(str(item.gravity_raw))
+        except ValueError:
+            return AdvisorStatus.NO_DECISION
+        if not sg.is_finite() or not Decimal("0.9") <= sg <= Decimal("1.2"):
+            return AdvisorStatus.NO_DECISION
+        identity = (item.source, item.device_kind, item.device_id)
+        if stream is not None and identity != stream:
+            return AdvisorStatus.NO_DECISION
+        stream = identity
+        if instant in values and values[instant] != sg:
+            return AdvisorStatus.NO_DECISION
+        if item.reading_id in identifiers and identifiers[item.reading_id] != instant:
+            return AdvisorStatus.NO_DECISION
+        values[instant] = sg
+        identifiers[item.reading_id] = instant
+    ordered = sorted(values)
+    if len(ordered) < confirmations or not 0 <= now_ns - ordered[-1] <= max_age_ns:
+        return AdvisorStatus.NO_DECISION
+    selected = ordered[-confirmations:]
+    if any(right - left > max_gap_ns for left, right in zip(selected, selected[1:], strict=False)):
+        return AdvisorStatus.NO_DECISION
+    condition_met = all(values[instant] <= trigger_sg for instant in selected)
+    return AdvisorStatus.CONDITION_MET if condition_met else AdvisorStatus.WAIT
 
 
 class AdvisorStatus(StrEnum):

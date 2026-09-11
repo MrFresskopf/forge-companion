@@ -104,8 +104,15 @@ Temperature Controller plus explicit-window, read-only retrieval of their separa
 streams. It preserves raw telemetry semantics and introduces no polling, aggregation, automation
 decision, or device-control path.
 
+The additive Python-only `advise_telemetry_sg` evaluator consumes neutral readings offline and returns
+only `NO_DECISION`, `WAIT`, or `CONDITION_MET`. It requires an explicit SG interpretation, Decimal
+threshold, integer-nanosecond clock/age/gap limits, and confirmation count; raw RAPT units are not
+assumed or converted. It validates one unmixed stream, deduplicates exact instants, and fails closed
+on invalid data or quality gates. It changes no existing advisor/CLI/persisted contract and grants no
+actuator permission, safety assurance, or fermentation-completion claim.
+
 Next steps remain separate: live read-only API validation, a BrewForge adapter to the neutral model,
-source-independent advisory rules, and only then a secured webhook receiver. Webhook reception must
+further source-independent advisory rules, and only then a secured webhook receiver. Reception must
 store observations rather than actuate directly. No Home Assistant or MQTT dependency is required.
 Unattended rules and hardware actions require their own safety review; this is not a 1.0 release gate.
 
