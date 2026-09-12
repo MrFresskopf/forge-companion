@@ -111,6 +111,11 @@ assumed or converted. It validates one unmixed stream, deduplicates exact instan
 on invalid data or quality gates. It changes no existing advisor/CLI/persisted contract and grants no
 actuator permission, safety assurance, or fermentation-completion claim.
 
+The separate Python-only [`normalize_rapt_sg` bridge](OFFLINE-RAPT-SG.md) now converts parsed
+RAPT hydrometer tuples only on the explicit `sg-times-1000` caller assertion. It preserves metadata
+and exact instants, marks SG output against repeat conversion, and rejects lossy float round trips.
+It adds no live integration, CLI, persisted schema, operational defaults, or actuator permission.
+
 Next steps remain separate: live read-only API validation, a BrewForge adapter to the neutral model,
 further source-independent advisory rules, and only then a secured webhook receiver. Reception must
 store observations rather than actuate directly. No Home Assistant or MQTT dependency is required.
