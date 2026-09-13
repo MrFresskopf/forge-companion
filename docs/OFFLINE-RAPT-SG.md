@@ -55,6 +55,63 @@ permission, establishes fermentation completion, or says packaging or any action
   exact-time deduplication, freshness, future time, gaps, and confirmation policy remain there.
   Missing SG and insufficient distinct observations produce `NO_DECISION`, not invented data.
 
+## Offline diagnostic result
+
+`forge_companion.spunding_advisor.explain_telemetry_sg` accepts exactly the same required
+arguments as `advise_telemetry_sg`. Use it in place of the advisor in the example above to get
+an immutable `TelemetrySgResult`; the old advisor delegates to this single evaluator and
+returns only its `.status`. Existing status and policy-exception behavior is preserved.
+This is an experimental Python API, not CLI output or a persisted/JSON contract.
+
+The frozen result contains:
+
+- `status`: existing `AdvisorStatus` (`NO_DECISION`, `WAIT`, `CONDITION_MET`).
+- `reason`: a `TelemetrySgReason` enum member from the table below.
+- `evidence`: a tuple of frozen `TelemetrySgEvidence(observed_at_ns, sg)` candidates, ordered
+  oldest to newest within the latest distinct `confirmations` instants. If fewer exist, all
+  available candidates are returned. Equal-SG duplicates at an exact instant count once,
+  regardless of ID or timezone offset. Each timestamp retains exact 100 ns resolution;
+  each SG is `Decimal(str(gravity_raw))`, independent of ambient Decimal precision.
+- `distinct_observations`: the distinct-instant count of the **whole valid input series**,
+  not just the selected candidates.
+- `latest_age_ns`: signed integer `now_ns - latest_instant`; negative means future data.
+- `largest_confirmation_gap_ns`: the largest adjacent gap **within a complete selection**;
+  `None` when there are too few distinct candidates, even if some gaps could be calculated.
+
+Unit/collection/reading integrity failures return `NO_DECISION`, empty evidence, and `None`
+for all three metrics. Validation covers the entire tuple, including readings older than
+those selected. No partially validated candidates leak out on a late failure. By contrast,
+insufficient/future/stale/gap results retain candidates and applicable metrics for inspection.
+**Evidence does not mean quality-approved confirmations**, freshness, safety, or readiness.
+Only latest age and gaps inside the latest selection are gated; historical gaps outside it
+are not. The diagnostics do not add a slope, calibration check, unit verification, or defaults.
+
+| Reason | Meaning |
+| --- | --- |
+| `UNDECLARED_UNIT` | Unit is missing or anything other than exact `"sg"`. |
+| `INVALID_COLLECTION` | Input is not a tuple. |
+| `NO_READINGS` | Empty tuple. |
+| `INVALID_READING` | Wrong reading type, blank/non-string identity, or invalid device kind. |
+| `INVALID_TIMESTAMP` | Invalid datetime, timezone, or 100 ns remainder. |
+| `MISSING_SG` | A reading has `gravity_raw=None`. |
+| `INVALID_SG` | SG is not supported finite numeric data in inclusive 0.9..1.2. |
+| `MIXED_STREAM` | Source, device kind, or device ID differs within the tuple. |
+| `CONFLICTING_SG` | Different SG values occur at the same exact instant. |
+| `REUSED_ID` | A reading ID occurs at different exact instants. |
+| `INSUFFICIENT_CONFIRMATIONS` | Fewer distinct instants than the requested count. |
+| `FUTURE` | Latest age is negative. |
+| `STALE` | Latest age exceeds the inclusive age limit. |
+| `GAP_EXCEEDED` | A selected gap exceeds the inclusive gap limit. |
+| `ABOVE_TRIGGER` | Quality gates passed; at least one selected SG exceeds trigger: `WAIT`. |
+| `AT_OR_BELOW_TRIGGER` | Quality gates passed; all selected SGs are at/below trigger: `CONDITION_MET`. |
+
+Invalid policy raises `ValueError` before unit or input checks; omitted required arguments
+raise `TypeError`. Reasons report only the first blocker, not an exhaustive defect list.
+Unit and collection checks precede per-reading checks in input traversal order, so tuples
+with several independent defects can report different reasons when reordered. On a valid
+series, precedence is insufficient confirmations, future, stale, gap, then threshold.
+None of these outcomes establishes fermentation completion or permission to actuate.
+
 ## Numeric limits
 
 Conversion takes the existing float's shortest decimal text (`Decimal(str(raw))`) and shifts

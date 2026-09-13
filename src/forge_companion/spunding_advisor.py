@@ -38,6 +38,83 @@ def advise_telemetry_sg(
     advisor. WAIT means at least one selected SG exceeds the Decimal threshold;
     CONDITION_MET means all are at or below it, not fermentation completion.
     """
+    return explain_telemetry_sg(
+        readings,
+        gravity_unit=gravity_unit,
+        now_ns=now_ns,
+        trigger_sg=trigger_sg,
+        max_age_ns=max_age_ns,
+        max_gap_ns=max_gap_ns,
+        confirmations=confirmations,
+    ).status
+
+
+class TelemetrySgReason(StrEnum):
+    """First diagnostic blocker, or the selected SG comparison outcome."""
+
+    UNDECLARED_UNIT = "UNDECLARED_UNIT"
+    INVALID_COLLECTION = "INVALID_COLLECTION"
+    NO_READINGS = "NO_READINGS"
+    INVALID_READING = "INVALID_READING"
+    INVALID_TIMESTAMP = "INVALID_TIMESTAMP"
+    MISSING_SG = "MISSING_SG"
+    INVALID_SG = "INVALID_SG"
+    MIXED_STREAM = "MIXED_STREAM"
+    CONFLICTING_SG = "CONFLICTING_SG"
+    REUSED_ID = "REUSED_ID"
+    INSUFFICIENT_CONFIRMATIONS = "INSUFFICIENT_CONFIRMATIONS"
+    FUTURE = "FUTURE"
+    STALE = "STALE"
+    GAP_EXCEEDED = "GAP_EXCEEDED"
+    ABOVE_TRIGGER = "ABOVE_TRIGGER"
+    AT_OR_BELOW_TRIGGER = "AT_OR_BELOW_TRIGGER"
+
+
+@dataclass(frozen=True)
+class TelemetrySgEvidence:
+    """One exact-time candidate observation, not quality approval."""
+
+    observed_at_ns: int
+    sg: Decimal
+
+
+@dataclass(frozen=True)
+class TelemetrySgResult:
+    """Immutable simulation diagnostics; never permission to actuate."""
+
+    status: "AdvisorStatus"
+    reason: TelemetrySgReason
+    evidence: tuple[TelemetrySgEvidence, ...]
+    distinct_observations: int | None
+    latest_age_ns: int | None
+    largest_confirmation_gap_ns: int | None
+
+
+def explain_telemetry_sg(
+    readings: tuple[TelemetryReading, ...],
+    *,
+    gravity_unit: str | None,
+    now_ns: int,
+    trigger_sg: Decimal,
+    max_age_ns: int,
+    max_gap_ns: int,
+    confirmations: int,
+) -> TelemetrySgResult:
+    """Explain SG candidates with the same required policy as ``advise_telemetry_sg``.
+
+    Invalid policy raises ValueError before any observation checks. Unit, collection,
+    or full-series integrity failures return empty evidence and None metrics. Otherwise
+    evidence contains the latest distinct N instants (or all available if fewer), in
+    ascending order, even when insufficient, future, stale, or gap-blocked. These are
+    candidates, not quality-approved confirmations. ``distinct_observations`` counts
+    the full valid series; latest age is signed; the largest gap is populated only
+    for a complete N-candidate selection. All times are exact integer nanoseconds and
+    SG is Decimal(str(gravity_raw)), not recovered upstream precision.
+
+    The reason is the first blocker in validation/traversal order, not an exhaustive
+    or permutation-invariant error list. Quality precedence is insufficient, future,
+    stale, gap, then threshold. No credentials, I/O, defaults, or actuator permission.
+    """
     if (
         not isinstance(trigger_sg, Decimal)
         or not trigger_sg.is_finite()
@@ -48,57 +125,90 @@ def advise_telemetry_sg(
         raise ValueError("time, limits and confirmations must be integers, not booleans")
     if max_age_ns <= 0 or max_gap_ns <= 0 or not 2 <= confirmations <= 5:
         raise ValueError("age and gap must be positive; confirmations must be between 2 and 5")
-    if gravity_unit != "sg" or not isinstance(readings, tuple) or not readings:
-        return AdvisorStatus.NO_DECISION
+
+    def unusable(reason: TelemetrySgReason) -> TelemetrySgResult:
+        return TelemetrySgResult(AdvisorStatus.NO_DECISION, reason, (), None, None, None)
+
+    if gravity_unit != "sg":
+        return unusable(TelemetrySgReason.UNDECLARED_UNIT)
+    if not isinstance(readings, tuple):
+        return unusable(TelemetrySgReason.INVALID_COLLECTION)
+    if not readings:
+        return unusable(TelemetrySgReason.NO_READINGS)
     values: dict[int, Decimal] = {}
     identifiers: dict[str, int] = {}
     stream: tuple[str, DeviceKind, str] | None = None
     for item in readings:
         if not isinstance(item, TelemetryReading):
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.INVALID_READING)
+        if any(
+            not isinstance(value, str) or not value.strip()
+            for value in (item.source, item.device_id, item.reading_id)
+        ) or not isinstance(item.device_kind, DeviceKind):
+            return unusable(TelemetrySgReason.INVALID_READING)
         if (
-            any(
-                not isinstance(value, str) or not value.strip()
-                for value in (item.source, item.device_id, item.reading_id)
-            )
-            or not isinstance(item.device_kind, DeviceKind)
-            or not isinstance(item.observed_at, datetime)
+            not isinstance(item.observed_at, datetime)
             or type(item.observed_at_submicrosecond_ns) is not int
             or item.observed_at_submicrosecond_ns not in range(0, 1000, 100)
-            or isinstance(item.gravity_raw, bool)
-            or not isinstance(item.gravity_raw, (int, float))
         ):
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.INVALID_TIMESTAMP)
+        if item.gravity_raw is None:
+            return unusable(TelemetrySgReason.MISSING_SG)
+        if isinstance(item.gravity_raw, bool) or not isinstance(item.gravity_raw, (int, float)):
+            return unusable(TelemetrySgReason.INVALID_SG)
         try:
             if item.observed_at.utcoffset() is None:
-                return AdvisorStatus.NO_DECISION
+                return unusable(TelemetrySgReason.INVALID_TIMESTAMP)
             instant = exact_ns(item)
         except (ValueError, OverflowError):
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.INVALID_TIMESTAMP)
         try:
             sg = Decimal(str(item.gravity_raw))
         except ValueError:
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.INVALID_SG)
         if not sg.is_finite() or not Decimal("0.9") <= sg <= Decimal("1.2"):
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.INVALID_SG)
         identity = (item.source, item.device_kind, item.device_id)
         if stream is not None and identity != stream:
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.MIXED_STREAM)
         stream = identity
         if instant in values and values[instant] != sg:
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.CONFLICTING_SG)
         if item.reading_id in identifiers and identifiers[item.reading_id] != instant:
-            return AdvisorStatus.NO_DECISION
+            return unusable(TelemetrySgReason.REUSED_ID)
         values[instant] = sg
         identifiers[item.reading_id] = instant
     ordered = sorted(values)
-    if len(ordered) < confirmations or not 0 <= now_ns - ordered[-1] <= max_age_ns:
-        return AdvisorStatus.NO_DECISION
     selected = ordered[-confirmations:]
-    if any(right - left > max_gap_ns for left, right in zip(selected, selected[1:], strict=False)):
-        return AdvisorStatus.NO_DECISION
-    condition_met = all(values[instant] <= trigger_sg for instant in selected)
-    return AdvisorStatus.CONDITION_MET if condition_met else AdvisorStatus.WAIT
+    latest_age = now_ns - ordered[-1]
+    largest_gap = (
+        max(right - left for left, right in zip(selected, selected[1:], strict=False))
+        if len(selected) == confirmations
+        else None
+    )
+    status = AdvisorStatus.NO_DECISION
+    if len(ordered) < confirmations:
+        reason = TelemetrySgReason.INSUFFICIENT_CONFIRMATIONS
+    elif latest_age < 0:
+        reason = TelemetrySgReason.FUTURE
+    elif latest_age > max_age_ns:
+        reason = TelemetrySgReason.STALE
+    elif largest_gap is not None and largest_gap > max_gap_ns:
+        reason = TelemetrySgReason.GAP_EXCEEDED
+    elif any(values[instant] > trigger_sg for instant in selected):
+        reason = TelemetrySgReason.ABOVE_TRIGGER
+        status = AdvisorStatus.WAIT
+    else:
+        reason = TelemetrySgReason.AT_OR_BELOW_TRIGGER
+        status = AdvisorStatus.CONDITION_MET
+    return TelemetrySgResult(
+        status,
+        reason,
+        tuple(TelemetrySgEvidence(instant, values[instant]) for instant in selected),
+        len(values),
+        latest_age,
+        largest_gap,
+    )
 
 
 class AdvisorStatus(StrEnum):
