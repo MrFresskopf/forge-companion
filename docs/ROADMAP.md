@@ -116,6 +116,13 @@ RAPT hydrometer tuples only on the explicit `sg-times-1000` caller assertion. It
 and exact instants, marks SG output against repeat conversion, and rejects lossy float round trips.
 It adds no live integration, CLI, persisted schema, operational defaults, or actuator permission.
 
+The additive Python-only `explain_telemetry_sg` now exposes frozen diagnostic results and
+exact-time Decimal SG candidates through the same evaluator used by `advise_telemetry_sg`.
+Integrity failures expose no partial evidence or metrics; valid series retain latest-N candidates,
+distinct count, signed age, and a gap only for complete selections, including quality-blocked results.
+Candidates are not quality approval. Existing status/exception behavior and required policy remain
+unchanged; this adds no CLI, persistent schema, live unit validation, or operational integration.
+
 Next steps remain separate: live read-only API validation, a BrewForge adapter to the neutral model,
 further source-independent advisory rules, and only then a secured webhook receiver. Reception must
 store observations rather than actuate directly. No Home Assistant or MQTT dependency is required.
