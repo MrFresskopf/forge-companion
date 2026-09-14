@@ -21,7 +21,9 @@ from forge_companion.fermentation_contexts import (
     start_fermentation_context,
 )
 from forge_companion.rapt import RaptClient, RaptError
-from forge_companion.sg_trend import TrendSegment, build_trend_report
+from forge_companion.rapt_sg import normalize_rapt_sg
+from forge_companion.sg_trend import TrendSegment, build_trend_report, exact_ns
+from forge_companion.spunding_advisor import TelemetrySgReason, explain_telemetry_sg
 from forge_companion.telemetry import (
     DeviceKind,
     RaptTelemetrySource,
@@ -567,6 +569,106 @@ def _trend_segment_line(segment: TrendSegment) -> str:
             f"endpoint_trend={segment.endpoint_trend}",
         )
     )
+
+
+@vessel_app.command("sg-diagnose")
+def vessel_sg_diagnose(
+    vessel_id: str,
+    start: Annotated[str, typer.Option("--start", help="Timezone-aware inclusive start.")],
+    end: Annotated[str, typer.Option("--end", help="Inclusive end and evaluation time.")],
+    trigger_sg: Annotated[str, typer.Option("--trigger-sg")],
+    max_age_minutes: Annotated[float, typer.Option("--max-age-minutes")],
+    max_gap_minutes: Annotated[float, typer.Option("--max-gap-minutes")],
+    confirmations: Annotated[int, typer.Option("--confirmations", min=2, max=5)],
+) -> None:
+    """Experimental SG-only query-end diagnostics; never permission to act."""
+    try:
+        start_at = _utc_datetime(start)
+        end_at = _utc_datetime(end)
+        if start_at >= end_at or end_at - start_at > MAX_TREND_WINDOW:
+            raise ValueError("invalid diagnostic interval")
+        trigger = Decimal(trigger_sg)
+        if not trigger.is_finite() or not Decimal("0.9") <= trigger <= Decimal("1.2"):
+            raise ValueError("invalid trigger")
+        max_age_ns = _validated_max_age(max_age_minutes)
+        max_gap_ns = _validated_max_age(max_gap_minutes)
+        if min(max_age_ns, max_gap_ns) <= 0:
+            raise ValueError("limits must resolve to positive nanoseconds")
+        bindings = load_vessels()
+        binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
+        contexts = [
+            item for item in load_fermentation_contexts()
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        ]
+        if len(contexts) != 1 or binding["gravity_interpretation"] != "sg-times-1000":
+            raise ValueError("diagnostic precondition failed")
+        if context_binding_status(contexts[0], bindings) != "current":
+            raise ValueError("context binding drift")
+    except (ArithmeticError, OSError, StopIteration, TypeError, ValueError):
+        typer.echo("Vessel SG diagnostic failed: input or local state is invalid.", err=True)
+        raise typer.Exit(1) from None
+
+    profile = _profile_for_api()
+    try:
+        readings = normalize_rapt_sg(
+            _read_hydrometer(
+                profile=profile, device_id=binding["hydrometer"], start=start_at, end=end_at
+            ),
+            gravity_interpretation=binding["gravity_interpretation"],
+        )
+        elapsed = end_at - datetime(1970, 1, 1, tzinfo=UTC)
+        now_ns = (
+            (elapsed.days * 86_400 + elapsed.seconds) * 1_000_000_000
+            + elapsed.microseconds * 1_000
+        )
+        duration = end_at - start_at
+        start_ns = now_ns - (
+            (duration.days * 86_400 + duration.seconds) * 1_000_000_000
+            + duration.microseconds * 1_000
+        )
+        if any(
+            item.device_id != binding["hydrometer"]
+            or not start_ns <= exact_ns(item) <= now_ns
+            for item in readings
+        ):
+            raise ValueError("unexpected device or out-of-window reading")
+        result = explain_telemetry_sg(
+            readings, gravity_unit="sg", now_ns=now_ns, trigger_sg=trigger,
+            max_age_ns=max_age_ns, max_gap_ns=max_gap_ns, confirmations=confirmations,
+        )
+        if (
+            result.distinct_observations is None
+            and result.reason != TelemetrySgReason.NO_READINGS
+        ):
+            raise ValueError("SG series integrity failure")
+        lines = [
+            "Vessel SG diagnostic read-only (experimental).",
+            f"Window: {start_at.isoformat()} / {end_at.isoformat()}",
+            f"evaluation_at_ns={now_ns} (query-end coverage, not live freshness)",
+            "Stored sg-times-1000 is a caller assertion, not unit proof or verified calibration.",
+            "SG-only window; no batch or phase attribution is inferred.",
+            f"trigger_sg={trigger} max_age_ns={max_age_ns} max_gap_ns={max_gap_ns} "
+            f"confirmations={confirmations}",
+            f"status={result.status} reason={result.reason}",
+            " ".join(
+                f"{name}={value if value is not None else 'NO_DATA'}"
+                for name, value in (
+                    ("distinct_observations", result.distinct_observations),
+                    ("latest_age_ns", result.latest_age_ns),
+                    ("largest_confirmation_gap_ns", result.largest_confirmation_gap_ns),
+                )
+            ),
+            "Candidates are not quality-approved confirmations.",
+            *(f"CANDIDATE observed_at_ns={item.observed_at_ns} sg={item.sg}"
+              for item in result.evidence),
+            "No fermentation-complete, packaging, or actuation permission "
+            "is granted by any status.",
+            "No RAPT or Shelly device command was sent.",
+        ]
+    except (RaptError, httpx.HTTPError, ArithmeticError, OSError, TypeError, ValueError):
+        typer.echo("Vessel SG diagnostic failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo("\n".join(lines))
 
 
 @vessel_app.command("sg-trend")

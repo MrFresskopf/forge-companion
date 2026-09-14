@@ -114,6 +114,9 @@ forge-companion vessel status fermenter-1 --pill-max-age-minutes 120 --controlle
 forge-companion vessel telemetry fermenter-1 --start 2026-09-08T18:00:00Z --end 2026-09-08T19:00:00Z
 forge-companion vessel sg-trend fermenter-1 --start 2026-09-01T00:00:00Z \
   --end 2026-09-08T00:00:00Z --phase-timezone Europe/Berlin
+forge-companion vessel sg-diagnose fermenter-1 --start "$START" --end "$END" \
+  --trigger-sg "$TRIGGER_SG" --max-age-minutes "$MAX_AGE_MINUTES" \
+  --max-gap-minutes "$MAX_GAP_MINUTES" --confirmations "$CONFIRMATIONS"
 forge-companion vessel overview fermenter-1
 ```
 
@@ -207,6 +210,36 @@ threshold is `STALE`. These thresholds are warning policy only, are not saved to
 grant no actuator permission. The command performs no writes, decisions, polling, Shelly imports, or
 device controls. Output reports each validated policy value canonically as integer-nanosecond
 `threshold_ns`; its parenthesized minutes label is for readability and is explicitly approximate.
+
+`sg-diagnose` is an experimental read-only SG-only Pill diagnostic. Supply every policy value
+explicitly (the shell variables above are placeholders, not recommendations): timezone-aware inclusive
+start/end, a finite decimal trigger SG in 0.9..1.2, age/gap limits in minutes (0 < value <= 2880), and
+2..5 confirmations. The interval is limited to seven days; request boundaries support microseconds,
+while observations retain exact 100 ns precision. Age is evaluated at `--end`, **not the current clock**:
+this is historical query-end coverage, never live freshness. Validated age/gap policy is printed as
+integer nanoseconds using the shared vessel freshness validator; limits resolving to zero nanoseconds
+are rejected before credentials. No operational values are inferred
+from a recipe, expected FG, phase, or display reading.
+
+Before credentials, it requires exactly one active context, a current snapshotted binding, and stored
+`sg-times-1000` interpretation. That interpretation is a caller assertion, not upstream unit proof or
+verified calibration. Only the bound Pill is queried; no controller data is combined. The window is
+not attributed to a batch or phase because a date-only context is not an exact start-time boundary.
+The complete tuple passes through `normalize_rapt_sg`, then the single `explain_telemetry_sg` evaluator.
+Raw SG outside 900..1200, missing SG, integrity/conversion failures, and request failures exit 1 with
+generic stderr and empty stdout; no partial or raw-as-usable-SG report is printed. An empty valid
+stream instead produces `NO_DECISION` / `NO_READINGS` with `NO_DATA` metrics.
+
+Successful diagnostics exit 0, including `NO_DECISION` for insufficient candidates, stale query-end
+coverage, or excessive candidate gaps; `WAIT` means a selected SG exceeds the trigger, and
+`CONDITION_MET` means all selected SG values are at or below it. Output includes status, first-blocker
+reason, exact-time candidate evidence, distinct-observation count, latest age, and largest selected
+gap when available. Candidates remain **not quality-approved confirmations**, including when quality
+checks block a decision. Equal-SG duplicates at one instant count once. No status grants fermentation
+completion, bottling, packaging, safety, switching, or actuation permission. No RAPT or Shelly device
+command is sent. Missing required options or parser-invalid confirmations exit 2; invalid local state
+or policy exits 1 before credentials. The shared RAPT setup helper preserves exit 2 for a missing
+profile and exit 1 for credential-store failure. Existing vessel commands are unchanged.
 
 `sg-trend` is an independent, read-only Pill query, not an advisor. Both interval endpoints must be
 timezone-aware, the interval must be no more than seven days, and `--phase-timezone` must name an IANA

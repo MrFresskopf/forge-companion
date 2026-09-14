@@ -1098,6 +1098,103 @@
       ],
       "stability": "experimental"
     },
+    "vessel sg-diagnose": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "vessel_id",
+          "kind": "argument",
+          "spellings": [
+            "vessel_id"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "start",
+          "kind": "option",
+          "spellings": [
+            "--start"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "end",
+          "kind": "option",
+          "spellings": [
+            "--end"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "trigger_sg",
+          "kind": "option",
+          "spellings": [
+            "--trigger-sg"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "max_age_minutes",
+          "kind": "option",
+          "spellings": [
+            "--max-age-minutes"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 2880
+          }
+        },
+        {
+          "name": "max_gap_minutes",
+          "kind": "option",
+          "spellings": [
+            "--max-gap-minutes"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 2880
+          }
+        },
+        {
+          "name": "confirmations",
+          "kind": "option",
+          "spellings": [
+            "--confirmations"
+          ],
+          "required": true,
+          "default": null,
+          "type": {
+            "kind": "integer",
+            "minimum": 2,
+            "maximum": 5
+          }
+        }
+      ],
+      "stability": "experimental"
+    },
     "vessel sg-trend": {
       "kind": "command",
       "hidden": false,
