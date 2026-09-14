@@ -123,10 +123,17 @@ distinct count, signed age, and a gap only for complete selections, including qu
 Candidates are not quality approval. Existing status/exception behavior and required policy remain
 unchanged; this adds no CLI, persistent schema, live unit validation, or operational integration.
 
-Next steps remain separate: live read-only API validation, a BrewForge adapter to the neutral model,
-further source-independent advisory rules, and only then a secured webhook receiver. Reception must
-store observations rather than actuate directly. No Home Assistant or MQTT dependency is required.
-Unattended rules and hardware actions require their own safety review; this is not a 1.0 release gate.
+The additive Python-only [`BrewForge telemetry adapter`](OFFLINE-BREWFORGE-TELEMETRY.md) now
+converts one complete, already-decoded readings response into neutral immutable readings. It uses the
+canonical brew UUID as the stored-stream identity rather than inventing a device UUID, preserves
+opaque source reading IDs and exact instants, and requires explicit `sg` and `c` assertions. Based on
+the observed BrewForge contract it rejects `sg-times-1000`; it adds no network, freshness, advisor,
+completion, safety, persistence, or actuator behavior.
+
+Next steps remain separate: live read-only API validation, further source-independent advisory rules,
+and only then a secured webhook receiver. Reception must store observations rather than actuate
+directly. No Home Assistant or MQTT dependency is required. Unattended rules and hardware actions
+require their own safety review; this is not a 1.0 release gate.
 
 ## Milestone 0 — Foundation (working)
 

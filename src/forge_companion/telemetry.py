@@ -1,9 +1,8 @@
 """Source-neutral telemetry values for brewery monitoring.
 
-RAPT readings are uniquely identified by reading ID; equal ``createdOn`` timestamps
-are retained and ordered deterministically by timestamp and reading ID. RFC3339
-fractions are limited to seven digits; sub-microsecond nanoseconds are retained
-separately from Python's datetime precision.
+RFC3339 fractions are limited to seven digits; sub-microsecond nanoseconds are
+retained separately from Python's datetime precision. A stream identity is its
+source, stream kind, and source identifier.
 """
 
 import re
@@ -16,7 +15,7 @@ from uuid import UUID
 
 
 class DeviceKind(StrEnum):
-    """Supported physical telemetry device families."""
+    """Supported neutral telemetry stream kinds."""
 
     HYDROMETER = "hydrometer"
     TEMPERATURE_CONTROLLER = "temperature-controller"
@@ -26,10 +25,13 @@ class DeviceKind(StrEnum):
 class TelemetryReading:
     """A validated measurement independent of its upstream API.
 
-    RAPT's OpenAPI does not specify gravity units. Both raw gravity
-    fields preserve upstream numbers without
-    conversion; consumers must not assume verified SG or SG/day units.
-    Controller measurements may be absent and must never be replaced by zero.
+    Unit fields record an adapter's explicit declaration, not independent proof,
+    calibration, or permission to interpret an undeclared value. RAPT's OpenAPI
+    does not specify gravity units, so its raw gravity fields preserve upstream
+    numbers without conversion and leave ``gravity_unit`` unset. Measurements may
+    be absent and must never be replaced by zero. A source adapter may use
+    ``device_id`` for the source's canonical stream identifier; it must document
+    when that identifier is not a physical-device UUID.
     ``observed_at`` is the UTC microsecond floor; ``observed_at_submicrosecond_ns``
     adds 0..900 ns in 100 ns steps. Compare both for exact time, and use
     ``observed_at_exact`` for canonical text without redundant fractional padding.
@@ -48,6 +50,8 @@ class TelemetryReading:
     rssi: float | None
     control_temperature_c: float | None = None
     observed_at_submicrosecond_ns: int = 0
+    temperature_unit: str | None = None
+    gravity_unit: str | None = None
 
     @property
     def observed_at_exact(self) -> str:
