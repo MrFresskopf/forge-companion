@@ -1056,10 +1056,29 @@
         {"name": "start_date", "kind": "option", "spellings": ["--start-date"], "required": true, "default": null, "type": {"kind": "string"}},
         {"name": "authoritative_temperature_role", "kind": "option", "spellings": ["--authoritative-temperature-role"], "required": true, "default": null, "type": {"kind": "string"}},
         {"name": "switch", "kind": "option", "spellings": ["--switch"], "required": false, "default": false, "type": {"kind": "boolean"}}
-      ],
-      "stability": "experimental"
-    },
-    "vessel list": {
+              ],
+              "stability": "experimental"
+            },
+            "vessel context start-brewforge": {
+              "kind": "command",
+              "hidden": false,
+              "parameters": [
+                {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+                {"name": "authoritative_temperature_role", "kind": "option", "spellings": ["--authoritative-temperature-role"], "required": true, "default": null, "type": {"kind": "string"}},
+                {"name": "brew_id", "kind": "argument", "spellings": ["brew_id"], "required": false, "default": null, "type": {"kind": "string"}},
+                {"name": "batch", "kind": "option", "spellings": ["--batch"], "required": false, "default": null, "type": {"kind": "string"}},
+                {"name": "original_gravity_sg", "kind": "option", "spellings": ["--original-gravity-sg"], "required": false, "default": null, "type": {"kind": "string"}},
+                {"name": "expected_final_gravity_sg", "kind": "option", "spellings": ["--expected-final-gravity-sg"], "required": false, "default": null, "type": {"kind": "string"}},
+                {"name": "yeast", "kind": "option", "spellings": ["--yeast"], "required": false, "default": null, "type": {"kind": "string"}},
+                {"name": "start_date", "kind": "option", "spellings": ["--start-date"], "required": false, "default": null, "type": {"kind": "string"}},
+                {"name": "switch", "kind": "option", "spellings": ["--switch"], "required": false, "default": false, "type": {"kind": "boolean"}},
+                {"name": "select", "kind": "option", "spellings": ["--select"], "required": false, "default": false, "type": {"kind": "boolean"}},
+                {"name": "page", "kind": "option", "spellings": ["--page"], "required": false, "default": 1, "type": {"kind": "integer", "minimum": 1}},
+                {"name": "limit", "kind": "option", "spellings": ["--limit"], "required": false, "default": 100, "type": {"kind": "integer", "minimum": 1, "maximum": 100}}
+              ],
+              "stability": "experimental"
+            },
+            "vessel list": {
       "kind": "command",
       "hidden": false,
       "parameters": [],

@@ -10,7 +10,18 @@ import httpx
 import typer
 
 from forge_companion import rapt_credentials
+from forge_companion.brewforge_brew import (
+    BrewForgeBrewDetailError,
+    context_source_from_brew_detail,
+)
+from forge_companion.cli_brewforge import _token_for_api
 from forge_companion.cli_rapt import _profile_for_api, _utc_datetime
+from forge_companion.cli_reports import (
+    _BrewSelectionCancelled,
+    _select_brew,
+    _selection_mode_brew_id,
+)
+from forge_companion.client import BrewForgeClient
 from forge_companion.fermentation_contexts import (
     FermentationContextBusyError,
     append_fermentation_phase,
@@ -18,7 +29,10 @@ from forge_companion.fermentation_contexts import (
     context_binding_status,
     context_phase_history,
     load_fermentation_contexts,
+    preflight_context_start,
+    start_brewforge_fermentation_context,
     start_fermentation_context,
+    validate_context_input_fields,
 )
 from forge_companion.rapt import RaptClient, RaptError
 from forge_companion.rapt_sg import normalize_rapt_sg
@@ -119,6 +133,7 @@ def _context_line(item: dict[str, object], *, binding_status: str) -> str:
         f"vessel_id={item['vessel_id']}",
         f"status={item['status']}",
         f"batch={item['batch_display_name']}",
+        f"brewforge_brew_id={item.get('brewforge_brew_id', 'unavailable')}",
         f"original_gravity_sg={item['original_gravity_sg']}",
         f"expected_final_gravity_sg={item['expected_final_gravity_sg']}",
         f"yeast={item['yeast']}",
@@ -165,6 +180,161 @@ def context_start(
         raise typer.Exit(1) from None
     typer.echo(f"Fermentation context started: {item['context_id']}")
     typer.echo("No credentials, API, telemetry, or device command was used.")
+
+
+_CONTEXT_SOURCE_OVERRIDES = (
+    ("batch_display_name", "--batch"),
+    ("original_gravity_sg", "--original-gravity-sg"),
+    ("expected_final_gravity_sg", "--expected-final-gravity-sg"),
+    ("yeast", "--yeast"),
+    ("fermentation_start_date", "--start-date"),
+)
+
+
+@context_app.command("start-brewforge")
+def context_start_brewforge(
+    vessel_id: str,
+    authoritative_temperature_role: Annotated[
+        str, typer.Option("--authoritative-temperature-role")
+    ],
+    brew_id: Annotated[
+        str | None,
+        typer.Argument(help="Exact BrewForge brew UUID; omit when using --select."),
+    ] = None,
+    batch: Annotated[
+        str | None,
+        typer.Option("--batch", help="Override the BrewForge brew name."),
+    ] = None,
+    original_gravity_sg: Annotated[
+        str | None,
+        typer.Option("--original-gravity-sg", help="Override measured.originalGravity."),
+    ] = None,
+    expected_final_gravity_sg: Annotated[
+        str | None,
+        typer.Option("--expected-final-gravity-sg", help="Override calculated.fg."),
+    ] = None,
+    yeast: Annotated[
+        str | None,
+        typer.Option("--yeast", help="Override recipe yeast names."),
+    ] = None,
+    start_date: Annotated[
+        str | None,
+        typer.Option("--start-date", help="Override an ambiguous brewDate."),
+    ] = None,
+    switch: Annotated[bool, typer.Option("--switch")] = False,
+    select: Annotated[
+        bool,
+        typer.Option("--select", help="Choose a brew; each n or p requests one API page."),
+    ] = False,
+    page: Annotated[
+        int,
+        typer.Option("--page", min=1, help="One-indexed brew page used with --select."),
+    ] = 1,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=100, help="Brews shown with --select."),
+    ] = 100,
+) -> None:
+    """Start a local context from a read-only BrewForge brew detail lookup."""
+    try:
+        canonical_id = _selection_mode_brew_id(brew_id, select=select, page=page, limit=limit)
+        if authoritative_temperature_role not in {"hydrometer", "controller"}:
+            raise ValueError("authoritative temperature role must be hydrometer or controller")
+        overrides = validate_context_input_fields(
+            batch_display_name=batch,
+            original_gravity_sg=original_gravity_sg,
+            expected_final_gravity_sg=expected_final_gravity_sg,
+            yeast=yeast,
+            fermentation_start_date=start_date,
+        )
+        preflight_context_start(
+            vessel_id,
+            switch=switch,
+            contexts=load_fermentation_contexts(),
+            bindings=load_vessels(),
+        )
+    except OSError:
+        typer.echo(
+            "Context start from BrewForge failed: local file is invalid or unavailable.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    except (TypeError, ValueError) as error:
+        typer.echo(f"Context start from BrewForge failed: {error}", err=True)
+        raise typer.Exit(1) from None
+
+    client = BrewForgeClient(token=_token_for_api())
+    try:
+        if select:
+            canonical_id = _select_brew(client, page=page, limit=limit).id
+        if canonical_id is None:
+            raise ValueError("brew selection did not produce an ID")
+        detail = client.get(f"brews/{canonical_id}")
+        source = context_source_from_brew_detail(detail, brew_id=canonical_id)
+    except _BrewSelectionCancelled:
+        typer.echo("Context start from BrewForge failed: brew selection cancelled.", err=True)
+        raise typer.Exit(1) from None
+    except httpx.HTTPError:
+        typer.echo("Context start from BrewForge failed: API request failed.", err=True)
+        raise typer.Exit(1) from None
+    except BrewForgeBrewDetailError:
+        typer.echo(
+            "Context start from BrewForge failed: BrewForge brew detail is invalid or unsupported.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    except (TypeError, ValueError):
+        typer.echo(
+            "Context start from BrewForge failed: brew selection or detail is invalid.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+
+    resolved: dict[str, str | None] = {
+        "batch_display_name": overrides.get("batch_display_name", source.batch_display_name),
+        "original_gravity_sg": overrides.get("original_gravity_sg", source.original_gravity_sg),
+        "expected_final_gravity_sg": overrides.get(
+            "expected_final_gravity_sg", source.expected_final_gravity_sg
+        ),
+        "yeast": overrides.get("yeast", source.yeast),
+        "fermentation_start_date": overrides.get(
+            "fermentation_start_date", source.fermentation_start_date
+        ),
+    }
+    missing = [flag for field, flag in _CONTEXT_SOURCE_OVERRIDES if resolved[field] is None]
+    if missing:
+        typer.echo(
+            "Context start from BrewForge failed: brew is missing required data; pass "
+            + ", ".join(missing)
+            + ".",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        item = start_brewforge_fermentation_context(
+            vessel_id=vessel_id,
+            brewforge_brew_id=canonical_id,
+            batch_display_name=resolved["batch_display_name"] or "",
+            original_gravity_sg=resolved["original_gravity_sg"] or "",
+            expected_final_gravity_sg=resolved["expected_final_gravity_sg"] or "",
+            yeast=resolved["yeast"] or "",
+            fermentation_start_date=resolved["fermentation_start_date"] or "",
+            authoritative_temperature_role=authoritative_temperature_role,
+            switch=switch,
+        )
+    except (FermentationContextBusyError, OSError, TypeError, ValueError):
+        typer.echo(
+            "Context start from BrewForge failed: invalid input, conflict, or local file.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    typer.echo(f"Fermentation context started from BrewForge: {item['context_id']}")
+    typer.echo("expected_final_gravity_sg is the brew's calculated estimate, not a measurement.")
+    typer.echo(
+        "Read-only BrewForge lookup; no BrewForge, RAPT, or Shelly write and no device "
+        "command was sent."
+    )
 
 
 @context_app.command("show")
