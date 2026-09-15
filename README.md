@@ -111,6 +111,10 @@ The experimental `vessel context start/phase/show/close` lifecycle stores offlin
 from vessel bindings. Starting requires strict SG values, an ISO calendar date, and an explicit
 authoritative temperature-device role. It never imports old brew readings or treats the date as an
 exact telemetry boundary; switching an active context must be explicit and retains the prior record.
+`context start-brewforge` is a read-only BrewForge-backed variant: it fetches one brew detail, copies
+only validated source fields (never a calculated original gravity or the planned brew date), records
+the canonical brew UUID additively, and revalidates all local prerequisites under the write lock.
+Required values the detail cannot supply fail closed and must be given as explicit overrides.
 `context phase` explicitly appends a date-only `fermentation` or `cold-crash` event to the active
 batch. Display calls it the latest recorded phase, not proof of the current state or completion.
 

@@ -211,6 +211,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "vessel context phase",
         "vessel context show",
         "vessel context start",
+        "vessel context start-brewforge",
         "vessel list",
         "vessel overview",
         "vessel show",

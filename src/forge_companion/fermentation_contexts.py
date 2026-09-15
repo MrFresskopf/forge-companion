@@ -40,7 +40,7 @@ _CONTEXT_FIELDS = {
     "source_devices",
     "status",
 }
-_OPTIONAL_CONTEXT_FIELDS = {"phase_history"}
+_OPTIONAL_CONTEXT_FIELDS = {"phase_history", "brewforge_brew_id"}
 _SOURCE_FIELDS = {"hydrometer", "temperature_controller"}
 _PHASE_EVENT_FIELDS = {"phase", "start_date"}
 _PHASES = {"fermentation", "cold-crash"}
@@ -222,6 +222,8 @@ def _validate_context(value: object) -> Context:
         result["phase_history"] = _validate_phase_history(
             value["phase_history"], fermentation_start_date
         )
+    if "brewforge_brew_id" in value:
+        result["brewforge_brew_id"] = _uuid(value["brewforge_brew_id"], "BrewForge brew ID")
     return result
 
 
@@ -314,6 +316,87 @@ def _write_contexts(contexts: list[Context]) -> None:
     atomic_write_text(content + "\n", fermentation_contexts_path(), newline="\n")
 
 
+def validate_context_input_fields(
+    *,
+    batch_display_name: str | None = None,
+    original_gravity_sg: str | None = None,
+    expected_final_gravity_sg: str | None = None,
+    yeast: str | None = None,
+    fermentation_start_date: str | None = None,
+) -> dict[str, str]:
+    """Validate only the provided start fields and return the validated subset.
+
+    ``None`` means "not supplied" and is omitted from the result, so callers can
+    validate explicit CLI overrides before any credential or network access.
+    """
+    validated: dict[str, str] = {}
+    if batch_display_name is not None:
+        validated["batch_display_name"] = _display(batch_display_name, "Batch display name")
+    if original_gravity_sg is not None:
+        validated["original_gravity_sg"] = _sg(original_gravity_sg, "Original gravity")
+    if expected_final_gravity_sg is not None:
+        validated["expected_final_gravity_sg"] = _sg(
+            expected_final_gravity_sg, "Expected final gravity"
+        )
+    if yeast is not None:
+        validated["yeast"] = _display(yeast, "Yeast")
+    if fermentation_start_date is not None:
+        validated["fermentation_start_date"] = _calendar_date(fermentation_start_date)
+    if (
+        "original_gravity_sg" in validated
+        and "expected_final_gravity_sg" in validated
+        and Decimal(validated["original_gravity_sg"])
+        <= Decimal(validated["expected_final_gravity_sg"])
+    ):
+        raise FermentationContextValidationError(
+            "Original gravity must exceed expected final gravity."
+        )
+    return validated
+
+
+def preflight_context_start(
+    vessel_id: str,
+    *,
+    switch: bool,
+    contexts: list[Context],
+    bindings: list[dict[str, str]],
+) -> None:
+    """Validate local start prerequisites without mutating the store.
+
+    Checks the vessel ID, the existing binding, the active-context conflict unless
+    ``switch`` is explicit, and capacity. Used both before credentials and again
+    inside the write lock so a concurrent writer cannot cause a TOCTOU gap.
+    """
+    if not isinstance(switch, bool):
+        raise FermentationContextValidationError("Switch must be a boolean.")
+    vessel_id = _vessel(vessel_id)
+    binding = next((item for item in bindings if item["vessel_id"] == vessel_id), None)
+    if binding is None:
+        raise FermentationContextValidationError(
+            "Vessel must be bound before starting a context."
+        )
+    active = next(
+        (
+            item
+            for item in contexts
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        ),
+        None,
+    )
+    if active is not None and not switch:
+        raise FermentationContextValidationError(
+            "Vessel already has an active context; close it or use switch explicitly."
+        )
+    if len(contexts) >= MAX_CONTEXTS:
+        raise FermentationContextValidationError("Context record limit reached.")
+
+
+def _validated_role(value: str) -> str:
+    if value not in {"hydrometer", "controller"}:
+        raise FermentationContextValidationError("Authoritative temperature role is invalid.")
+    return value
+
+
 def start_fermentation_context(
     *,
     vessel_id: str,
@@ -329,29 +412,20 @@ def start_fermentation_context(
     if not isinstance(switch, bool):
         raise FermentationContextValidationError("Switch must be a boolean.")
     vessel_id = _vessel(vessel_id)
-    candidate_inputs = {
-        "batch_display_name": _display(batch_display_name, "Batch display name"),
-        "original_gravity_sg": _sg(original_gravity_sg, "Original gravity"),
-        "expected_final_gravity_sg": _sg(expected_final_gravity_sg, "Expected final gravity"),
-        "yeast": _display(yeast, "Yeast"),
-        "fermentation_start_date": _calendar_date(fermentation_start_date),
-    }
-    if Decimal(str(candidate_inputs["original_gravity_sg"])) <= Decimal(
-        str(candidate_inputs["expected_final_gravity_sg"])
-    ):
-        raise FermentationContextValidationError(
-            "Original gravity must exceed expected final gravity."
-        )
-    if authoritative_temperature_role not in {"hydrometer", "controller"}:
-        raise FermentationContextValidationError("Authoritative temperature role is invalid.")
+    candidate_inputs = validate_context_input_fields(
+        batch_display_name=batch_display_name,
+        original_gravity_sg=original_gravity_sg,
+        expected_final_gravity_sg=expected_final_gravity_sg,
+        yeast=yeast,
+        fermentation_start_date=fermentation_start_date,
+    )
+    role = _validated_role(authoritative_temperature_role)
 
     with _contexts_lock():
         contexts = load_fermentation_contexts()
-        binding = next((item for item in load_vessels() if item["vessel_id"] == vessel_id), None)
-        if binding is None:
-            raise FermentationContextValidationError(
-                "Vessel must be bound before starting a context."
-            )
+        bindings = load_vessels()
+        preflight_context_start(vessel_id, switch=switch, contexts=contexts, bindings=bindings)
+        binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
         active = next(
             (
                 item
@@ -360,12 +434,6 @@ def start_fermentation_context(
             ),
             None,
         )
-        if active is not None and not switch:
-            raise FermentationContextValidationError(
-                "Vessel already has an active context; close it or use switch explicitly."
-            )
-        if len(contexts) >= MAX_CONTEXTS:
-            raise FermentationContextValidationError("Context record limit reached.")
         if active is not None:
             active["status"] = "closed"
         candidate: Context = {
@@ -374,7 +442,71 @@ def start_fermentation_context(
             **candidate_inputs,
             "start_instant": None,
             "same_day_telemetry_attribution": "unavailable",
-            "authoritative_temperature_role": authoritative_temperature_role,
+            "authoritative_temperature_role": role,
+            "source_devices": {
+                "hydrometer": binding["hydrometer"],
+                "temperature_controller": binding["temperature_controller"],
+            },
+            "status": "active",
+        }
+        candidate = _validate_context(candidate)
+        _write_contexts([*contexts, candidate])
+        return candidate
+
+
+def start_brewforge_fermentation_context(
+    *,
+    vessel_id: str,
+    brewforge_brew_id: str,
+    batch_display_name: str,
+    original_gravity_sg: str,
+    expected_final_gravity_sg: str,
+    yeast: str,
+    fermentation_start_date: str,
+    authoritative_temperature_role: str,
+    switch: bool = False,
+) -> Context:
+    """Start a context that additively records a canonical BrewForge brew ID.
+
+    All local prerequisites are revalidated under the write lock so the
+    pre-credential preflight cannot be invalidated by a concurrent writer.
+    """
+    if not isinstance(switch, bool):
+        raise FermentationContextValidationError("Switch must be a boolean.")
+    vessel_id = _vessel(vessel_id)
+    canonical_brew_id = _uuid(brewforge_brew_id, "BrewForge brew ID")
+    candidate_inputs = validate_context_input_fields(
+        batch_display_name=batch_display_name,
+        original_gravity_sg=original_gravity_sg,
+        expected_final_gravity_sg=expected_final_gravity_sg,
+        yeast=yeast,
+        fermentation_start_date=fermentation_start_date,
+    )
+    role = _validated_role(authoritative_temperature_role)
+
+    with _contexts_lock():
+        contexts = load_fermentation_contexts()
+        bindings = load_vessels()
+        preflight_context_start(vessel_id, switch=switch, contexts=contexts, bindings=bindings)
+        binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
+        active = next(
+            (
+                item
+                for item in contexts
+                if item["vessel_id"] == vessel_id and item["status"] == "active"
+            ),
+            None,
+        )
+        if active is not None:
+            active["status"] = "closed"
+        candidate: Context = {
+            "context_id": str(uuid4()),
+            "vessel_id": vessel_id,
+            "brewforge_brew_id": canonical_brew_id,
+            **candidate_inputs,
+            "start_instant": None,
+            "same_day_telemetry_attribution": "unavailable",
+            "authoritative_temperature_role": role,
             "source_devices": {
                 "hydrometer": binding["hydrometer"],
                 "temperature_controller": binding["temperature_controller"],

@@ -117,6 +117,8 @@ def test_installed_smoke_checks_rapt_surface_and_native_boundary() -> None:
     assert '"vessel", "overview", "--help"' in program
     assert '"vessel context start"' in program
     assert '"vessel", "context", "start", "--help"' in program
+    assert '"vessel context start-brewforge"' in program
+    assert '"vessel", "context", "start-brewforge", "--help"' in program
     assert '"vessel context phase"' in program
     assert '"vessel", "context", "phase", "--help"' in program
 

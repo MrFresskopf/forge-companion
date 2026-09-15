@@ -106,6 +106,10 @@ forge-companion vessel show fermenter-1
 forge-companion vessel context start fermenter-1 --batch "Example batch" \
   --original-gravity-sg 1.077 --expected-final-gravity-sg 1.015 --yeast US-05 \
   --start-date 2026-08-29 --authoritative-temperature-role hydrometer
+forge-companion vessel context start-brewforge fermenter-1 BREW_UUID \
+  --authoritative-temperature-role hydrometer
+forge-companion vessel context start-brewforge fermenter-1 --select --page 1 --limit 100 \
+  --authoritative-temperature-role hydrometer
 forge-companion vessel context phase fermenter-1 --phase cold-crash --start-date 2026-09-06
 forge-companion vessel context show fermenter-1
 forge-companion vessel context close fermenter-1
@@ -147,6 +151,29 @@ reads history. The authoritative temperature role must explicitly be `hydrometer
 `controller`. If the vessel binding later changes, output reports `binding_status=changed`
 and continues to show the captured IDs; it does not substitute new sensors. These context commands
 are offline and do not access credentials, APIs, telemetry, automation, or devices.
+
+`context start-brewforge` is the BrewForge-backed variant: one read-only `GET /brews/{id}` for a
+supplied canonical brew UUID, or `--select` (with the same `--select`/`--page`/`--limit` selection
+flow as the report commands) followed by exactly one detail GET. It never writes to BrewForge, RAPT,
+or any device, and it loads no brew readings. Before any credential or network access it validates the
+selection parameters, the explicit `--authoritative-temperature-role`, the optional overrides, the
+context store, an existing vessel binding, the active-context conflict unless `--switch` is explicit,
+and store capacity; it revalidates all of that atomically under the same lock as the write, so a
+concurrent writer cannot slip past a stale preflight. The brew detail is a direct object (not an
+envelope): the response ID must equal the requested canonical ID, the batch display name comes from a
+validated nonempty and bounded brew `name`, the original gravity comes **only** from
+`measured.originalGravity` (never the `calculated.og` estimate), the expected final gravity comes from
+`calculated.fg` and is recorded as the brew's *calculated estimate, not a measurement*, the yeast comes
+from validated nonempty `recipe.yeasts[].name` entries joined in a deterministic bounded display, and
+the start date comes only from an unambiguous date-only `brewDate` calendar value -- never from
+`plannedBrewDate`, and never from a timestamp whose instant-to-date mapping would require an unknown
+vessel timezone. The canonical brew UUID is stored additively as `brewforge_brew_id`; contexts created
+by the manual `context start` remain valid without it and read back as `brewforge_brew_id=unavailable`
+in `context show`. Each explicit override (`--batch`, `--original-gravity-sg`,
+`--expected-final-gravity-sg`, `--yeast`, `--start-date`) is validated by the same context rules and
+wins over the source value. When the brew detail cannot supply a required field, the command fails
+before any local mutation with a bounded message naming the missing override, and it never prints raw
+API values, exception text, or tokens.
 
 Vessel and context writes use separate locks. A concurrent vessel rebind can therefore make a newly
 captured, internally consistent context snapshot immediately stale; output reports it as `changed`
