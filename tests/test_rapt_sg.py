@@ -42,6 +42,7 @@ def test_explicit_conversion_preserves_metadata_missing_sg_and_input():
         assert result is not original
         expected = asdict(original)
         expected["gravity_raw"] = result.gravity_raw
+        expected["gravity_unit"] = "sg"
         assert asdict(result) == expected
         assert result.observed_at_exact == original.observed_at_exact
     assert [asdict(item) for item in raw] == before

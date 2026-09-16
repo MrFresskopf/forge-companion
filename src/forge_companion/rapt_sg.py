@@ -30,8 +30,8 @@ def normalize_rapt_sg(
     Only ``gravity_interpretation="sg-times-1000"`` is accepted; it does not
     verify RAPT units. Invalid input/conversion raises TelemetryValidationError
     without returning partial results. Empty input and missing SG are preserved.
-    All metadata fields, ordering, and exact 100 ns instants survive unchanged.
-    Only gravity_raw changes.
+    All metadata, ordering, and exact 100 ns instants survive unchanged except
+    that ``gravity_raw`` is converted and ``gravity_unit`` is marked ``"sg"``.
     No time, freshness, gap, threshold, or confirmation policy is chosen here.
 
     The output marker subclasses TelemetryReading for advise_telemetry_sg with
@@ -98,5 +98,6 @@ def normalize_rapt_sg(
                 raise TelemetryValidationError("RAPT SG conversion would lose decimal precision")
         values = {field.name: getattr(item, field.name) for field in fields(TelemetryReading)}
         values["gravity_raw"] = sg
+        values["gravity_unit"] = "sg"
         result.append(SgTelemetryReading(**values))
     return tuple(result)
