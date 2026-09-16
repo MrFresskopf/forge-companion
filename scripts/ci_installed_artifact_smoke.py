@@ -85,6 +85,7 @@ for path in (
     "vessel telemetry",
     "vessel status",
     "vessel sg-diagnose",
+    "vessel sg-diagnose-brewforge",
     "vessel sg-trend",
     "vessel overview",
     "vessel context start",
@@ -104,6 +105,7 @@ for args in (
     ["vessel", "telemetry", "--help"],
     ["vessel", "status", "--help"],
     ["vessel", "sg-diagnose", "--help"],
+    ["vessel", "sg-diagnose-brewforge", "--help"],
     ["vessel", "sg-trend", "--help"],
     ["vessel", "overview", "--help"],
     ["vessel", "context", "start", "--help"],
@@ -115,6 +117,76 @@ for args in (
     result = CliRunner().invoke(app, args)
     if result.exit_code != 0:
         raise AssertionError("installed CLI help failed")
+
+# Exercise the installed implementation with synthetic local state and a recording
+# client. Neither credentials nor a real network or device is used by this check.
+import tempfile
+from unittest.mock import patch
+import forge_companion.cli_vessel as vessel_cli
+
+brew_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+calls = []
+class DiagnosticClient:
+    def __init__(self, *, token):
+        calls.append(("client", token))
+    def get(self, path):
+        calls.append(("get", path))
+        return {"data": [
+            {"id": "a", "timestamp": "2026-09-03T00:30:00.0000001Z", "gravity": 1.019},
+            {"id": "b", "timestamp": "2026-09-03T01:00:00.0000001Z", "gravity": 1.018},
+        ]}
+
+def diagnostic_token():
+    calls.append("token")
+    return "synthetic-token"
+
+diagnostic_args = [
+    "vessel", "sg-diagnose-brewforge", "tank",
+    "--start", "2026-09-03T00:00:00.0000001Z",
+    "--end", "2026-09-03T01:00:00.0000001Z", "--trigger-sg", "1.020",
+    "--max-age-minutes", "30", "--max-gap-minutes", "30", "--confirmations", "2",
+    "--gravity-unit", "sg", "--temperature-unit", "c",
+]
+with tempfile.TemporaryDirectory() as state:
+    with patch.dict(os.environ, {"FORGE_COMPANION_CONFIG_DIR": state}), \
+         patch.object(vessel_cli, "_token_for_api", diagnostic_token), \
+         patch.object(vessel_cli, "BrewForgeClient", DiagnosticClient):
+        result = CliRunner().invoke(app, diagnostic_args)
+        if result.exit_code != 1 or result.stdout or calls:
+            raise AssertionError("installed diagnostic accessed credentials before preflight")
+        context_path = Path(state) / "fermentation-contexts.json"
+        context_path.write_text(json.dumps({
+            "schema_version": "forge-companion-fermentation-contexts-v1",
+            "contexts": [{
+                "context_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "vessel_id": "tank",
+                "batch_display_name": "Synthetic", "original_gravity_sg": "1.050",
+                "expected_final_gravity_sg": "1.010", "yeast": "Synthetic",
+                "fermentation_start_date": "2026-09-01", "start_instant": None,
+                "same_day_telemetry_attribution": "unavailable",
+                "authoritative_temperature_role": "hydrometer",
+                "source_devices": {
+                    "hydrometer": "11111111-1111-4111-8111-111111111111",
+                    "temperature_controller": "22222222-2222-4222-8222-222222222222",
+                }, "status": "active", "brewforge_brew_id": brew_id,
+            }],
+        }), encoding="utf-8")
+        before = context_path.read_bytes()
+        result = CliRunner().invoke(app, diagnostic_args)
+        if result.exit_code != 0 or result.stderr:
+            raise AssertionError("installed BrewForge diagnostic failed")
+        if calls != ["token", ("client", "synthetic-token"),
+                     ("get", f"brews/{brew_id}/readings")]:
+            raise AssertionError("installed diagnostic request contract failed")
+        for expected in (
+            "source=brewforge gravity_unit=sg temperature_unit=c",
+            "evaluation_at_ns=1788397200000000100",
+            "status=CONDITION_MET reason=AT_OR_BELOW_TRIGGER",
+            "No BrewForge, RAPT, or Shelly write and no device command was sent.",
+        ):
+            if expected not in result.stdout:
+                raise AssertionError("installed diagnostic output contract failed")
+        if context_path.read_bytes() != before or list(Path(state).iterdir()) != [context_path]:
+            raise AssertionError("installed diagnostic changed local state")
 
 phase_timezone = ZoneInfo("Europe/Berlin")
 if phase_timezone.key != "Europe/Berlin":

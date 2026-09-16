@@ -8,6 +8,10 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Experimental `vessel sg-diagnose-brewforge`: one read-only readings GET after complete local
+  preflight, explicit `sg`/`c` units, exact inclusive 100 ns boundaries, and query-end SG diagnostics.
+  Invalid or empty telemetry fails closed. No persistence or device command is performed; existing
+  `vessel sg-diagnose` behavior is unchanged.
 - Experimental `rapt auth login/status/logout`, `rapt devices`, and `rapt telemetry` commands
   for direct read-only Pill and Temperature Controller access, independent of BrewForge.
 - A separate native RAPT credential profile, in-memory token renewal, and a source-neutral
