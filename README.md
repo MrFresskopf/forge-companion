@@ -93,6 +93,13 @@ Whitespace-only values are ignored; values containing whitespace are rejected an
 credential use until corrected or unset. Do not put a real token in a config file, issue, screenshot,
 command argument, or commit.
 
+### Optional: BrewForge SG diagnostic (unreleased, experimental)
+
+`vessel sg-diagnose-brewforge` reads the active local context's BrewForge readings with one GET.
+It requires explicit SG/Celsius declarations and every diagnostic policy, evaluates coverage at
+the requested end time, and grants no completion or actuation permission. See the
+[command guide](docs/COMMANDS.md#vessel-sg-diagnose-brewforge-experimental-unreleased).
+
 ### Optional: direct RAPT telemetry (unreleased, experimental)
 
 The development branch adds direct read-only RAPT Pill and Temperature Controller access without

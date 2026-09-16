@@ -56,7 +56,7 @@ def _surface() -> dict[str, dict[str, Any]]:
                 "pill_max_age_minutes",
                 "controller_max_age_minutes",
             } or (
-                path == ("vessel", "sg-diagnose")
+                path in {("vessel", "sg-diagnose"), ("vessel", "sg-diagnose-brewforge")}
                 and parameter.name in {"max_age_minutes", "max_gap_minutes"}
             ):
                 parameter_type.update({"exclusiveMinimum": 0, "maximum": 2880})
@@ -216,6 +216,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "vessel overview",
         "vessel show",
         "vessel sg-diagnose",
+        "vessel sg-diagnose-brewforge",
         "vessel sg-trend",
         "vessel status",
         "vessel telemetry",

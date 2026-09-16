@@ -14,6 +14,12 @@ from forge_companion.brewforge_brew import (
     BrewForgeBrewDetailError,
     context_source_from_brew_detail,
 )
+from forge_companion.brewforge_telemetry import (
+    _canonical_brew_id,
+    _canonical_reading_id,
+    _measurement,
+    adapt_brewforge_readings,
+)
 from forge_companion.cli_brewforge import _token_for_api
 from forge_companion.cli_rapt import _profile_for_api, _utc_datetime
 from forge_companion.cli_reports import (
@@ -36,13 +42,14 @@ from forge_companion.fermentation_contexts import (
 )
 from forge_companion.rapt import RaptClient, RaptError
 from forge_companion.rapt_sg import normalize_rapt_sg
-from forge_companion.sg_trend import TrendSegment, build_trend_report, exact_ns
+from forge_companion.sg_trend import TrendSegment, _datetime_ns, build_trend_report, exact_ns
 from forge_companion.spunding_advisor import TelemetrySgReason, explain_telemetry_sg
 from forge_companion.telemetry import (
     DeviceKind,
     RaptTelemetrySource,
     TelemetryReading,
     TelemetryValidationError,
+    _utc_timestamp,
 )
 from forge_companion.vessels import VesselBusyError, bind_vessel, load_vessels
 
@@ -837,6 +844,142 @@ def vessel_sg_diagnose(
         ]
     except (RaptError, httpx.HTTPError, ArithmeticError, OSError, TypeError, ValueError):
         typer.echo("Vessel SG diagnostic failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo("\n".join(lines))
+
+
+def _validate_brewforge_diagnostic_readings(
+    readings: tuple[TelemetryReading, ...], *, brew_id: str, start_ns: int, end_ns: int,
+    require_in_window: bool = True,
+) -> None:
+    """Check the complete adapter boundary before invoking any SG evaluation."""
+    if not isinstance(readings, tuple) or not readings:
+        raise ValueError("nonempty adapted tuple required")
+    identifiers: set[str] = set()
+    instants: set[int] = set()
+    for item in readings:
+        if not isinstance(item, TelemetryReading) or (
+            item.source != "brewforge"
+            or item.device_kind is not DeviceKind.HYDROMETER
+            or item.device_id != brew_id
+            or item.gravity_unit != "sg"
+            or item.temperature_unit != "c"
+        ):
+            raise ValueError("unexpected stream or declaration")
+        if (
+            not isinstance(item.observed_at, datetime)
+            or item.observed_at.utcoffset() is None
+            or type(item.observed_at_submicrosecond_ns) is not int
+            or item.observed_at_submicrosecond_ns not in range(0, 1000, 100)
+        ):
+            raise ValueError("invalid observation time")
+        identifier = _canonical_reading_id(item.reading_id)
+        instant = exact_ns(item)
+        if identifier in identifiers or instant in instants:
+            raise ValueError("duplicate identity, time, or out-of-window observation")
+        if require_in_window and not start_ns <= instant <= end_ns:
+            raise ValueError("out-of-window observation")
+        if _measurement(item.gravity_raw, field="gravity") is None:
+            raise ValueError("missing SG")
+        _measurement(item.temperature_c, field="temperature")
+        identifiers.add(identifier)
+        instants.add(instant)
+
+
+@vessel_app.command("sg-diagnose-brewforge")
+def vessel_sg_diagnose_brewforge(
+    vessel_id: str,
+    start: Annotated[str, typer.Option("--start", help="Timezone-aware inclusive start.")],
+    end: Annotated[str, typer.Option("--end", help="Inclusive end and evaluation time.")],
+    trigger_sg: Annotated[str, typer.Option("--trigger-sg")],
+    max_age_minutes: Annotated[float, typer.Option("--max-age-minutes")],
+    max_gap_minutes: Annotated[float, typer.Option("--max-gap-minutes")],
+    confirmations: Annotated[int, typer.Option("--confirmations", min=2, max=5)],
+    gravity_unit: Annotated[str, typer.Option("--gravity-unit")],
+    temperature_unit: Annotated[str, typer.Option("--temperature-unit")],
+) -> None:
+    """EXPERIMENTAL read-only BrewForge SG diagnostics; never permission to act."""
+    try:
+        if gravity_unit != "sg" or temperature_unit != "c":
+            raise ValueError("explicit sg and c declarations required")
+        start_at, start_remainder = _utc_timestamp(start)
+        end_at, end_remainder = _utc_timestamp(end)
+        start_ns = _datetime_ns(start_at) + start_remainder
+        now_ns = _datetime_ns(end_at) + end_remainder
+        if not 0 < now_ns - start_ns <= 7 * 86_400 * 1_000_000_000:
+            raise ValueError("invalid diagnostic interval")
+        trigger = Decimal(trigger_sg)
+        if not trigger.is_finite() or not Decimal("0.9") <= trigger <= Decimal("1.2"):
+            raise ValueError("invalid trigger")
+        max_age_ns = _validated_max_age(max_age_minutes)
+        max_gap_ns = _validated_max_age(max_gap_minutes)
+        if min(max_age_ns, max_gap_ns) <= 0 or not 2 <= confirmations <= 5:
+            raise ValueError("invalid diagnostic policy")
+        contexts = [
+            item for item in load_fermentation_contexts()
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        ]
+        if len(contexts) != 1:
+            raise ValueError("one active context required")
+        context_phase_history(contexts[0])
+        brew_id = _canonical_brew_id(contexts[0].get("brewforge_brew_id"))
+    except (ArithmeticError, OSError, TypeError, ValueError):
+        typer.echo(
+            "BrewForge SG diagnostic failed: input or active context is invalid; "
+            "use vessel context start-brewforge for a valid BrewForge context.", err=True,
+        )
+        raise typer.Exit(1) from None
+
+    try:
+        client = BrewForgeClient(token=_token_for_api())
+        payload = client.get(f"brews/{brew_id}/readings")
+        readings = adapt_brewforge_readings(
+            payload, brew_id=brew_id, gravity_unit=gravity_unit, temperature_unit=temperature_unit,
+        )
+        _validate_brewforge_diagnostic_readings(
+            readings, brew_id=brew_id, start_ns=start_ns, end_ns=now_ns,
+            require_in_window=False,
+        )
+        in_window_readings = tuple(
+            item for item in readings if start_ns <= exact_ns(item) <= now_ns
+        )
+        _validate_brewforge_diagnostic_readings(
+            in_window_readings, brew_id=brew_id, start_ns=start_ns, end_ns=now_ns,
+        )
+        result = explain_telemetry_sg(
+            in_window_readings, gravity_unit="sg", now_ns=now_ns, trigger_sg=trigger,
+            max_age_ns=max_age_ns, max_gap_ns=max_gap_ns, confirmations=confirmations,
+        )
+        if result.distinct_observations is None:
+            raise ValueError("SG series integrity failure")
+        lines = [
+            "BrewForge SG diagnostic read-only (EXPERIMENTAL).",
+            "source=brewforge gravity_unit=sg temperature_unit=c",
+            f"Window: start_at_ns={start_ns} end_at_ns={now_ns}",
+            f"evaluation_at_ns={now_ns} (query-end coverage, not live freshness)",
+            "Declared units are caller assertions, not unit proof or verified calibration.",
+            "The brew UUID identifies a stored stream, not a physical device.",
+            "SG-only window; no batch or phase attribution is inferred.",
+            f"trigger_sg={trigger} max_age_ns={max_age_ns} max_gap_ns={max_gap_ns} "
+            f"confirmations={confirmations}",
+            f"status={result.status} reason={result.reason}",
+            " ".join(
+                f"{name}={value if value is not None else 'NO_DATA'}"
+                for name, value in (
+                    ("distinct_observations", result.distinct_observations),
+                    ("latest_age_ns", result.latest_age_ns),
+                    ("largest_confirmation_gap_ns", result.largest_confirmation_gap_ns),
+                )
+            ),
+            "Candidates are not quality-approved confirmations.",
+            *(f"CANDIDATE observed_at_ns={item.observed_at_ns} sg={item.sg}"
+              for item in result.evidence),
+            "No fermentation-complete, packaging, safety, or actuation permission "
+            "is granted by any status.",
+            "No BrewForge, RAPT, or Shelly write and no device command was sent.",
+        ]
+    except (httpx.HTTPError, ArithmeticError, OSError, RecursionError, TypeError, ValueError):
+        typer.echo("BrewForge SG diagnostic failed: request or response is invalid.", err=True)
         raise typer.Exit(1) from None
     typer.echo("\n".join(lines))
 

@@ -111,6 +111,8 @@ def test_installed_smoke_checks_rapt_surface_and_native_boundary() -> None:
     assert '"vessel", "status", "--help"' in program
     assert '"vessel sg-diagnose"' in program
     assert '"vessel", "sg-diagnose", "--help"' in program
+    assert '"vessel sg-diagnose-brewforge"' in program
+    assert '"vessel", "sg-diagnose-brewforge", "--help"' in program
     assert '"vessel sg-trend"' in program
     assert '"vessel", "sg-trend", "--help"' in program
     assert '"vessel overview"' in program
@@ -127,3 +129,10 @@ def test_installed_smoke_checks_named_phase_timezone_lookup() -> None:
     program = _installed_smoke_module()._verification_program()
 
     assert 'ZoneInfo("Europe/Berlin")' in program
+
+
+def test_installed_smoke_exercises_brewforge_diagnostic_offline() -> None:
+    program = _installed_smoke_module()._verification_program()
+    assert "brews/{brew_id}/readings" in program
+    assert "source=brewforge gravity_unit=sg temperature_unit=c" in program
+    assert "installed diagnostic accessed credentials before preflight" in program

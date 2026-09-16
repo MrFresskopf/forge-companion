@@ -268,6 +268,49 @@ command is sent. Missing required options or parser-invalid confirmations exit 2
 or policy exits 1 before credentials. The shared RAPT setup helper preserves exit 2 for a missing
 profile and exit 1 for credential-store failure. Existing vessel commands are unchanged.
 
+### `vessel sg-diagnose-brewforge` (EXPERIMENTAL, unreleased)
+
+```bash
+forge-companion vessel sg-diagnose-brewforge fermenter-1 --start "$START" --end "$END" \
+  --trigger-sg "$TRIGGER_SG" --max-age-minutes "$MAX_AGE_MINUTES" \
+  --max-gap-minutes "$MAX_GAP_MINUTES" --confirmations "$CONFIRMATIONS" \
+  --gravity-unit sg --temperature-unit c
+```
+
+This read-only SG diagnostic performs exactly one `GET /brews/{id}/readings` using the canonical
+`brewforge_brew_id` from exactly one valid active local context. Create that context with
+`vessel context start-brewforge` first. Missing, closed, duplicate, malformed, or noncanonical
+contexts fail before BrewForge credentials or client construction. The entire context store and
+recorded phase history must validate. Both supported recorded phases are acceptable; the query is
+not attributed to a phase or batch. Current RAPT bindings and their unit interpretation are not used.
+
+All eight options are mandatory. Units must be exactly lowercase `sg` and `c`; every other
+declaration is rejected before credentials, without conversion or magnitude detection. The remaining
+policy matches `sg-diagnose`: finite trigger SG in 0.9..1.2, positive age/gap minutes up to 2880
+(each must resolve to at least one nanosecond), and 2..5 confirmations. Start and end must be
+timezone-aware RFC3339 timestamps, with up to seven fractional digits (100 ns), a strictly positive
+interval, and at most seven days. Boundaries are inclusive and compared as exact integers.
+`--end` is the evaluation time; the current clock is never substituted.
+
+The complete decoded payload goes through `adapt_brewforge_readings` once with both explicit units.
+Every adapted reading is validated as the exact context brew UUID, source `brewforge`, hydrometer
+stream kind, and declared units. The command then filters the validated stream to the exact inclusive
+window; every reading passed to the single evaluator is in that window. Empty filtered windows and
+missing, malformed, duplicate, or missing-SG observations fail closed.
+API and integrity errors exit 1 with bounded stderr and empty stdout. Missing options or
+parser-invalid confirmations exit 2; other invalid policy exits 1 before credentials. Shared
+BrewForge authentication preserves exit 2 for missing setup and exit 1 for credential-store failure.
+
+Successful output declares `source=brewforge`, both units, exact window/evaluation times, policy,
+core status/reason, candidate evidence, and diagnostic metrics. Valid quality-blocked series report
+`NO_DECISION`; `WAIT` and `CONDITION_MET` retain the sibling's threshold-only meanings. Candidates
+are not quality-approved confirmations. Declared units do not prove calibration; the brew UUID
+identifies a stored stream, not a physical device. No fermentation state, completion, packaging,
+safety, live freshness, calibration, or physical-device conclusion follows from this report.
+No BrewForge, RAPT, or Shelly write and no device command is sent. No persistence, configuration
+change, polling, or extra network lookup occurs. The existing `sg-diagnose` behavior is unchanged,
+including its microsecond CLI boundaries and empty-stream diagnostic output.
+
 `sg-trend` is an independent, read-only Pill query, not an advisor. Both interval endpoints must be
 timezone-aware, the interval must be no more than seven days, and `--phase-timezone` must name an IANA
 zone. Inputs, one active context, an unchanged snapshotted device binding, and the current explicit

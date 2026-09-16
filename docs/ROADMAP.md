@@ -130,6 +130,11 @@ opaque source reading IDs and exact instants, and requires explicit `sg` and `c`
 the observed BrewForge contract it rejects `sg-times-1000`; it adds no network, freshness, advisor,
 completion, safety, persistence, or actuator behavior.
 
+The experimental `vessel sg-diagnose-brewforge` consumer now connects that adapter to one read-only
+readings GET and the existing SG diagnostic evaluator. It requires an active canonical BrewForge
+context, explicit units and policy, and exact inclusive boundaries; it makes no device or completion
+claim. The direct RAPT `sg-diagnose` path remains unchanged.
+
 Next steps remain separate: live read-only API validation, further source-independent advisory rules,
 and only then a secured webhook receiver. Reception must store observations rather than actuate
 directly. No Home Assistant or MQTT dependency is required. Unattended rules and hardware actions
