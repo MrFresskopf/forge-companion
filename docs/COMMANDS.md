@@ -121,6 +121,8 @@ forge-companion vessel sg-trend fermenter-1 --start 2026-09-01T00:00:00Z \
 forge-companion vessel sg-diagnose fermenter-1 --start "$START" --end "$END" \
   --trigger-sg "$TRIGGER_SG" --max-age-minutes "$MAX_AGE_MINUTES" \
   --max-gap-minutes "$MAX_GAP_MINUTES" --confirmations "$CONFIRMATIONS"
+forge-companion vessel compare-progress fermenter-1 --start "$START" --end "$END" \
+  --gravity-unit sg --temperature-unit c
 forge-companion vessel overview fermenter-1
 ```
 
@@ -310,6 +312,35 @@ safety, live freshness, calibration, or physical-device conclusion follows from 
 No BrewForge, RAPT, or Shelly write and no device command is sent. No persistence, configuration
 change, polling, or extra network lookup occurs. The existing `sg-diagnose` behavior is unchanged,
 including its microsecond CLI boundaries and empty-stream diagnostic output.
+
+### `vessel compare-progress` (EXPERIMENTAL, unreleased)
+
+```bash
+forge-companion vessel compare-progress fermenter-1 --start "$START" --end "$END" \
+  --gravity-unit sg --temperature-unit c
+```
+
+This is a read-only side-by-side observational report; it does not change `vessel overview` or either
+existing diagnosis command. It requires one explicit timezone-aware inclusive window, lowercase
+`--gravity-unit sg`, `--temperature-unit c`, one active valid BrewForge-backed context with canonical
+`brewforge_brew_id`, a current matching binding with explicit `sg-times-1000`, and the stored explicit
+original gravity. All options, context, binding, exact 100 ns interval, and original gravity validate
+before either RAPT or BrewForge credentials/client construction.
+
+It selects the bound RAPT hydrometer and makes exactly one `GET /brews/{id}/readings`, then normalizes
+RAPT only through `normalize_rapt_sg` and adapts BrewForge only through `adapt_brewforge_readings`.
+Each complete stream is validated and filtered to the same exact inclusive window. Each source is then
+passed independently to the common fermentation-progress evaluator with the same stored OG. A valid
+source with fewer than two selected SG observations renders its own bounded `NO_DATA` block; malformed
+responses or stream-integrity failures abort with generic stderr and no stdout.
+
+The two deterministic source blocks state their declared interpretation and stream identity (RAPT
+device or BrewForge stored-brew stream), selected count, first/latest exact observation and SG,
+apparent attenuation, signed average SG/day, and exact observation interval. These are
+observational/window averages, not forecast, freshness, calibration, completion, packaging, safety,
+or actuation evidence. The command neither resolves disagreement, computes cross-source deltas,
+averages observations, nor selects a winner. It performs no persistence/configuration/hardware/RAPT/
+BrewForge write or device command.
 
 `sg-trend` is an independent, read-only Pill query, not an advisor. Both interval endpoints must be
 timezone-aware, the interval must be no more than seven days, and `--phase-timezone` must name an IANA
