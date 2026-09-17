@@ -206,6 +206,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "rapt telemetry",
         "vessel",
         "vessel bind",
+        "vessel compare-progress",
         "vessel context",
         "vessel context close",
         "vessel context phase",

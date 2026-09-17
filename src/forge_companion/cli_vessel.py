@@ -1,5 +1,6 @@
 """Experimental offline vessel associations and read-only online telemetry."""
 
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from math import isfinite
@@ -40,6 +41,7 @@ from forge_companion.fermentation_contexts import (
     start_fermentation_context,
     validate_context_input_fields,
 )
+from forge_companion.fermentation_progress import evaluate_fermentation_progress
 from forge_companion.rapt import RaptClient, RaptError
 from forge_companion.rapt_sg import normalize_rapt_sg
 from forge_companion.sg_trend import TrendSegment, _datetime_ns, build_trend_report, exact_ns
@@ -980,6 +982,183 @@ def vessel_sg_diagnose_brewforge(
         ]
     except (httpx.HTTPError, ArithmeticError, OSError, RecursionError, TypeError, ValueError):
         typer.echo("BrewForge SG diagnostic failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo("\n".join(lines))
+
+
+def _progress_stream_selection(
+    readings: tuple[TelemetryReading, ...],
+    *,
+    source: str,
+    device_id: str,
+    start_ns: int,
+    end_ns: int,
+) -> tuple[TelemetryReading, ...]:
+    """Validate one complete neutral stream, then retain valid inclusive-window SGs."""
+    if not isinstance(readings, tuple):
+        raise ValueError("progress stream must be a tuple")
+    reading_ids: set[str] = set()
+    instants: set[int] = set()
+    selected: list[TelemetryReading] = []
+    for reading in readings:
+        if (
+            not isinstance(reading, TelemetryReading)
+            or reading.source != source
+            or reading.device_kind is not DeviceKind.HYDROMETER
+            or reading.device_id != device_id
+            or reading.gravity_unit != "sg"
+            or reading.observed_at.utcoffset() is None
+            or type(reading.observed_at_submicrosecond_ns) is not int
+            or reading.observed_at_submicrosecond_ns not in range(0, 1000, 100)
+        ):
+            raise ValueError("unexpected progress stream")
+        instant = exact_ns(reading)
+        if reading.reading_id in reading_ids or instant in instants:
+            raise ValueError("duplicate progress observation")
+        reading_ids.add(reading.reading_id)
+        instants.add(instant)
+        if start_ns <= instant <= end_ns and reading.gravity_raw is not None:
+            selected.append(reading)
+    return tuple(sorted(selected, key=exact_ns))
+
+
+def _progress_block(
+    *, heading: str, source: str, stream: str, readings: tuple[TelemetryReading, ...],
+    original_gravity: str, start_ns: int, end_ns: int,
+) -> list[str]:
+    if len(readings) < 2:
+        return [
+            f"{heading}_NO_DATA",
+            f"source={source} stream={stream}",
+            "input_gravity_unit=sg explicit; "
+            "input_interpretation=caller declaration, not unit proof or calibration",
+            "selected_observations=" + str(len(readings)),
+            "metrics=NO_DATA (fewer than two valid selected observations)",
+            f"{heading}_END",
+        ]
+    result = evaluate_fermentation_progress(
+        readings,
+        gravity_unit="sg",
+        original_gravity=original_gravity,
+        window_start_ns=start_ns,
+        window_end_ns=end_ns,
+    )
+    return [
+        f"{heading}_BEGIN",
+        f"source={source} stream={stream}",
+        "input_gravity_unit=sg explicit; "
+        "input_interpretation=caller declaration, not unit proof or calibration",
+        f"selected_observations={result.observations}",
+        f"first_at={readings[0].observed_at_exact} first_sg={result.first_observation.sg}",
+        f"latest_at={readings[-1].observed_at_exact} latest_sg={result.latest_sg}",
+        f"apparent_attenuation_percent={result.apparent_attenuation_percent}",
+        f"average_sg_per_day={result.average_sg_slope_per_day}",
+        "observation_interval_ns="
+        f"{result.observation_interval_start_ns}/{result.observation_interval_end_ns}",
+        f"{heading}_END",
+    ]
+
+
+@vessel_app.command("compare-progress")
+def vessel_compare_progress(
+    vessel_id: str,
+    start: Annotated[str, typer.Option("--start", help="Timezone-aware inclusive start.")],
+    end: Annotated[str, typer.Option("--end", help="Timezone-aware inclusive end.")],
+    gravity_unit: Annotated[str, typer.Option("--gravity-unit")],
+    temperature_unit: Annotated[str, typer.Option("--temperature-unit")],
+) -> None:
+    """EXPERIMENTAL read-only separate RAPT and BrewForge progress observations."""
+    try:
+        if gravity_unit != "sg" or temperature_unit != "c":
+            raise ValueError("explicit units required")
+        start_at, start_remainder = _utc_timestamp(start)
+        end_at, end_remainder = _utc_timestamp(end)
+        start_ns = _datetime_ns(start_at) + start_remainder
+        end_ns = _datetime_ns(end_at) + end_remainder
+        if start_ns >= end_ns:
+            raise ValueError("invalid progress window")
+        bindings = load_vessels()
+        binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
+        contexts = [
+            item for item in load_fermentation_contexts()
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        ]
+        if len(contexts) != 1 or binding["gravity_interpretation"] != "sg-times-1000":
+            raise ValueError("invalid progress precondition")
+        context = contexts[0]
+        if context_binding_status(context, bindings) != "current":
+            raise ValueError("context binding drift")
+        brew_id = _canonical_brew_id(context.get("brewforge_brew_id"))
+        original_gravity = context["original_gravity_sg"]
+        if not isinstance(original_gravity, str):
+            raise ValueError("invalid stored original gravity")
+        original = Decimal(original_gravity)
+        if (
+            not original.is_finite()
+            or not Decimal("1") < original <= Decimal("1.2")
+            or re.fullmatch(r"1\.[0-9]+", original_gravity) is None
+        ):
+            raise ValueError("invalid stored original gravity")
+    except (ArithmeticError, OSError, StopIteration, TypeError, ValueError):
+        typer.echo(
+            "Vessel progress comparison failed: input or local state is invalid.", err=True
+        )
+        raise typer.Exit(1) from None
+
+    try:
+        profile = _profile_for_api()
+        # RAPT request bounds have microsecond precision; floor start and ceil an exact end.
+        rapt_end = end_at + timedelta(microseconds=1) if end_remainder else end_at
+        raw_rapt = _read_hydrometer(
+            profile=profile, device_id=binding["hydrometer"], start=start_at, end=rapt_end
+        )
+        rapt = normalize_rapt_sg(
+            raw_rapt, gravity_interpretation=binding["gravity_interpretation"]
+        )
+        selected_rapt = _progress_stream_selection(
+            rapt, source="rapt", device_id=binding["hydrometer"], start_ns=start_ns, end_ns=end_ns
+        )
+        client = BrewForgeClient(token=_token_for_api())
+        payload = client.get(f"brews/{brew_id}/readings")
+        brewforge = adapt_brewforge_readings(
+            payload, brew_id=brew_id, gravity_unit=gravity_unit, temperature_unit=temperature_unit
+        )
+        selected_brewforge = _progress_stream_selection(
+            brewforge, source="brewforge", device_id=brew_id, start_ns=start_ns, end_ns=end_ns
+        )
+        lines = [
+            "Vessel progress comparison read-only (EXPERIMENTAL).",
+            f"Vessel: {vessel_id}",
+            f"Window: start_at_ns={start_ns} end_at_ns={end_ns} (inclusive)",
+            "BrewForge declarations: gravity_unit=sg temperature_unit=c.",
+            "Metrics are observational/window averages, not forecast, freshness, calibration, "
+            "completion, packaging, safety, or actuation evidence.",
+            *_progress_block(
+                heading="RAPT_PROGRESS", source="rapt", stream="RAPT hydrometer device",
+                readings=selected_rapt, original_gravity=original_gravity,
+                start_ns=start_ns, end_ns=end_ns,
+            ),
+            *_progress_block(
+                heading="BREWFORGE_PROGRESS",
+                source="brewforge",
+                stream="BrewForge stored-brew stream",
+                readings=selected_brewforge, original_gravity=original_gravity,
+                start_ns=start_ns, end_ns=end_ns,
+            ),
+            "The two source blocks are separate observations; no disagreement is resolved or "
+            "averaged.",
+            "No persistence/config/hardware/BrewForge/RAPT write or device command was sent.",
+        ]
+    except (
+        RaptError,
+        httpx.HTTPError,
+        ArithmeticError,
+        OSError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
+        typer.echo("Vessel progress comparison failed: request or response is invalid.", err=True)
         raise typer.Exit(1) from None
     typer.echo("\n".join(lines))
 

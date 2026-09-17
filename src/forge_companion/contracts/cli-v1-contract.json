@@ -1335,6 +1335,18 @@
       ],
       "stability": "experimental"
     },
+    "vessel compare-progress": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "start", "kind": "option", "spellings": ["--start"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "end", "kind": "option", "spellings": ["--end"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "gravity_unit", "kind": "option", "spellings": ["--gravity-unit"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "temperature_unit", "kind": "option", "spellings": ["--temperature-unit"], "required": true, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
+    },
     "vessel sg-trend": {
       "kind": "command",
       "hidden": false,
