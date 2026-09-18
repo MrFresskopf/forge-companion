@@ -36,12 +36,15 @@ def test_release_version_is_0_5_0_across_active_metadata_and_readme() -> None:
     assert "@v0.4.0" not in readme
 
 
-def test_frozen_snapshot_fixture_remains_historical_and_byte_stable() -> None:
+def test_frozen_snapshot_fixture_remains_historical_and_lf_byte_stable() -> None:
     fixture = _REPOSITORY_ROOT / "tests" / "fixtures" / "collection-snapshot-v3.json"
+    fixture_bytes = fixture.read_bytes().replace(bytes((13, 10)), bytes((10,)))
 
-    assert sha256(fixture.read_bytes()).hexdigest() == (
-        "9bc384cb7492d8ce1450440eee47b03f34325e8b1d2bf1871d8cacaf7813b457"
+    assert sha256(fixture_bytes).hexdigest() == (
+        "e363a679dc962b0e139ac78e20b10ac41aae2a11f40212e4bb70ad7b0d456f3e"
     )
+    attributes = (_REPOSITORY_ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "tests/fixtures/collection-snapshot-v3.json text eol=lf" in attributes
     assert '"version": "0.2.1"' in fixture.read_text(encoding="utf-8")
 
 
