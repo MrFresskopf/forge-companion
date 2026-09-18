@@ -93,7 +93,7 @@ deprecation and migration path.
 - BrewForge restore or any BrewForge write operation
 - promoting `hopper fire` from experimental status without mechanical success sensing
 
-## Direct telemetry sources (unreleased, experimental)
+## Direct telemetry sources (experimental)
 
 The first additive RAPT API slice provides native credential storage, explicit device selection,
 read-only Pill/controller telemetry, and a source-neutral reading model. It does not change frozen

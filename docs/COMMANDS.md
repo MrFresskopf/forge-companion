@@ -36,10 +36,10 @@ stored credential until corrected or unset. `logout` deletes only the native sto
 whether a valid environment override remains active or an invalid value still blocks authentication.
 All three commands are offline.
 
-## `rapt` (experimental, unreleased)
+## `rapt` (experimental)
 
 Direct read-only RAPT access is independent of BrewForge and needs neither Home Assistant nor MQTT.
-These commands are in development and are not part of the `v0.4.0` release.
+These commands are experimental and may change before 1.0.
 
 ```bash
 forge-companion rapt auth login
@@ -95,7 +95,7 @@ RAPT describes its API as unsupported and subject to change. See the
 that readings are fresh enough for automation. The existing BrewForge spunding advisor and Shelly
 one-shot safety core are unchanged and are not connected to RAPT readings in this slice.
 
-## `vessel` (experimental, unreleased)
+## `vessel` (experimental)
 
 Create and inspect a local association between exactly one RAPT Pill and one Temperature Controller:
 
@@ -270,7 +270,7 @@ command is sent. Missing required options or parser-invalid confirmations exit 2
 or policy exits 1 before credentials. The shared RAPT setup helper preserves exit 2 for a missing
 profile and exit 1 for credential-store failure. Existing vessel commands are unchanged.
 
-### `vessel sg-diagnose-brewforge` (EXPERIMENTAL, unreleased)
+### `vessel sg-diagnose-brewforge` (EXPERIMENTAL)
 
 ```bash
 forge-companion vessel sg-diagnose-brewforge fermenter-1 --start "$START" --end "$END" \
@@ -313,7 +313,7 @@ No BrewForge, RAPT, or Shelly write and no device command is sent. No persistenc
 change, polling, or extra network lookup occurs. The existing `sg-diagnose` behavior is unchanged,
 including its microsecond CLI boundaries and empty-stream diagnostic output.
 
-### `vessel compare-progress` (EXPERIMENTAL, unreleased)
+### `vessel compare-progress` (EXPERIMENTAL)
 
 ```bash
 forge-companion vessel compare-progress fermenter-1 --start "$START" --end "$END" \

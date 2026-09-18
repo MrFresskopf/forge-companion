@@ -1,7 +1,7 @@
 # Offline BrewForge → neutral telemetry adapter (experimental Python API)
 
 The adapter remains pure. Its experimental CLI consumer,
-[`vessel sg-diagnose-brewforge`](COMMANDS.md#vessel-sg-diagnose-brewforge-experimental-unreleased),
+[`vessel sg-diagnose-brewforge`](COMMANDS.md#vessel-sg-diagnose-brewforge-experimental),
 owns local preflight, one read-only request, explicit diagnostic policy, and output validation.
 
 `forge_companion.brewforge_telemetry.adapt_brewforge_readings` is a pure adapter for an
