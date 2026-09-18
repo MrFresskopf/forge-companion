@@ -1,7 +1,7 @@
 # Compatibility policy
 
 > [!IMPORTANT]
-> This is the pre-1.0 compatibility design for Forge Companion. Version 0.4.0 implements the documented
+> This is the pre-1.0 compatibility design for Forge Companion. Version 0.5.0 implements the documented
 > `doctor --json` contract while live Cloud actuation remains experimental.
 > The policy becomes binding for the stable scope when 1.0 is released; until then, incompatible changes
 > remain possible when they are documented in the changelog.
@@ -31,11 +31,11 @@ Offline simulated-pulse planning and simulation may enter the stable tier indepe
 actuation. Cloud-pulse plan fields and transitions remain experimental together with the actuator. An
 experimental actuator is not evidence that a pulse reached or released hops mechanically.
 
-The unreleased `rapt` command family, including its separate authentication commands, is entirely
+The `rapt` command family, including its separate authentication commands, is entirely
 experimental. It is additive and does not extend the stable authentication scope above. Its internal
-telemetry model is not a versioned export format. See the [command guide](COMMANDS.md#rapt-experimental-unreleased).
+telemetry model is not a versioned export format. See the [command guide](COMMANDS.md#rapt-experimental).
 
-The unreleased `vessel` command family (offline bindings and read-only online telemetry) and its
+The `vessel` command family (offline bindings and read-only online telemetry) and its
 `forge-companion-vessels-v1` local file are also experimental. The file is closed and versioned so
 malformed or future content fails safely, but no forward-compatibility or migration promise applies
 before this feature is promoted.

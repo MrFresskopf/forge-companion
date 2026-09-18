@@ -1,5 +1,6 @@
 import importlib.util
 import tomllib
+from hashlib import sha256
 from pathlib import Path
 from types import ModuleType
 
@@ -23,11 +24,54 @@ def _installed_smoke_module() -> ModuleType:
     return module
 
 
-def test_release_version_is_0_4_0_and_matches_runtime() -> None:
+def test_release_version_is_0_5_0_across_active_metadata_and_readme() -> None:
     project = _project_metadata()
+    lock = (_REPOSITORY_ROOT / "uv.lock").read_text(encoding="utf-8")
+    readme = (_REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert project["version"] == "0.4.0"
-    assert __version__ == project["version"]
+    assert project["version"] == "0.5.0"
+    assert __version__ == project["version"] == "0.5.0"
+    assert 'name = "forge-companion"\nversion = "0.5.0"' in lock
+    assert readme.count("@v0.5.0") == 4
+    assert "@v0.4.0" not in readme
+
+
+def test_frozen_snapshot_fixture_remains_historical_and_byte_stable() -> None:
+    fixture = _REPOSITORY_ROOT / "tests" / "fixtures" / "collection-snapshot-v3.json"
+
+    assert sha256(fixture.read_bytes()).hexdigest() == (
+        "9bc384cb7492d8ce1450440eee47b03f34325e8b1d2bf1871d8cacaf7813b457"
+    )
+    assert '"version": "0.2.1"' in fixture.read_text(encoding="utf-8")
+
+
+def test_release_docs_ship_0_5_0_experimental_surfaces_and_keep_v0_4_history() -> None:
+    readme = (_REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+    commands = (_REPOSITORY_ROOT / "docs" / "COMMANDS.md").read_text(encoding="utf-8")
+    compatibility = (_REPOSITORY_ROOT / "docs" / "COMPATIBILITY.md").read_text(encoding="utf-8")
+    changelog = (_REPOSITORY_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "[0.5.0] — 2026-09-18" in changelog
+    assert (
+        "[0.5.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.4.0...v0.5.0"
+        in changelog
+    )
+    assert "## [0.4.0] — 2026-08-16" in changelog
+    assert "An executable 1.0 CLI freeze candidate" in changelog
+    assert "unreleased" not in readme.lower()
+    assert "unreleased" not in commands.lower()
+    assert "unreleased" not in compatibility.lower()
+    assert "## `rapt` (experimental)" in commands
+    assert "## `vessel` (experimental)" in commands
+    assert "#rapt-experimental" in readme
+    assert "#vessel-experimental" in readme
+    assert "#vessel-sg-diagnose-brewforge-experimental" in readme
+
+
+def test_packaging_ignores_all_local_virtualenv_directories() -> None:
+    gitignore = (_REPOSITORY_ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    assert ".venv*/" in gitignore
 
 
 def test_bug_report_template_uses_release_version() -> None:

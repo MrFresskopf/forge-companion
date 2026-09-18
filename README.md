@@ -33,13 +33,13 @@ Cloud commands use a separate native-keyring profile; optional BrewForge reports
 With [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
+uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
 ```
 
 Or with [pipx](https://pipx.pypa.io/):
 
 ```bash
-pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
+pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
 ```
 
 ### Upgrade from an earlier release
@@ -48,13 +48,13 @@ Choose the target release tag explicitly. Reinstalling from that immutable tag a
 new commits on `main`:
 
 ```bash
-uv tool install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
+uv tool install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
 ```
 
 Or with pipx:
 
 ```bash
-pipx install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.4.0
+pipx install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
 ```
 
 ### 2. Inspect the guarded hopper workflow
@@ -93,18 +93,17 @@ Whitespace-only values are ignored; values containing whitespace are rejected an
 credential use until corrected or unset. Do not put a real token in a config file, issue, screenshot,
 command argument, or commit.
 
-### Optional: BrewForge SG diagnostic (unreleased, experimental)
+### Optional: BrewForge SG diagnostic (experimental)
 
 `vessel sg-diagnose-brewforge` reads the active local context's BrewForge readings with one GET.
 It requires explicit SG/Celsius declarations and every diagnostic policy, evaluates coverage at
 the requested end time, and grants no completion or actuation permission. See the
-[command guide](docs/COMMANDS.md#vessel-sg-diagnose-brewforge-experimental-unreleased).
+[command guide](docs/COMMANDS.md#vessel-sg-diagnose-brewforge-experimental).
 
-### Optional: direct RAPT telemetry (unreleased, experimental)
+### Optional: direct RAPT telemetry (experimental)
 
-The development branch adds direct read-only RAPT Pill and Temperature Controller access without
-BrewForge, Home Assistant, or MQTT. This is not included in the `v0.4.0` installation above.
-See the [RAPT command guide](docs/COMMANDS.md#rapt-experimental-unreleased) for secure setup and
+Direct read-only RAPT Pill and Temperature Controller access needs neither BrewForge, Home Assistant,
+nor MQTT. See the [RAPT command guide](docs/COMMANDS.md#rapt-experimental) for secure setup and
 explicit telemetry windows. No telemetry command evaluates automation rules or switches a device.
 
 Associate one Pill and Temperature Controller under a local vessel name with offline `vessel bind`,
@@ -112,7 +111,7 @@ then inspect it offline with `vessel list` or `vessel show`. The separate `vesse
 performs an explicit-window, read-only online query for both bound devices; it never controls
 hardware or evaluates automation rules. This experimental metadata is stored separately from
 credentials. See the
-[vessel command guide](docs/COMMANDS.md#vessel-experimental-unreleased).
+[vessel command guide](docs/COMMANDS.md#vessel-experimental).
 
 The experimental `vessel context start/phase/show/close` lifecycle stores offline batch context separately
 from vessel bindings. Starting requires strict SG values, an ISO calendar date, and an explicit

@@ -6,6 +6,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-18
+
 ### Added
 
 - Experimental `vessel sg-diagnose-brewforge`: one read-only readings GET after complete local
@@ -47,6 +49,15 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   windows using the full instant, and display it in the CLI. Existing shorter timestamps and raw
   gravity values remain unchanged. Returned fractions beyond seven digits fail closed; CLI request
   boundaries beyond six digits are rejected rather than silently truncated.
+
+### Changed
+
+- Experimental source-neutral progress comparison and local outlier evidence now keep RAPT and
+  BrewForge streams distinct. They are observational read-only evidence, not calibration, freshness,
+  fermentation-completion, packaging, safety, or actuation decisions.
+- Packaging and compatibility coverage now exercises the added experimental RAPT and vessel command
+  surfaces through the installed-artifact smoke while retaining the frozen snapshot-v3 fixture and its
+  historical generator metadata unchanged.
 
 ## [0.4.0] — 2026-08-16
 
@@ -211,7 +222,8 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/MrFresskopf/forge-companion/releases/tag/v0.2.1
