@@ -270,6 +270,31 @@ command is sent. Missing required options or parser-invalid confirmations exit 2
 or policy exits 1 before credentials. The shared RAPT setup helper preserves exit 2 for a missing
 profile and exit 1 for credential-store failure. Existing vessel commands are unchanged.
 
+### `vessel local-outliers` (EXPERIMENTAL)
+
+```bash
+forge-companion vessel local-outliers fermenter-1 --source rapt --start "$START" --end "$END" \
+  --max-neighbor-gap-ns 1800000000000 --gravity-unit sg --gravity-threshold 0.0005
+forge-companion vessel local-outliers fermenter-1 --source brewforge --start "$START" --end "$END" \
+  --max-neighbor-gap-ns 1800000000000 --gravity-unit sg --gravity-threshold 0.0005 \
+  --temperature-unit c --temperature-threshold 0.5
+```
+
+One source is selected explicitly per invocation (`rapt` or `brewforge`); streams are never fused or
+ranked. Exact timezone-aware inclusive endpoints support 100 ns, the neighbor-gap policy is an exact
+nonnegative integer `--max-neighbor-gap-ns`, and SG needs an explicit `sg` declaration and Decimal
+threshold. RAPT requires the active context's current binding with persisted `sg-times-1000`, makes one
+hydrometer read, and uses `normalize_rapt_sg`; raw RAPT temperature is not silently labeled C or
+assessed. BrewForge requires canonical active-context `brewforge_brew_id`, explicit `sg`/`c` caller
+declarations, and exactly one `GET /brews/{id}/readings`.
+
+Policy, local context/binding, source identity and units validate before credentials or a client. API
+and malformed/integrity failures atomically emit fixed sanitized stderr and empty stdout. Valid
+no-assessment/no-finding output reports assessment count. Each finding retains metric, candidate and
+bracketing neighbor IDs/exact times/values, interpolated expected, residual and threshold. Findings are
+evidence only—not validation, calibration, sensor-fault proof, forecast, freshness, completion,
+packaging, safety, or actuation conclusions. No write, persistence, device command, or actuation occurs.
+
 ### `vessel sg-diagnose-brewforge` (EXPERIMENTAL)
 
 ```bash

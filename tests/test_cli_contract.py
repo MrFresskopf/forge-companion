@@ -214,6 +214,7 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
         "vessel context start",
         "vessel context start-brewforge",
         "vessel list",
+        "vessel local-outliers",
         "vessel overview",
         "vessel show",
         "vessel sg-diagnose",
