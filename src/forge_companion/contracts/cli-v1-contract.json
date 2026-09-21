@@ -1117,6 +1117,22 @@
       ],
       "stability": "experimental"
     },
+    "vessel local-outliers": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {"name": "vessel_id", "kind": "argument", "spellings": ["vessel_id"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "source", "kind": "option", "spellings": ["--source"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "start", "kind": "option", "spellings": ["--start"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "end", "kind": "option", "spellings": ["--end"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "max_neighbor_gap_ns", "kind": "option", "spellings": ["--max-neighbor-gap-ns"], "required": true, "default": null, "type": {"kind": "integer", "minimum": 0}},
+        {"name": "gravity_unit", "kind": "option", "spellings": ["--gravity-unit"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "gravity_threshold", "kind": "option", "spellings": ["--gravity-threshold"], "required": true, "default": null, "type": {"kind": "string"}},
+        {"name": "temperature_unit", "kind": "option", "spellings": ["--temperature-unit"], "required": false, "default": null, "type": {"kind": "string"}},
+        {"name": "temperature_threshold", "kind": "option", "spellings": ["--temperature-threshold"], "required": false, "default": null, "type": {"kind": "string"}}
+      ],
+      "stability": "experimental"
+    },
     "vessel sg-diagnose": {
       "kind": "command",
       "hidden": false,

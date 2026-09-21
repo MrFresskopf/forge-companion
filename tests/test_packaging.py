@@ -158,6 +158,8 @@ def test_installed_smoke_checks_rapt_surface_and_native_boundary() -> None:
     assert '"vessel", "status", "--help"' in program
     assert '"vessel compare-progress"' in program
     assert '"vessel", "compare-progress", "--help"' in program
+    assert '"vessel local-outliers"' in program
+    assert '"vessel", "local-outliers", "--help"' in program
     assert '"vessel sg-diagnose"' in program
     assert '"vessel", "sg-diagnose", "--help"' in program
     assert '"vessel sg-diagnose-brewforge"' in program

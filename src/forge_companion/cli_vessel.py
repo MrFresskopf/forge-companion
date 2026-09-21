@@ -42,6 +42,7 @@ from forge_companion.fermentation_contexts import (
     validate_context_input_fields,
 )
 from forge_companion.fermentation_progress import evaluate_fermentation_progress
+from forge_companion.local_outliers import LocalOutlierResult, evaluate_local_outliers
 from forge_companion.rapt import RaptClient, RaptError
 from forge_companion.rapt_sg import normalize_rapt_sg
 from forge_companion.sg_trend import TrendSegment, _datetime_ns, build_trend_report, exact_ns
@@ -748,6 +749,139 @@ def _trend_segment_line(segment: TrendSegment) -> str:
             f"endpoint_trend={segment.endpoint_trend}",
         )
     )
+
+
+def _outlier_lines(result: LocalOutlierResult, *, source: str) -> list[str]:
+    """Render complete local evidence only after the evaluator has succeeded."""
+    assessments = result.assessed_observations
+    findings = result.findings
+    lines = [
+        "Local outlier evidence read-only (EXPERIMENTAL).",
+        f"source={source} assessments={len(assessments)} findings={len(findings)}",
+        "Findings are evidence only—not validation, calibration, sensor-fault proof, "
+        "forecast, freshness, completion, packaging, safety, or actuation conclusion.",
+    ]
+    for finding in findings:
+        item = finding.observation
+        left = finding.left_observation
+        right = finding.right_observation
+        lines.append(
+            f"metric={finding.metric} candidate_id={item.reading_id} "
+            f"candidate_at_ns={item.observed_at_ns} candidate_value={item.value} "
+            f"left_id={left.reading_id} left_at_ns={left.observed_at_ns} "
+            f"left_value={left.value} right_id={right.reading_id} "
+            f"right_at_ns={right.observed_at_ns} right_value={right.value} "
+            f"expected={finding.expected_value} residual={finding.residual} "
+            f"threshold={finding.threshold}"
+        )
+    lines.append("No write, persistence, device command, or actuation was performed.")
+    return lines
+
+
+@vessel_app.command("local-outliers")
+def vessel_local_outliers(
+    vessel_id: str,
+    source: Annotated[str, typer.Option("--source", help="Exactly one source: rapt or brewforge.")],
+    start: Annotated[str, typer.Option("--start", help="Timezone-aware exact inclusive start.")],
+    end: Annotated[str, typer.Option("--end", help="Timezone-aware exact inclusive end.")],
+    max_neighbor_gap_ns: Annotated[int, typer.Option("--max-neighbor-gap-ns", min=0)],
+    gravity_unit: Annotated[str, typer.Option("--gravity-unit")],
+    gravity_threshold: Annotated[str, typer.Option("--gravity-threshold")],
+    temperature_unit: Annotated[str | None, typer.Option("--temperature-unit")] = None,
+    temperature_threshold: Annotated[str | None, typer.Option("--temperature-threshold")] = None,
+) -> None:
+    """EXPERIMENTAL strict-neighbor evidence for one explicit stored source."""
+    try:
+        if source not in {"rapt", "brewforge"} or gravity_unit != "sg":
+            raise ValueError("invalid source or unit")
+        if source == "rapt" and (temperature_unit is not None or temperature_threshold is not None):
+            raise ValueError("raw RAPT temperature is not declared C")
+        if source == "brewforge" and (temperature_unit != "c" or temperature_threshold is None):
+            raise ValueError("BrewForge temperature requires explicit c and threshold")
+        start_at, start_remainder = _utc_timestamp(start)
+        end_at, end_remainder = _utc_timestamp(end)
+        start_ns = _datetime_ns(start_at) + start_remainder
+        end_ns = _datetime_ns(end_at) + end_remainder
+        if start_ns >= end_ns or end_ns - start_ns > 7 * 86_400 * 1_000_000_000:
+            raise ValueError("invalid interval")
+        # Validate threshold grammar and exact ns policy before credentials/client creation.
+        evaluate_local_outliers(
+            (),
+            gravity_unit=gravity_unit,
+            temperature_unit=temperature_unit,
+            gravity_threshold=gravity_threshold,
+            temperature_threshold=temperature_threshold,
+            window_start_ns=start_ns,
+            window_end_ns=end_ns,
+            max_neighbor_gap_ns=max_neighbor_gap_ns,
+        )
+        contexts = [
+            item
+            for item in load_fermentation_contexts()
+            if item["vessel_id"] == vessel_id and item["status"] == "active"
+        ]
+        if len(contexts) != 1:
+            raise ValueError("one active context required")
+        context_phase_history(contexts[0])
+        if source == "rapt":
+            bindings = load_vessels()
+            binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
+            if (
+                binding["gravity_interpretation"] != "sg-times-1000"
+                or context_binding_status(contexts[0], bindings) != "current"
+            ):
+                raise ValueError("RAPT binding is not current and explicit")
+            source_id = binding["hydrometer"]
+        else:
+            source_id = _canonical_brew_id(contexts[0].get("brewforge_brew_id"))
+    except (ArithmeticError, OSError, StopIteration, TypeError, ValueError):
+        typer.echo("Local outlier evidence failed: input or local state is invalid.", err=True)
+        raise typer.Exit(1) from None
+
+    try:
+        readings: tuple[TelemetryReading, ...]
+        if source == "rapt":
+            profile = _profile_for_api()
+            # The RAPT transport accepts datetimes only: floor start and ceil exact end.
+            rapt_end = end_at + timedelta(microseconds=1) if end_remainder else end_at
+            readings = normalize_rapt_sg(
+                _read_hydrometer(
+                    profile=profile, device_id=source_id, start=start_at, end=rapt_end
+                ),
+                gravity_interpretation="sg-times-1000",
+            )
+            temperature_unit = None
+            temperature_threshold = None
+        else:
+            client = BrewForgeClient(token=_token_for_api())
+            payload = client.get(f"brews/{source_id}/readings")
+            readings = adapt_brewforge_readings(
+                payload, brew_id=source_id, gravity_unit="sg", temperature_unit="c"
+            )
+        selected = tuple(item for item in readings if start_ns <= exact_ns(item) <= end_ns)
+        result = evaluate_local_outliers(
+            selected,
+            gravity_unit="sg",
+            temperature_unit=temperature_unit,
+            gravity_threshold=gravity_threshold,
+            temperature_threshold=temperature_threshold,
+            window_start_ns=start_ns,
+            window_end_ns=end_ns,
+            max_neighbor_gap_ns=max_neighbor_gap_ns,
+        )
+        lines = _outlier_lines(result, source=source)
+    except (
+        RaptError,
+        httpx.HTTPError,
+        ArithmeticError,
+        OSError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
+        typer.echo("Local outlier evidence failed: request or response is invalid.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo("\n".join(lines))
 
 
 @vessel_app.command("sg-diagnose")
