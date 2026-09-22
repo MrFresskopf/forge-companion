@@ -7,12 +7,14 @@ across the selected observations, not a forecast.
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal, Inexact, Rounded, localcontext
-from uuid import UUID
 
-from forge_companion.sg_trend import NANOSECONDS_PER_SECOND, exact_ns
+from forge_companion.sg_trend import NANOSECONDS_PER_SECOND
 from forge_companion.telemetry import DeviceKind, TelemetryReading
+from forge_companion.telemetry_identity import (
+    TelemetryIdentityValidationError,
+    validate_telemetry_identity,
+)
 
 _SG_MIN = Decimal("0.9")
 _SG_MAX = Decimal("1.2")
@@ -148,26 +150,15 @@ def _original_gravity(value: object) -> Decimal:
 
 
 def _reading(reading: object) -> tuple[int, Decimal, tuple[str, DeviceKind, str]]:
-    if not isinstance(reading, TelemetryReading):
-        raise FermentationProgressValidationError("input contains an invalid reading")
-    source = _opaque_identifier(reading.source, field="source")
-    device_id = _opaque_identifier(reading.device_id, field="device")
-    reading_id = _opaque_identifier(reading.reading_id, field="reading")
-    if source in {"rapt", "brewforge"}:
-        device_id = _canonical_uuid(device_id, field="device")
-    if source == "rapt":
-        reading_id = _canonical_uuid(reading_id, field="reading")
-    if reading.device_kind is not DeviceKind.HYDROMETER:
+    try:
+        identity = validate_telemetry_identity(reading)
+    except TelemetryIdentityValidationError as error:
+        raise FermentationProgressValidationError(str(error)) from None
+    assert isinstance(reading, TelemetryReading)
+    if identity.device_kind is not DeviceKind.HYDROMETER:
         raise FermentationProgressValidationError("input contains an invalid stream identity")
     if reading.gravity_unit != "sg":
         raise FermentationProgressValidationError("reading gravity unit must be explicit sg")
-    if (
-        not isinstance(reading.observed_at, datetime)
-        or type(reading.observed_at_submicrosecond_ns) is not int
-        or reading.observed_at_submicrosecond_ns not in range(0, 1000, 100)
-        or reading.observed_at.utcoffset() is None
-    ):
-        raise FermentationProgressValidationError("input contains an invalid exact timestamp")
     if (
         reading.gravity_raw is None
         or isinstance(reading.gravity_raw, bool)
@@ -177,36 +168,7 @@ def _reading(reading: object) -> tuple[int, Decimal, tuple[str, DeviceKind, str]
     sg = Decimal(str(reading.gravity_raw))
     if not sg.is_finite() or not _SG_MIN <= sg <= _SG_MAX:
         raise FermentationProgressValidationError("input contains an out-of-domain SG")
-    try:
-        instant = exact_ns(reading)
-    except (OverflowError, ValueError):
-        raise FermentationProgressValidationError(
-            "input contains an invalid exact timestamp"
-        ) from None
-    return instant, sg, (source, reading.device_kind, device_id)
-
-
-def _opaque_identifier(value: object, *, field: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or value != value.strip()
-        or any(not character.isprintable() for character in value)
-    ):
-        raise FermentationProgressValidationError("input contains an invalid stream identity")
-    return value
-
-
-def _canonical_uuid(value: str, *, field: str) -> str:
-    try:
-        canonical = str(UUID(value))
-    except ValueError:
-        raise FermentationProgressValidationError(
-            "input contains an invalid stream identity"
-        ) from None
-    if canonical != value:
-        raise FermentationProgressValidationError("input contains an invalid stream identity")
-    return canonical
+    return identity.observed_at_ns, sg, identity.stream
 
 
 def _derived(

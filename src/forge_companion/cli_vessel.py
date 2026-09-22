@@ -46,7 +46,11 @@ from forge_companion.local_outliers import LocalOutlierResult, evaluate_local_ou
 from forge_companion.rapt import RaptClient, RaptError
 from forge_companion.rapt_sg import normalize_rapt_sg
 from forge_companion.sg_trend import TrendSegment, _datetime_ns, build_trend_report, exact_ns
-from forge_companion.spunding_advisor import TelemetrySgReason, explain_telemetry_sg
+from forge_companion.spunding_advisor import (
+    TelemetrySgReason,
+    TelemetrySgResult,
+    explain_telemetry_sg,
+)
 from forge_companion.telemetry import (
     DeviceKind,
     RaptTelemetrySource,
@@ -432,6 +436,18 @@ def _read_hydrometer(
         )
 
 
+def _active_context_for_vessel(vessel_id: str) -> dict[str, object]:
+    """Return exactly one active local context before any credential lookup."""
+    contexts = [
+        item
+        for item in load_fermentation_contexts()
+        if item["vessel_id"] == vessel_id and item["status"] == "active"
+    ]
+    if len(contexts) != 1:
+        raise ValueError("one active context required")
+    return contexts[0]
+
+
 def _vessel_reading_line(reading: TelemetryReading, *, gravity_interpretation: str) -> str:
     fields = [reading.observed_at_exact]
     if reading.temperature_c is not None:
@@ -597,13 +613,10 @@ def vessel_overview(vessel_id: str) -> None:
     """Experimental read-only active context and recent device observations."""
     try:
         bindings = load_vessels()
-        item = next(
-            item for item in load_fermentation_contexts()
-            if item["vessel_id"] == vessel_id and item["status"] == "active"
-        )
+        item = _active_context_for_vessel(vessel_id)
         if context_binding_status(item, bindings) != "current":
             raise ValueError("context binding is not current")
-    except (OSError, StopIteration, TypeError, ValueError):
+    except (OSError, TypeError, ValueError):
         typer.echo(
             "Vessel overview failed: active context or matching binding unavailable.",
             err=True,
@@ -727,6 +740,30 @@ def _decimal_label(value: Decimal | None) -> str:
     return "NO_DATA" if value is None else format(value, "f")
 
 
+def _sg_diagnostic_result_lines(
+    result: TelemetrySgResult, *, permission_disclaimer: str, permission_boundary: str
+) -> list[str]:
+    """Render complete SG evaluator evidence with an explicit source boundary."""
+    return [
+        f"status={result.status} reason={result.reason}",
+        " ".join(
+            f"{name}={value if value is not None else 'NO_DATA'}"
+            for name, value in (
+                ("distinct_observations", result.distinct_observations),
+                ("latest_age_ns", result.latest_age_ns),
+                ("largest_confirmation_gap_ns", result.largest_confirmation_gap_ns),
+            )
+        ),
+        "Candidates are not quality-approved confirmations.",
+        *(
+            f"CANDIDATE observed_at_ns={item.observed_at_ns} sg={item.sg}"
+            for item in result.evidence
+        ),
+        permission_disclaimer,
+        permission_boundary,
+    ]
+
+
 def _trend_segment_line(segment: TrendSegment) -> str:
     return " ".join(
         (
@@ -815,25 +852,19 @@ def vessel_local_outliers(
             window_end_ns=end_ns,
             max_neighbor_gap_ns=max_neighbor_gap_ns,
         )
-        contexts = [
-            item
-            for item in load_fermentation_contexts()
-            if item["vessel_id"] == vessel_id and item["status"] == "active"
-        ]
-        if len(contexts) != 1:
-            raise ValueError("one active context required")
-        context_phase_history(contexts[0])
+        context = _active_context_for_vessel(vessel_id)
+        context_phase_history(context)
         if source == "rapt":
             bindings = load_vessels()
             binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
             if (
                 binding["gravity_interpretation"] != "sg-times-1000"
-                or context_binding_status(contexts[0], bindings) != "current"
+                or context_binding_status(context, bindings) != "current"
             ):
                 raise ValueError("RAPT binding is not current and explicit")
             source_id = binding["hydrometer"]
         else:
-            source_id = _canonical_brew_id(contexts[0].get("brewforge_brew_id"))
+            source_id = _canonical_brew_id(context.get("brewforge_brew_id"))
     except (ArithmeticError, OSError, StopIteration, TypeError, ValueError):
         typer.echo("Local outlier evidence failed: input or local state is invalid.", err=True)
         raise typer.Exit(1) from None
@@ -909,13 +940,10 @@ def vessel_sg_diagnose(
             raise ValueError("limits must resolve to positive nanoseconds")
         bindings = load_vessels()
         binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
-        contexts = [
-            item for item in load_fermentation_contexts()
-            if item["vessel_id"] == vessel_id and item["status"] == "active"
-        ]
-        if len(contexts) != 1 or binding["gravity_interpretation"] != "sg-times-1000":
+        context = _active_context_for_vessel(vessel_id)
+        if binding["gravity_interpretation"] != "sg-times-1000":
             raise ValueError("diagnostic precondition failed")
-        if context_binding_status(contexts[0], bindings) != "current":
+        if context_binding_status(context, bindings) != "current":
             raise ValueError("context binding drift")
     except (ArithmeticError, OSError, StopIteration, TypeError, ValueError):
         typer.echo("Vessel SG diagnostic failed: input or local state is invalid.", err=True)
@@ -962,21 +990,14 @@ def vessel_sg_diagnose(
             "SG-only window; no batch or phase attribution is inferred.",
             f"trigger_sg={trigger} max_age_ns={max_age_ns} max_gap_ns={max_gap_ns} "
             f"confirmations={confirmations}",
-            f"status={result.status} reason={result.reason}",
-            " ".join(
-                f"{name}={value if value is not None else 'NO_DATA'}"
-                for name, value in (
-                    ("distinct_observations", result.distinct_observations),
-                    ("latest_age_ns", result.latest_age_ns),
-                    ("largest_confirmation_gap_ns", result.largest_confirmation_gap_ns),
-                )
+            *_sg_diagnostic_result_lines(
+                result,
+                permission_disclaimer=(
+                    "No fermentation-complete, packaging, or actuation permission "
+                    "is granted by any status."
+                ),
+                permission_boundary="No RAPT or Shelly device command was sent.",
             ),
-            "Candidates are not quality-approved confirmations.",
-            *(f"CANDIDATE observed_at_ns={item.observed_at_ns} sg={item.sg}"
-              for item in result.evidence),
-            "No fermentation-complete, packaging, or actuation permission "
-            "is granted by any status.",
-            "No RAPT or Shelly device command was sent.",
         ]
     except (RaptError, httpx.HTTPError, ArithmeticError, OSError, TypeError, ValueError):
         typer.echo("Vessel SG diagnostic failed: request or response is invalid.", err=True)
@@ -1051,14 +1072,9 @@ def vessel_sg_diagnose_brewforge(
         max_gap_ns = _validated_max_age(max_gap_minutes)
         if min(max_age_ns, max_gap_ns) <= 0 or not 2 <= confirmations <= 5:
             raise ValueError("invalid diagnostic policy")
-        contexts = [
-            item for item in load_fermentation_contexts()
-            if item["vessel_id"] == vessel_id and item["status"] == "active"
-        ]
-        if len(contexts) != 1:
-            raise ValueError("one active context required")
-        context_phase_history(contexts[0])
-        brew_id = _canonical_brew_id(contexts[0].get("brewforge_brew_id"))
+        context = _active_context_for_vessel(vessel_id)
+        context_phase_history(context)
+        brew_id = _canonical_brew_id(context.get("brewforge_brew_id"))
     except (ArithmeticError, OSError, TypeError, ValueError):
         typer.echo(
             "BrewForge SG diagnostic failed: input or active context is invalid; "
@@ -1098,21 +1114,16 @@ def vessel_sg_diagnose_brewforge(
             "SG-only window; no batch or phase attribution is inferred.",
             f"trigger_sg={trigger} max_age_ns={max_age_ns} max_gap_ns={max_gap_ns} "
             f"confirmations={confirmations}",
-            f"status={result.status} reason={result.reason}",
-            " ".join(
-                f"{name}={value if value is not None else 'NO_DATA'}"
-                for name, value in (
-                    ("distinct_observations", result.distinct_observations),
-                    ("latest_age_ns", result.latest_age_ns),
-                    ("largest_confirmation_gap_ns", result.largest_confirmation_gap_ns),
-                )
+            *_sg_diagnostic_result_lines(
+                result,
+                permission_disclaimer=(
+                    "No fermentation-complete, packaging, safety, or actuation "
+                    "permission is granted by any status."
+                ),
+                permission_boundary=(
+                    "No BrewForge, RAPT, or Shelly write and no device command was sent."
+                ),
             ),
-            "Candidates are not quality-approved confirmations.",
-            *(f"CANDIDATE observed_at_ns={item.observed_at_ns} sg={item.sg}"
-              for item in result.evidence),
-            "No fermentation-complete, packaging, safety, or actuation permission "
-            "is granted by any status.",
-            "No BrewForge, RAPT, or Shelly write and no device command was sent.",
         ]
     except (httpx.HTTPError, ArithmeticError, OSError, RecursionError, TypeError, ValueError):
         typer.echo("BrewForge SG diagnostic failed: request or response is invalid.", err=True)
@@ -1213,13 +1224,9 @@ def vessel_compare_progress(
             raise ValueError("invalid progress window")
         bindings = load_vessels()
         binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
-        contexts = [
-            item for item in load_fermentation_contexts()
-            if item["vessel_id"] == vessel_id and item["status"] == "active"
-        ]
-        if len(contexts) != 1 or binding["gravity_interpretation"] != "sg-times-1000":
+        context = _active_context_for_vessel(vessel_id)
+        if binding["gravity_interpretation"] != "sg-times-1000":
             raise ValueError("invalid progress precondition")
-        context = contexts[0]
         if context_binding_status(context, bindings) != "current":
             raise ValueError("context binding drift")
         brew_id = _canonical_brew_id(context.get("brewforge_brew_id"))
@@ -1321,14 +1328,9 @@ def vessel_sg_trend(
         timezone = ZoneInfo(phase_timezone)
         bindings = load_vessels()
         binding = next(item for item in bindings if item["vessel_id"] == vessel_id)
-        contexts = [
-            item
-            for item in load_fermentation_contexts()
-            if item["vessel_id"] == vessel_id and item["status"] == "active"
-        ]
-        if len(contexts) != 1 or binding["gravity_interpretation"] != "sg-times-1000":
+        context = _active_context_for_vessel(vessel_id)
+        if binding["gravity_interpretation"] != "sg-times-1000":
             raise ValueError("trend precondition failed")
-        context = contexts[0]
         if context_binding_status(context, bindings) != "current":
             raise ValueError("context binding drift")
         sources = context["source_devices"]

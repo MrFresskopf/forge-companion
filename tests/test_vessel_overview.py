@@ -31,6 +31,23 @@ def local_context(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_active_context_for_vessel_returns_the_unique_active_context(monkeypatch):
+    expected = {"vessel_id": "tank", "status": "active"}
+    monkeypatch.setattr(cli_module, "load_fermentation_contexts", lambda: [expected])
+
+    assert cli_module._active_context_for_vessel("tank") is expected
+
+
+@pytest.mark.parametrize("contexts", [[], [{"vessel_id": "tank", "status": "active"}] * 2])
+def test_active_context_for_vessel_rejects_missing_or_duplicate_active_contexts(
+    monkeypatch, contexts
+):
+    monkeypatch.setattr(cli_module, "load_fermentation_contexts", lambda: contexts)
+
+    with pytest.raises(ValueError, match="one active context required"):
+        cli_module._active_context_for_vessel("tank")
+
+
 @pytest.mark.parametrize(
     "failure",
     [

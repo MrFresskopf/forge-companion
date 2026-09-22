@@ -36,6 +36,40 @@ def rows(values=(1019, 1018)):
     )
 
 
+def test_sg_diagnostic_result_lines_render_metrics_candidates_and_source_boundary():
+    from forge_companion.spunding_advisor import (
+        AdvisorStatus,
+        TelemetrySgEvidence,
+        TelemetrySgReason,
+        TelemetrySgResult,
+    )
+
+    result = TelemetrySgResult(
+        status=AdvisorStatus.CONDITION_MET,
+        reason=TelemetrySgReason.AT_OR_BELOW_TRIGGER,
+        evidence=(TelemetrySgEvidence(observed_at_ns=123, sg=cli_module.Decimal("1.018")),),
+        distinct_observations=2,
+        latest_age_ns=0,
+        largest_confirmation_gap_ns=1_800_000_000_000,
+    )
+
+    assert cli_module._sg_diagnostic_result_lines(
+        result,
+        permission_disclaimer=(
+            "No fermentation-complete, packaging, or actuation permission is granted by any status."
+        ),
+        permission_boundary="No RAPT or Shelly device command was sent.",
+    ) == [
+        "status=CONDITION_MET reason=AT_OR_BELOW_TRIGGER",
+        "distinct_observations=2 latest_age_ns=0 "
+        "largest_confirmation_gap_ns=1800000000000",
+        "Candidates are not quality-approved confirmations.",
+        "CANDIDATE observed_at_ns=123 sg=1.018",
+        "No fermentation-complete, packaging, or actuation permission is granted by any status.",
+        "No RAPT or Shelly device command was sent.",
+    ]
+
+
 def test_diagnostic_normalizes_candidates_and_uses_explicit_query_end(tmp_path, monkeypatch):
     monkeypatch.setenv("FORGE_COMPANION_CONFIG_DIR", str(tmp_path))
     local_state(tmp_path)

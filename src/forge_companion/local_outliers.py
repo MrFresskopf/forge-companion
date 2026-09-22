@@ -7,14 +7,14 @@ source, clock, persistence, progress, diagnosis, or control policy.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation, localcontext
 from math import isfinite
-from uuid import UUID
 
 from forge_companion.telemetry import DeviceKind, TelemetryReading
-
-_NANOSECONDS_PER_SECOND = 1_000_000_000
+from forge_companion.telemetry_identity import (
+    TelemetryIdentityValidationError,
+    validate_telemetry_identity,
+)
 
 
 class LocalOutlierValidationError(ValueError):
@@ -207,24 +207,11 @@ def _gap(value: object) -> None:
 def _reading(
     reading: object, metrics: tuple[tuple[str, Decimal], ...]
 ) -> tuple[int, tuple[str, DeviceKind, str]]:
-    if not isinstance(reading, TelemetryReading):
-        raise LocalOutlierValidationError("input contains an invalid reading")
-    source = _opaque_identifier(reading.source)
-    device_id = _opaque_identifier(reading.device_id)
-    _opaque_identifier(reading.reading_id)
-    if source in {"rapt", "brewforge"}:
-        _canonical_uuid(device_id)
-    if source == "rapt":
-        _canonical_uuid(reading.reading_id)
-    if not isinstance(reading.device_kind, DeviceKind):
-        raise LocalOutlierValidationError("input contains an invalid stream identity")
-    if (
-        not isinstance(reading.observed_at, datetime)
-        or reading.observed_at.utcoffset() is None
-        or type(reading.observed_at_submicrosecond_ns) is not int
-        or reading.observed_at_submicrosecond_ns not in range(0, 1000, 100)
-    ):
-        raise LocalOutlierValidationError("input contains an invalid exact timestamp")
+    try:
+        identity = validate_telemetry_identity(reading)
+    except TelemetryIdentityValidationError as error:
+        raise LocalOutlierValidationError(str(error)) from None
+    assert isinstance(reading, TelemetryReading)
     for name in (
         "temperature_c",
         "gravity_raw",
@@ -242,31 +229,7 @@ def _reading(
         expected = "sg" if metric == "gravity-sg" else "c"
         if unit != expected:
             raise LocalOutlierValidationError(f"reading {metric} unit must be explicit {expected}")
-    try:
-        instant = _exact_ns(reading)
-    except (OverflowError, ValueError):
-        raise LocalOutlierValidationError("input contains an invalid exact timestamp") from None
-    return instant, (source, reading.device_kind, device_id)
-
-
-def _opaque_identifier(value: object) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or value != value.strip()
-        or any(not character.isprintable() for character in value)
-    ):
-        raise LocalOutlierValidationError("input contains an invalid stream identity")
-    return value
-
-
-def _canonical_uuid(value: str) -> None:
-    try:
-        canonical = str(UUID(value))
-    except ValueError:
-        raise LocalOutlierValidationError("input contains an invalid stream identity") from None
-    if canonical != value:
-        raise LocalOutlierValidationError("input contains an invalid stream identity")
+    return identity.observed_at_ns, identity.stream
 
 
 def _finite_or_none(value: object) -> None:
@@ -279,16 +242,6 @@ def _finite_or_none(value: object) -> None:
             raise ValueError
     except (OverflowError, ValueError):
         raise LocalOutlierValidationError("input contains an invalid numeric value") from None
-
-
-def _exact_ns(reading: TelemetryReading) -> int:
-    utc = reading.observed_at.astimezone(UTC)
-    elapsed = utc - datetime(1970, 1, 1, tzinfo=UTC)
-    return (
-        (elapsed.days * 86_400 + elapsed.seconds) * _NANOSECONDS_PER_SECOND
-        + elapsed.microseconds * 1_000
-        + reading.observed_at_submicrosecond_ns
-    )
 
 
 def _value(reading: TelemetryReading, metric: str) -> Decimal | None:
