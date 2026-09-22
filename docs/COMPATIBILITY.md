@@ -1,7 +1,7 @@
 # Compatibility policy
 
 > [!IMPORTANT]
-> This is the pre-1.0 compatibility design for Forge Companion. Version 0.5.0 implements the documented
+> This is the pre-1.0 compatibility design for Forge Companion. Version 1.0.0rc1 implements the documented
 > `doctor --json` contract while live Cloud actuation remains experimental.
 > The policy becomes binding for the stable scope when 1.0 is released; until then, incompatible changes
 > remain possible when they are documented in the changelog.

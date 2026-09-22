@@ -30,16 +30,19 @@ Cloud commands use a separate native-keyring profile; optional BrewForge reports
 
 ### 1. Install
 
+After the RC tag is published, install that immutable tag explicitly. Until then, use the current
+published release rather than these upcoming-RC commands.
+
 With [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
+uv tool install git+https://github.com/MrFresskopf/forge-companion.git@v1.0.0rc1
 ```
 
 Or with [pipx](https://pipx.pypa.io/):
 
 ```bash
-pipx install git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
+pipx install git+https://github.com/MrFresskopf/forge-companion.git@v1.0.0rc1
 ```
 
 ### Upgrade from an earlier release
@@ -48,13 +51,13 @@ Choose the target release tag explicitly. Reinstalling from that immutable tag a
 new commits on `main`:
 
 ```bash
-uv tool install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
+uv tool install --force git+https://github.com/MrFresskopf/forge-companion.git@v1.0.0rc1
 ```
 
 Or with pipx:
 
 ```bash
-pipx install --force git+https://github.com/MrFresskopf/forge-companion.git@v0.5.0
+pipx install --force git+https://github.com/MrFresskopf/forge-companion.git@v1.0.0rc1
 ```
 
 ### 2. Inspect the guarded hopper workflow
