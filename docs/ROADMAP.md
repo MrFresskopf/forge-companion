@@ -33,7 +33,8 @@ deprecation and migration path.
 - [x] freeze the supported snapshot schema and document how older snapshot versions are read or
   migrated
 - [x] complete repeated full-assembly qualification for the current unchanged mechanism
-- [ ] evaluate independent mechanical release sensing
+- [x] defer independent mechanical release sensing from 1.0; `hopper fire` remains experimental and
+  cannot claim mechanical release from relay state or electrical OFF read-back
 - [x] review live-actuation evidence and failure boundaries while keeping the feature experimental
 - [x] retain stable machine-readable output for doctor diagnostics
 - [x] verify isolated installation and native-keyring boundaries on Windows, Linux, and macOS, including
@@ -55,7 +56,9 @@ deprecation and migration path.
 
 - run supervised winch bench characterization and record measured travel, current, and timing
 - [x] repeat full-assembly release trials on the current stronger felt-backed magnet assembly
-- evaluate practical mechanical release sensing without inferring success from relay state
+- defer practical mechanical release sensing from 1.0 without inferring success from relay state; keep
+  the Cloud one-shot experimental until a separately designed and independently qualified mechanism is
+  available
 - preserve explicit confirmation, no-retry, device auto-off, and durable consumed-state guarantees
 
 #### 0.4 — Public contracts and platform hardening
