@@ -279,7 +279,7 @@ wheels = [
 
 [[package]]
 name = "forge-companion"
-version = "0.5.0"
+version = "1.0.0rc1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

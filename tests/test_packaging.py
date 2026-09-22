@@ -24,16 +24,17 @@ def _installed_smoke_module() -> ModuleType:
     return module
 
 
-def test_release_version_is_0_5_0_across_active_metadata_and_readme() -> None:
+def test_release_candidate_version_is_1_0_0rc1_across_active_metadata_and_readme() -> None:
     project = _project_metadata()
     lock = (_REPOSITORY_ROOT / "uv.lock").read_text(encoding="utf-8")
     readme = (_REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert project["version"] == "0.5.0"
-    assert __version__ == project["version"] == "0.5.0"
-    assert 'name = "forge-companion"\nversion = "0.5.0"' in lock
-    assert readme.count("@v0.5.0") == 4
-    assert "@v0.4.0" not in readme
+    assert project["version"] == "1.0.0rc1"
+    assert __version__ == project["version"] == "1.0.0rc1"
+    assert 'name = "forge-companion"\nversion = "1.0.0rc1"' in lock
+    assert readme.count("@v1.0.0rc1") == 4
+    assert "@v0.5.0" not in readme
+    assert "After the RC tag is published" in readme
 
 
 def test_frozen_snapshot_fixture_remains_historical_and_lf_byte_stable() -> None:
@@ -48,12 +49,17 @@ def test_frozen_snapshot_fixture_remains_historical_and_lf_byte_stable() -> None
     assert '"version": "0.2.1"' in fixture.read_text(encoding="utf-8")
 
 
-def test_release_docs_ship_0_5_0_experimental_surfaces_and_keep_v0_4_history() -> None:
+def test_release_docs_ship_rc1_experimental_surfaces_and_keep_v0_5_history() -> None:
     readme = (_REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
     commands = (_REPOSITORY_ROOT / "docs" / "COMMANDS.md").read_text(encoding="utf-8")
     compatibility = (_REPOSITORY_ROOT / "docs" / "COMPATIBILITY.md").read_text(encoding="utf-8")
     changelog = (_REPOSITORY_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 
+    assert "[1.0.0rc1] — 2026-09-22" in changelog
+    assert (
+        "[1.0.0rc1]: https://github.com/MrFresskopf/forge-companion/compare/v0.5.0...v1.0.0rc1"
+        in changelog
+    )
     assert "[0.5.0] — 2026-09-18" in changelog
     assert (
         "[0.5.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.4.0...v0.5.0"

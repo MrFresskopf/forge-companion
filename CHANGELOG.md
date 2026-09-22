@@ -4,7 +4,18 @@ All notable changes to Forge Companion are documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0rc1] — 2026-09-22
+
+### Changed
+
+- Promote the reviewed safety core to a release candidate: stable contracts remain limited to offline
+  hopper planning, narrow read-only Shelly diagnostics, native credential boundaries, versioned data
+  contracts, and supporting read-only BrewForge tools. RAPT and vessel telemetry remain experimental.
+- Consolidate neutral telemetry identity validation and fail-closed active-context selection across
+  experimental vessel analyses without changing source separation, exact 100 ns timestamps, or their
+  no-completion/no-actuation boundaries.
+- Defer independent mechanical release sensing from 1.0. `hopper fire` remains experimental; relay state
+  and electrical OFF read-back do not prove mechanical release.
 
 ## [0.5.0] — 2026-09-18
 
@@ -222,7 +233,7 @@ First public developer-preview release.
 - The spunding advisor does not contact or control hardware.
 - Collection snapshots are not described as complete or restorable account backups.
 
-[Unreleased]: https://github.com/MrFresskopf/forge-companion/compare/v0.5.0...HEAD
+[1.0.0rc1]: https://github.com/MrFresskopf/forge-companion/compare/v0.5.0...v1.0.0rc1
 [0.5.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/MrFresskopf/forge-companion/compare/v0.2.1...v0.3.0
