@@ -47,7 +47,7 @@ deprecation and migration path.
   boundary
 - [x] review the CLI composition root and complete any intended command-module split before the public
   interface freeze; this is a maintainability improvement, not a feature requirement
-- [ ] publish and exercise `1.0.0rc1` before the final release, including an independent security and
+- [x] publish and exercise `1.0.0rc1` before the final release, including an independent security and
   release-artifact review
 
 ### Planned stabilization sequence
