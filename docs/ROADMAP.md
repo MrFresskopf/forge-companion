@@ -98,6 +98,12 @@ deprecation and migration path.
 
 ## Direct telemetry sources (experimental)
 
+New RAPT Pill installations should use RAPT Brew's native Data Stream to Brewfather. The direct
+RAPT API slice below is a legacy fallback while the old portal is retired; migration is deliberately
+provider-managed rather than a Forge Companion relay. See
+[RAPT-BREW-MIGRATION.md](RAPT-BREW-MIGRATION.md) for the required cadence and data-shape validation
+before a Brewfather reader is added.
+
 The first additive RAPT API slice provides native credential storage, explicit device selection,
 read-only Pill/controller telemetry, and a source-neutral reading model. It does not change frozen
 BrewForge reports, the spunding advisor, hopper formats, or Shelly safety transitions.

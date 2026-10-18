@@ -36,10 +36,53 @@ stored credential until corrected or unset. `logout` deletes only the native sto
 whether a valid environment override remains active or an invalid value still blocks authentication.
 All three commands are offline.
 
+## `brewfather` (experimental)
+
+The native RAPT Brew Data Stream is configured in RAPT Brew, not sent by Forge Companion. This
+experimental command family performs only the next discovery step: one explicit, read-only request for
+the readings of one Brewfather batch. It uses a separate native credential profile with a Brewfather
+**User ID** and API key scoped to `batches:read`.
+
+```bash
+forge-companion brewfather auth login
+forge-companion brewfather auth status
+forge-companion brewfather readings-schema ACTUAL_BATCH_ID
+forge-companion brewfather devices ACTUAL_BATCH_ID
+forge-companion brewfather gravity-audit ACTUAL_BATCH_ID DEVICE_ID
+forge-companion brewfather telemetry-summary ACTUAL_BATCH_ID DEVICE_ID \
+  --gravity-unit sg --temperature-unit c --time-unit epoch-ms
+forge-companion brewfather auth logout
+```
+
+`auth login` hides the User ID and API key and stores them only in the supported native credential
+store. It does not validate them remotely. `readings-schema` makes exactly one
+`GET /v2/batches/:id/readings` request and prints only record count plus field names and JSON value
+types—never batch, device, timestamp, gravity, temperature, or credential values. It sends no
+Brewfather, RAPT, BrewForge, or Shelly write and no device command. Use a completed batch with the
+native Data Stream's historical Pill values to establish the provider response shape before adding a
+telemetry consumer.
+
+`devices` makes one readings request and lists only an opaque `device_id`, the provider-reported type,
+and record count—never device names or measurements. Select the Pill ID explicitly for
+`telemetry-summary`. The summary makes one readings request, validates that selected stream with the
+explicit SG/Celsius/epoch-milliseconds declarations, and prints only counts plus first/latest timestamps;
+it never outputs gravity or temperature values. These commands do not add a vessel binding, replace the
+legacy RAPT reader, or permit automation.
+
+`gravity-audit` makes one readings request and reports only count-based scale evidence for the selected
+stream. It never prints a gravity value. Use it before declaring a nonstandard provider field as SG; a
+mixed stream must keep records outside the explicit SG range as rejected evidence rather than silently
+converting or discarding the source data.
+
 ## `rapt` (experimental)
 
-Direct read-only RAPT access is independent of BrewForge and needs neither Home Assistant nor MQTT.
-These commands are experimental and may change before 1.0.
+For new RAPT Pill setups, prefer the native RAPT Brew Data Stream to Brewfather; see the
+[RAPT Brew migration guide](RAPT-BREW-MIGRATION.md). That provider-managed path is distinct from
+BrewForge and is not yet a Forge Companion telemetry consumer.
+
+The direct read-only RAPT adapter is retained only as a legacy fallback during the old RAPT portal
+retirement. It is independent of BrewForge and needs neither Home Assistant nor MQTT. These commands
+are experimental and may change before 1.0.
 
 ```bash
 forge-companion rapt auth login
@@ -90,7 +133,7 @@ validation, credential-store, or network failure, including `auth status` withou
 parser errors or a missing profile for `devices`/`telemetry`. Failures go to stderr, without raw remote
 or credential-store exception details.
 
-RAPT describes its API as unsupported and subject to change. See the
+RAPT describes this direct API as unsupported and subject to change. See the
 [official API contract](https://api.rapt.io/swagger/v1/swagger.json). This adapter is not evidence
 that readings are fresh enough for automation. The existing BrewForge spunding advisor and Shelly
 one-shot safety core are unchanged and are not connected to RAPT readings in this slice.

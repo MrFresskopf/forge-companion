@@ -103,11 +103,16 @@ It requires explicit SG/Celsius declarations and every diagnostic policy, evalua
 the requested end time, and grants no completion or actuation permission. See the
 [command guide](docs/COMMANDS.md#vessel-sg-diagnose-brewforge-experimental).
 
-### Optional: direct RAPT telemetry (experimental)
+### Optional: RAPT Pill telemetry (experimental legacy fallback)
 
-Direct read-only RAPT Pill and Temperature Controller access needs neither BrewForge, Home Assistant,
-nor MQTT. See the [RAPT command guide](docs/COMMANDS.md#rapt-experimental) for secure setup and
-explicit telemetry windows. No telemetry command evaluates automation rules or switches a device.
+For new RAPT Pill setups, use RAPT Brew's native Data Stream to Brewfather. The migration scope,
+measured-cadence gate, and explicit boundary to BrewForge are in the
+[RAPT Brew migration guide](docs/RAPT-BREW-MIGRATION.md).
+
+The direct read-only RAPT Pill and Temperature Controller adapter remains an experimental legacy
+fallback while the old RAPT portal is retired. It needs neither BrewForge, Home Assistant, nor MQTT;
+see the [RAPT command guide](docs/COMMANDS.md#rapt-experimental) for secure setup and explicit
+telemetry windows. No telemetry command evaluates automation rules or switches a device.
 
 Associate one Pill and Temperature Controller under a local vessel name with offline `vessel bind`,
 then inspect it offline with `vessel list` or `vessel show`. The separate `vessel telemetry` command
