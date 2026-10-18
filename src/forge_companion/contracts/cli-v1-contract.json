@@ -89,6 +89,136 @@
       ],
       "stability": "stable"
     },
+    "brewfather": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "brewfather auth": {
+      "kind": "group",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "brewfather auth login": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "brewfather auth logout": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "brewfather auth status": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [],
+      "stability": "experimental"
+    },
+    "brewfather devices": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "batch_id",
+          "kind": "argument",
+          "spellings": ["batch_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        }
+      ],
+      "stability": "experimental"
+    },
+    "brewfather gravity-audit": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "batch_id",
+          "kind": "argument",
+          "spellings": ["batch_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "device_id",
+          "kind": "argument",
+          "spellings": ["device_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        }
+      ],
+      "stability": "experimental"
+    },
+    "brewfather readings-schema": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "batch_id",
+          "kind": "argument",
+          "spellings": ["batch_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        }
+      ],
+      "stability": "experimental"
+    },
+    "brewfather telemetry-summary": {
+      "kind": "command",
+      "hidden": false,
+      "parameters": [
+        {
+          "name": "batch_id",
+          "kind": "argument",
+          "spellings": ["batch_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "device_id",
+          "kind": "argument",
+          "spellings": ["device_id"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "gravity_unit",
+          "kind": "option",
+          "spellings": ["--gravity-unit"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "temperature_unit",
+          "kind": "option",
+          "spellings": ["--temperature-unit"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        },
+        {
+          "name": "time_unit",
+          "kind": "option",
+          "spellings": ["--time-unit"],
+          "required": true,
+          "default": null,
+          "type": {"kind": "string"}
+        }
+      ],
+      "stability": "experimental"
+    },
     "doctor": {
       "kind": "command",
       "hidden": false,

@@ -191,6 +191,15 @@ def test_stable_and_experimental_command_classification_is_explicit() -> None:
 
     assert classified["mixed"] == {"hopper", "hopper arm", "hopper plan", "hopper status"}
     assert classified["experimental"] == {
+        "brewfather",
+        "brewfather auth",
+        "brewfather auth login",
+        "brewfather auth logout",
+        "brewfather auth status",
+        "brewfather devices",
+        "brewfather gravity-audit",
+        "brewfather readings-schema",
+        "brewfather telemetry-summary",
         "hopper check",
         "hopper fire",
         "hopper qualification",

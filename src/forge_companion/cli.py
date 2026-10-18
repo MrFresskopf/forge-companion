@@ -5,6 +5,7 @@ from typing import Annotated
 import typer
 
 from forge_companion import __version__
+from forge_companion.cli_brewfather import brewfather_app
 from forge_companion.cli_brewforge import (
     auth_app,
     snapshot_app,
@@ -28,6 +29,7 @@ app = typer.Typer(
 app.add_typer(hopper_app, name="hopper", rich_help_panel="Start here")
 app.add_typer(vessel_app, name="vessel", rich_help_panel="Telemetry sources")
 app.add_typer(rapt_app, name="rapt", rich_help_panel="Telemetry sources")
+app.add_typer(brewfather_app, name="brewfather", rich_help_panel="Telemetry sources")
 app.add_typer(auth_app, name="auth", rich_help_panel="Supporting BrewForge")
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel="Supporting BrewForge")
 register_brewforge_commands(app)
